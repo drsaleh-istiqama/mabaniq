@@ -39,7 +39,9 @@ def test_security_headers_complete():
             assert k in h, k
         assert "max-age=63072000" in h["strict-transport-security"]
         assert h["cross-origin-opener-policy"] == "same-origin"
-        assert c.get("/static/app.js").headers["cache-control"].startswith("public")
+        import re
+        asset = re.search(r'/static/assets/[^"]+\.js', c.get("/login").text).group(0)
+        assert c.get(asset).headers["cache-control"] == "public, max-age=31536000, immutable"
         assert c.get("/login").headers["cache-control"] == "no-store"
 
 

@@ -80,7 +80,7 @@ def test_m1_invoices_isolated_by_customer_id_not_name(cl):
     b = cl.get("/api/portal").json()["bookings"][0]
     nxt = b["next"]
     if nxt:
-        cl.post("/api/portal/pay", json={"installment_id": nxt["id"]})  # يُصدر فاتورة لعميل ١
+        cl.post("/api/portal/pay", json={"installment_id": nxt["id"]})  # يُصدر فاتورة لعميل 1
     mine = {i["number"] for i in cl.get("/api/portal/extra").json()["invoices"]}
     db_mine = {r[0] for r in db.execute("SELECT number FROM invoices WHERE customer_id=?", (c1,))}
     assert mine and mine <= db_mine
@@ -127,7 +127,7 @@ def test_m2_handover_requires_bank_letter_for_unpaid_financing(cl):
 
 def test_m2_handover_still_blocked_for_own_unpaid_installments(cl):
     db = connect()
-    body = book(cl, "6040", "عميل ٦٠/٤٠", 2)
+    body = book(cl, "6040", "عميل 60/40", 2)
     bid = body["booking_id"]
     cl.post(f"/api/customers/{body['customer_id']}/kyc", json=KYC)
     cl.post(f"/api/bookings/{bid}/confirm")

@@ -1,9 +1,10 @@
 # Continuous integration — Mabaniq (docs/CI.md).
 #
-#   quality      ruff (lint) · node --check on every static script · pip-audit (known CVEs)
-#   test         pytest on SQLite (the development engine) + selfcheck
-#   test-pg      pytest against PostgreSQL 17 — Unit 1 target; allowed to fail until the dbx layer lands
-#   image        Docker image builds and answers /health
+#   quality      ruff (lint) · web static checks (parse, no inline handlers, RTL, Western digits) · Vite build + size budget · pip-audit
+#   test         pytest on SQLite (the development engine) + selfcheck   (needs the built bundle)
+#   test-pg      pytest + pgTAP against PostgreSQL 17 — blocking since Unit 1
+#   e2e          Playwright critical path (booking → KYC → contract → signature → payment → bank letter → handover) — Unit 3
+#   image        Docker image (node build stage + python) builds and answers /health
 name: CI
 
 on:
@@ -38,17 +39,19 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
+          cache: npm
       - run: pip install -r requirements.txt -r requirements-dev.txt
+      - run: npm ci --no-audit --no-fund
       - name: ruff
         run: ruff check backend tests
-      - name: Static scripts parse (CSP forbids inline scripts, so every script is a file)
-        run: for f in frontend/*.js; do node --check "$f"; done
-      - name: No inline handlers or inline scripts in HTML
-        run: |
-          ! grep -n 'onclick="' frontend/*.html frontend/*.js
-          ! grep -Pzo '<script(?![^>]*\bsrc=)[^>]*>\s*\S' frontend/*.html
+      - name: Web static checks (parse · no inline handlers/scripts · RTL root · Western digits)
+        run: npm run check
+      - name: Vite build + initial-JS budget (≤ 200 kB gzip)
+        run: npm run build && npm run size
       - name: pip-audit (known vulnerabilities)
         run: pip-audit -r requirements.txt
+      - name: npm audit (production tree is empty; dev tooling high+ only)
+        run: npm audit --audit-level=high
 
   test:
     name: pytest (SQLite) + selfcheck
@@ -60,6 +63,11 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --no-audit --no-fund && npm run build
       - run: pip install -r requirements.txt -r requirements-dev.txt
       - run: python -m pytest -q tests
       - name: selfcheck (demo config)
@@ -89,6 +97,11 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --no-audit --no-fund && npm run build
       - run: pip install -r requirements.txt -r requirements-dev.txt
       - name: pgTAP (extension from the postgres image is not bundled — install it)
         run: |
@@ -99,6 +112,33 @@ jobs:
         run: python -m pytest tests
       - name: pgTAP — RLS per organisation on every table
         run: python db/run_pgtap.py
+
+  e2e:
+    name: Playwright — critical path in Chromium
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: pip install -r requirements.txt
+      - run: npm ci --no-audit --no-fund && npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test
+        env:
+          PYTHON: python
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-traces
+          path: test-results/
+          retention-days: 7
 
   image:
     name: Docker image + /health

@@ -1,4 +1,4 @@
-"""مبانيك — الوحدات الموسّعة (الجزء ٢): التسليم والعيوب ونقل الملكية، إدارة المرافق، اتحاد الملاك، التأجير،
+"""مبانيك — الوحدات الموسّعة (الجزء 2): التسليم والعيوب ونقل الملكية، إدارة المرافق، اتحاد الملاك، التأجير،
 المستندات، الإشعارات، وكيل واتساب، تقارير الممولين والمستثمرين، الخصوصية، إدارة المستخدمين، النسخ الاحتياطي، مفاتيح API."""
 import datetime as dt
 import hashlib
@@ -98,7 +98,7 @@ class HandIn(BaseModel):
 
 @router.post("/api/bookings/{bid}/handover/complete")
 def handover_complete(bid: int, h: HandIn, _=Depends(act_as("handover"))):
-    """شروط التسليم: سداد ١٠٠٪ (أو قسط تمويل البنك وحده غير مسدَّد مع خطاب صرف بنكي مرفق)، إغلاق كل الملاحظات، وعقد موقَّع."""
+    """شروط التسليم: سداد 100٪ (أو قسط تمويل البنك وحده غير مسدَّد مع خطاب صرف بنكي مرفق)، إغلاق كل الملاحظات، وعقد موقَّع."""
     c = db()
     b = one(c, "SELECT * FROM bookings WHERE id=? AND status='confirmed'", (bid,), "الحجز غير مؤكد", 409)
     blockers = []
@@ -249,7 +249,7 @@ def oa(project_id: int, _=Depends(need_any("oa", "service"))):
     return {"project": p["name"], "year": year, "budget": budget, "budget_total": sum(b["amount"] for b in budget),
             "owners": len(owners), "total_area": area, "rate_per_sqm": round(sum(b["amount"] for b in budget) / area, 2) if area else 0,
             "charges": charges, "collected": sum(x["paid"] for x in charges), "billed": sum(x["amount"] for x in charges),
-            "motions": motions, "rule": "رسوم الخدمات وحقوق التصويت موزعة حسب نسبة مساحة كل وحدة من إجمالي المساحات المملوكة؛ النصاب ٥٠٪."}
+            "motions": motions, "rule": "رسوم الخدمات وحقوق التصويت موزعة حسب نسبة مساحة كل وحدة من إجمالي المساحات المملوكة؛ النصاب 50٪."}
 
 
 @router.post("/api/oa/{project_id}/bill")
@@ -335,7 +335,7 @@ def lease_create(l: LeaseIn, _=Depends(act_as("leasing"))):
     if c.execute("SELECT 1 FROM leases WHERE unit_id=? AND status='active' AND \"end\">=?", (l.unit_id, l.start.isoformat())).fetchone():
         raise HTTPException(409, "يوجد عقد إيجار ساري على الوحدة")
     if 12 % l.frequency:
-        raise HTTPException(400, "عدد الدفعات السنوية يجب أن يقسم ١٢")
+        raise HTTPException(400, "عدد الدفعات السنوية يجب أن يقسم 12")
     tid = c.execute("INSERT INTO tenants_l(name,phone,id_number) VALUES(?,?,?)", (l.tenant_name, l.tenant_phone, pii.enc(l.tenant_id_number))).lastrowid
     end = _add_months(l.start, l.months)
     lid = c.execute("INSERT INTO leases(unit_id,tenant_id,start,\"end\",annual_rent,frequency,deposit,status) VALUES(?,?,?,?,?,?,?,?)",
@@ -379,7 +379,7 @@ async def doc_upload(ref_type: str = Form(..., pattern=REF_TYPES), ref_id: int =
                      file: UploadFile = File(...), u=Depends(act_as("docs"))):
     data = await file.read(MAX_DOC + 1)
     if len(data) > MAX_DOC:
-        raise HTTPException(413, "الحد الأقصى ٥ ميجابايت")
+        raise HTTPException(413, "الحد الأقصى 5 ميجابايت")
     kind = next((m for m, (magic, _e) in ALLOWED.items() if data.startswith(magic)), None)
     if not kind:  # نعتمد البصمة الفعلية للملف لا الامتداد ولا نوع المحتوى المرسل
         raise HTTPException(415, "الأنواع المسموحة: PDF وPNG وJPEG فقط")
@@ -427,7 +427,7 @@ def portal_doc(did: int, u=Depends(need("portal"))):
 # ======================================================================= الإشعارات (تذكير الأقساط وغيرها)
 @router.post("/api/notifications/run")
 def notify_run(_=Depends(act_as("notify"))):
-    """يولّد تذكيرات: قبل الاستحقاق بـ٧ أيام، يوم الاستحقاق، وبعد التأخر بـ١٥ يومًا. منع التكرار عبر مفتاح فريد."""
+    """يولّد تذكيرات: قبل الاستحقاق بـ7 أيام، يوم الاستحقاق، وبعد التأخر بـ15 يومًا. منع التكرار عبر مفتاح فريد."""
     c = db()
     t = today()
     n = 0
@@ -489,7 +489,7 @@ def wa_reply(c, phone, text) -> dict:
         slot = dt.datetime.combine(today() + dt.timedelta(days=1), dt.time(17, 0))
         c.execute("INSERT INTO viewings(lead_id,project_id,at,status,source) VALUES(?,?,?,?,?)",
                   (lead["id"], lead["project_id"], slot.isoformat(timespec="minutes"), "proposed", "whatsapp"))
-        reply = "يسعدنا استقبالك. اقترحنا موعد معاينة غدًا الساعة ٥ مساءً. ردّ بكلمة «تأكيد» أو اقترح وقتًا آخر."
+        reply = "يسعدنا استقبالك. اقترحنا موعد معاينة غدًا الساعة 5 مساءً. ردّ بكلمة «تأكيد» أو اقترح وقتًا آخر."
         actions.append("viewing_proposed")
     elif it["intent"] in ("availability", "greeting"):
         q = "SELECT u.code, u.type, u.view, u.price, p.name project, p.kind FROM units u JOIN projects p ON p.id=u.project_id WHERE u.status='a' AND u.retained=0"
@@ -502,7 +502,7 @@ def wa_reply(c, phone, text) -> dict:
             a.append(it["budget"] * 1.05)
         if it["bedrooms"]:
             q += " AND u.type LIKE ?"
-            a.append("%" + {1: "غرفة وصالة", 2: "غرفتان", 3: "٣ غرف", 4: "٤ غرف", 5: "٥ غرف"}.get(it["bedrooms"], "") + "%")
+            a.append("%" + {1: "غرفة وصالة", 2: "غرفتان", 3: "3 غرف", 4: "4 غرف", 5: "5 غرف"}.get(it["bedrooms"], "") + "%")
         res = c.execute(q + " ORDER BY u.price DESC LIMIT 40", a).fetchall()
         if it["intent"] == "greeting" and not (it["budget"] or it["bedrooms"] or it.get("kind")):
             reply = "وعليكم السلام ومرحبًا بك في مبانيك 🌿 أخبرني: هل تبحث عن شقة أم فيلا؟ وكم عدد الغرف والميزانية التقريبية؟"
@@ -568,7 +568,7 @@ def lender_report(_=Depends(need("reports"))):
         row["rating"] = "أخضر" if not row["flags"] else "أصفر" if len(row["flags"]) == 1 else "أحمر"
         out.append(row)
     return {"as_of": today().isoformat(), "projects": out,
-            "method": "التغطية = (رصيد الضمان + الذمم المتبقية + ٦٠٪ من قيمة غير المباع) ÷ التكلفة المتبقية خلال ١٢ شهرًا"}
+            "method": "التغطية = (رصيد الضمان + الذمم المتبقية + 60٪ من قيمة غير المباع) ÷ التكلفة المتبقية خلال 12 شهرًا"}
 
 
 @router.get("/api/reports/investor")
@@ -581,13 +581,13 @@ def investor_report(_=Depends(need("reports"))):
                            (p["id"],)).fetchone()[0]
         k = c.execute("SELECT value FROM contracts_c WHERE project_id=?", (p["id"],)).fetchone()
         co = c.execute("SELECT COALESCE(SUM(cost),0) FROM change_orders WHERE project_id=? AND status='approved'", (p["id"],)).fetchone()[0]
-        # التكلفة = عقد المقاول + أوامر التغيير المعتمدة + الأرض والتكاليف غير المباشرة والتسويق (١٨٪ من قيمة المبيعات)
+        # التكلفة = عقد المقاول + أوامر التغيير المعتمدة + الأرض والتكاليف غير المباشرة والتسويق (18٪ من قيمة المبيعات)
         cost = (k["value"] + co + gdv * .18) if k else gdv * .72
         dist = c.execute("SELECT COALESCE(SUM(amount),0) FROM distributions WHERE project_id=?", (p["id"],)).fetchone()[0]
         out.append({"project": p["name"], "gdv": round(gdv), "sold_value": round(sold_v), "est_cost": round(cost),
                     "est_profit": round(gdv - cost), "margin": round((gdv - cost) / gdv * 100, 1) if gdv else 0,
                     "distributions": round(dist), "build_pct": p["build_pct"]})
-    return {"as_of": today().isoformat(), "projects": out, "note": "التكلفة = عقد المقاول + أوامر التغيير المعتمدة + تقدير الأرض والتكاليف غير المباشرة والتسويق (١٨٪ من قيمة المبيعات) إلى حين ربط الحسابات الفعلية."}
+    return {"as_of": today().isoformat(), "projects": out, "note": "التكلفة = عقد المقاول + أوامر التغيير المعتمدة + تقدير الأرض والتكاليف غير المباشرة والتسويق (18٪ من قيمة المبيعات) إلى حين ربط الحسابات الفعلية."}
 
 
 # ======================================================================= بوابة العميل: إضافات

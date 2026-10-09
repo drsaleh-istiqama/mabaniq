@@ -7,6 +7,7 @@ from __future__ import annotations
 import os
 import re
 import sys
+from pathlib import Path
 
 os.environ.setdefault("MABANIQ_LOG_JSON", "0")
 
@@ -31,6 +32,13 @@ def main() -> int:
         page = c.get("/login")
         csp = page.headers.get("content-security-policy", "")
         results.append(("script-src 'self';" in csp and "unsafe-inline" not in csp.split("style-src")[0], "csp: script-src strict"))
+        results.append(("style-src 'self';" in csp and "font-src 'self'" in csp and "googleapis" not in csp, "csp: no external style/font hosts"))
+        dist_index = Path(__file__).resolve().parent.parent / "frontend" / "dist" / "index.html"
+        results.append((dist_index.exists(), f"web: built bundle present ({dist_index})"))
+        asset = re.search(r'/static/assets/[^"]+\.js', page.text)
+        results.append((bool(asset), "web: hashed asset referenced from the login page"))
+        if asset:
+            results.append((c.get(asset.group(0)).headers.get("cache-control", "").endswith("immutable"), "cache: hashed assets immutable"))
         for hdr in ("strict-transport-security", "x-frame-options", "x-content-type-options", "referrer-policy", "permissions-policy",
                     "cross-origin-opener-policy", "cross-origin-resource-policy"):
             results.append((hdr in page.headers, f"header: {hdr}"))

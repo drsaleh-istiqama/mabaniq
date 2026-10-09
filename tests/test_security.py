@@ -60,6 +60,7 @@ def test_csp_has_no_inline_scripts():
     r = c.get("/login")
     csp = r.headers["content-security-policy"]
     assert "script-src 'self';" in csp and "unsafe-inline" not in csp.split("style-src")[0]
+    assert "style-src 'self';" in csp and "style-src-attr 'unsafe-inline'" in csp and "font-src 'self'" in csp  # Unit 3
     import re
     for p in ("/login",):
         html = c.get(p).text

@@ -188,11 +188,16 @@ def test_m7_csrf_token_required_and_pages_have_no_inline_js(cl):
     for p in ("/login",):
         html = cl.get(p).text
         assert not re.search(r"<script(?![^>]*\bsrc=)[^>]*>\s*\S", html)
-    for js in ("/static/app.js", "/static/app2.js", "/static/client.js", "/static/broker.js", "/static/login.js"):
+    seen = set()
+    for page in ("/login", "/", "/app", "/broker"):
+        for js in re.findall(r'/static/assets/[^"]+\.js', cl.get(page).text):
+            seen.add(js)
+    assert seen
+    for js in seen:
         r = cl.get(js)
-        assert r.status_code == 200 and 'onclick="' not in r.text
+        assert r.status_code == 200 and 'onclick="' not in r.text and "googleapis" not in r.text
     csp = cl.get("/login").headers["content-security-policy"]
-    assert "script-src 'self';" in csp
+    assert "script-src 'self';" in csp and "style-src 'self';" in csp and "font-src 'self'" in csp and "googleapis" not in csp
 
 
 # ================================================================== M8 — تسوية التنازل
@@ -229,7 +234,7 @@ def test_m9_lease_dues_prorated_13_months(cl):
     db = connect()
     L = cl.get("/api/leasing").json()
     free = next(u for u in L["units"] if u["id"] not in {l["unit_id"] for l in L["leases"]})
-    r = cl.post("/api/leases", json={"unit_id": free["id"], "tenant_name": "مستأجر ١٣ شهرًا", "tenant_phone": "+968 9000 7777", "tenant_id_number": "55556666",
+    r = cl.post("/api/leases", json={"unit_id": free["id"], "tenant_name": "مستأجر 13 شهرًا", "tenant_phone": "+968 9000 7777", "tenant_id_number": "55556666",
                                      "start": "2026-11-01", "months": 13, "annual_rent": 6000, "frequency": 4}).json()
     dues = db.execute("SELECT amount FROM rent_dues WHERE lease_id=? ORDER BY due", (r["id"],)).fetchall()
     assert [d[0] for d in dues] == [1500, 1500, 1500, 1500, 500]

@@ -1,11 +1,11 @@
 """بيانات «الدورة العقارية الكاملة»: تضيف مشروعين يمثلان طرفي الدورة، وتملأ المراحل الوسطى في المشاريع القائمة.
 
 المحفظة بعد هذا البذر (للمطوّر الأول):
-  ١. أبراج العامرات   — مرحلة الأرض والتراخيص والإطلاق (إنجاز ٣٪، مبيعات الإطلاق الأولى)
-  ٢. واجهة السيب      — الهيكل الخرساني، متأخر، فجوة سيولة
-  ٣. أبراج الريحان    — البلوك والتمديدات، مبيعات ناضجة، سوق ثانوي نشط
-  ٤. ضاحية الخوض      — التشطيبات النهائية، التسليم جارٍ، أول سندات الملكية
-  ٥. القرم ريزيدنس    — مكتمل ومسلَّم: إدارة أملاك، اتحاد ملاك، ضمان، تأجير، توزيعات
+  1. أبراج العامرات   — مرحلة الأرض والتراخيص والإطلاق (إنجاز 3٪، مبيعات الإطلاق الأولى)
+  2. واجهة السيب      — الهيكل الخرساني، متأخر، فجوة سيولة
+  3. أبراج الريحان    — البلوك والتمديدات، مبيعات ناضجة، سوق ثانوي نشط
+  4. ضاحية الخوض      — التشطيبات النهائية، التسليم جارٍ، أول سندات الملكية
+  5. القرم ريزيدنس    — مكتمل ومسلَّم: إدارة أملاك، اتحاد ملاك، ضمان، تأجير، توزيعات
 """
 import datetime as dt
 import hashlib
@@ -88,7 +88,7 @@ def seed_cycle(c, rnd, today: dt.date, pid: dict, tenant: str, schedule) -> None
                                                                 _iso(e0) if pct == 100 else None, pct, prev, w)).lastrowid
             acc += w
 
-    # ======================================================================= ٥) مشروع مكتمل ومسلَّم
+    # ======================================================================= 5) مشروع مكتمل ومسلَّم
     qn, ql = names["QRM"]
     q_ho = _m(today, -5)
     q_start = _m(q_ho, -26)
@@ -97,7 +97,7 @@ def seed_cycle(c, rnd, today: dt.date, pid: dict, tenant: str, schedule) -> None
     q_units = []
     for f in range(1, 7):
         for p in range(1, 9):
-            tp, ar = [("غرفتان وصالة", 125), ("٣ غرف وصالة", 168), ("غرفة وصالة", 84), ("بنتهاوس", 240)][(p - 1) % 4 if f == 6 else (p - 1) % 3]
+            tp, ar = [("غرفتان وصالة", 125), ("3 غرف وصالة", 168), ("غرفة وصالة", 84), ("بنتهاوس", 240)][(p - 1) % 4 if f == 6 else (p - 1) % 3]
             vw = "بحري" if p <= 3 else "مدينة"
             price = round(ar * (720 if vw == "بحري" else 610) * (1 + f * .015), -2)
             retained = 1 if (f == 2 and p in (7, 8)) or (f == 3 and p in (7, 8)) else 0
@@ -165,7 +165,7 @@ def seed_cycle(c, rnd, today: dt.date, pid: dict, tenant: str, schedule) -> None
                             ("شهادة السلامة النهائية", "الدفاع المدني والإسعاف", "CD-FIN-5521")):
         c.execute("INSERT INTO permits(project_id,authority,kind,ref,status,applied,issued,expires) VALUES(?,?,?,?,?,?,?,?)",
                   (qrm, auth, kind, ref, "issued", _iso(_m(q_start, -2)), _iso(_m(q_ho, -1) if "إتمام" in kind or "فرز" in kind or "النهائية" in kind else q_start), None))
-    for nm, cat, interval, last in (("المصاعد (٣)", "ميكانيك", 30, 12), ("مضخات الحريق", "سلامة", 90, 95), ("المولد الاحتياطي", "كهرباء", 60, 20),
+    for nm, cat, interval, last in (("المصاعد (3)", "ميكانيك", 30, 12), ("مضخات الحريق", "سلامة", 90, 95), ("المولد الاحتياطي", "كهرباء", 60, 20),
                                     ("التكييف المركزي للممرات", "ميكانيك", 90, 40), ("بوابات المواقف", "أمن", 60, 70)):
         aid = c.execute("INSERT INTO fm_assets(project_id,name,category,last_service,interval_days,installed) VALUES(?,?,?,?,?,?)",
                         (qrm, nm, cat, _iso(today - dt.timedelta(days=last)), interval, q_ho.isoformat())).lastrowid
@@ -179,7 +179,7 @@ def seed_cycle(c, rnd, today: dt.date, pid: dict, tenant: str, schedule) -> None
                                                          ("أخرى", "باب الشرفة يحتاج ضبط", "done"))):
         c.execute("INSERT INTO service_requests(booking_id,category,description,status,created,updated,note) VALUES(?,?,?,?,?,?,?)",
                   (bid, cat, desc, st, _iso(today - dt.timedelta(days=rnd.randint(2, 30))), _iso(today - dt.timedelta(days=1)),
-                   "أُنجز ضمن ضمان التشطيب" if st == "done" else "الفني يزورك خلال ٤٨ ساعة" if st == "in_progress" else None))
+                   "أُنجز ضمن ضمان التشطيب" if st == "done" else "الفني يزورك خلال 48 ساعة" if st == "in_progress" else None))
     # اتحاد الملاك: ميزانية، مطالبات، تصويتات مغلقة ومفتوحة
     year = today.year + 1
     for line, amt in (("الأمن والحراسة", 38_000), ("النظافة", 16_000), ("صيانة المصاعد", 14_000), ("صيانة المرافق المشتركة", 19_000),
@@ -225,7 +225,7 @@ def seed_cycle(c, rnd, today: dt.date, pid: dict, tenant: str, schedule) -> None
     for amt, d, note in ((900_000, _m(today, -4), "توزيع بعد إصدار شهادة الإتمام"), (420_000, _m(today, -1), "توزيع بعد تحصيل دفعات التسليم")):
         c.execute("INSERT INTO distributions(project_id,investor,amount,day,note) VALUES(?,?,?,?,?)", (qrm, "الشركاء المؤسسون", amt, d.isoformat(), note))
 
-    # ======================================================================= ١) مشروع في مرحلة الأرض والتراخيص والإطلاق
+    # ======================================================================= 1) مشروع في مرحلة الأرض والتراخيص والإطلاق
     an, al = names["AMR"]
     land = c.execute("SELECT id FROM lands ORDER BY id LIMIT 1").fetchone()[0]
     c.execute("UPDATE lands SET status='تم الشراء — قيد التطوير', notes=? WHERE id=?", (f"تحولت إلى مشروع {an}", land))
@@ -235,7 +235,7 @@ def seed_cycle(c, rnd, today: dt.date, pid: dict, tenant: str, schedule) -> None
     a_units = []
     for f in range(1, 11):
         for p in range(1, 7):
-            tp, ar = [("غرفتان وصالة", 115), ("٣ غرف وصالة", 150), ("غرفة وصالة", 76)][(p - 1) % 3]
+            tp, ar = [("غرفتان وصالة", 115), ("3 غرف وصالة", 150), ("غرفة وصالة", 76)][(p - 1) % 3]
             vw = "جبلي" if p <= 2 else "حديقة" if p <= 4 else "شارع"
             price = round(ar * {"جبلي": 560, "حديقة": 520, "شارع": 480}[vw] * (1 + f * .01), -2)
             a_units.append((c.execute("INSERT INTO units(project_id,code,building,floor,pos,type,area,view,price,status) VALUES(?,?,?,?,?,?,?,?,?,'a')",
@@ -266,7 +266,7 @@ def seed_cycle(c, rnd, today: dt.date, pid: dict, tenant: str, schedule) -> None
             _contract(c, bid, price, created.isoformat())
         if n in (7, 9):
             c.execute("INSERT INTO discount_requests(booking_id,pct,reason,status,requested_by,created) VALUES(?,?,?,?,?,?)",
-                      (bid, .04 if n == 7 else .08, "عميل إطلاق يشتري وحدتين" if n == 7 else "سداد نقدي كامل خلال ٣٠ يومًا", "pending", "موظف المبيعات", today.isoformat()))
+                      (bid, .04 if n == 7 else .08, "عميل إطلاق يشتري وحدتين" if n == 7 else "سداد نقدي كامل خلال 30 يومًا", "pending", "موظف المبيعات", today.isoformat()))
     k2 = contractor("الرائد للهندسة والمقاولات")
     val = sum(u[1] for u in a_units) * .72
     a_start = _m(today, -1)
@@ -291,7 +291,7 @@ def seed_cycle(c, rnd, today: dt.date, pid: dict, tenant: str, schedule) -> None
         cr = today - dt.timedelta(days=rnd.randint(0, 25))
         c.execute("""INSERT INTO leads(name,phone,interest,project_id,channel,stage,interactions,budget,created,last_contact,score)
                      VALUES(?,?,?,?,?,?,?,?,?,?,0)""", (f"{rnd.choice(FIRST)} {rnd.choice(LAST)}", f"+968 9{rnd.randint(1000000, 9999999)}",
-                                                       rnd.choice(["غرفتان إطلالة جبلية", "استثمار للإيجار", "٣ غرف حديقة", "سعر الإطلاق"]), amr,
+                                                       rnd.choice(["غرفتان إطلالة جبلية", "استثمار للإيجار", "3 غرف حديقة", "سعر الإطلاق"]), amr,
                                                        rnd.choice(["إنستغرام", "واتساب", "حملة الإطلاق", "وسيط", "الموقع"]), rnd.choice([0, 0, 1, 1, 2, 3]),
                                                        rnd.randint(1, 6), rnd.choice([45000, 60000, 70000, 85000]), cr.isoformat(), cr.isoformat()))
 
@@ -308,7 +308,7 @@ def seed_cycle(c, rnd, today: dt.date, pid: dict, tenant: str, schedule) -> None
                   (lid, nm, json.dumps(p, ensure_ascii=False), json.dumps(res, ensure_ascii=False), _iso(today - dt.timedelta(days=60 if lid == land else 5)), "مدير المنصة"))
 
     # ======================================================================= المراحل الوسطى في المشاريع القائمة
-    # ضاحية الخوض: أول ٣ تسليمات مكتملة، وسند صادر وآخر مقدَّم
+    # ضاحية الخوض: أول 3 تسليمات مكتملة، وسند صادر وآخر مقدَّم
     for i, h in enumerate(c.execute("SELECT h.booking_id, b.price FROM handovers h JOIN bookings b ON b.id=h.booking_id ORDER BY h.id LIMIT 3").fetchall()):
         d = today - dt.timedelta(days=12 - i * 4)
         c.execute("UPDATE handovers SET status='done', handed_at=?, appointment=?, certificate_no=?, warranty_until=?, structural_until=?, keys=3 WHERE booking_id=?",
@@ -347,12 +347,12 @@ def seed_cycle(c, rnd, today: dt.date, pid: dict, tenant: str, schedule) -> None
     # خصومات بمستويات اعتماد مختلفة
     for b, pct, why, st, by in zip(c.execute("SELECT b.id FROM bookings b JOIN units u ON u.id=b.unit_id JOIN projects p ON p.id=u.project_id WHERE p.code='SEB' AND b.status='pending' LIMIT 2").fetchall()
                                    + c.execute("SELECT b.id FROM bookings b JOIN units u ON u.id=b.unit_id JOIN projects p ON p.id=u.project_id WHERE p.code='RAY' AND b.status='pending' LIMIT 1").fetchall(),
-                                   (.015, .045, .03), ("مطابقة عرض منافس", "عميل مؤسسي (٣ وحدات)", "تمديد خطة السداد بدل الخصم"),
+                                   (.015, .045, .03), ("مطابقة عرض منافس", "عميل مؤسسي (3 وحدات)", "تمديد خطة السداد بدل الخصم"),
                                    ("approved", "pending", "rejected"), ("موظف المبيعات", "المالية", "موظف المبيعات")):
         c.execute("INSERT INTO discount_requests(booking_id,pct,reason,status,requested_by,decided_by,created) VALUES(?,?,?,?,?,?,?)",
                   (b["id"], pct, why, st, by, "مدير المنصة" if st != "pending" else None, _iso(today - dt.timedelta(days=3))))
 
-    # الفواتير والمطابقة البنكية لآخر ٤٥ يومًا
+    # الفواتير والمطابقة البنكية لآخر 45 يومًا
     recent = c.execute("""SELECT p.id, p.amount, p.at, p.receipt, i.id iid, i.label, cu.name, cu.id cid FROM payments p JOIN installments i ON i.id=p.installment_id
                           JOIN bookings b ON b.id=i.booking_id JOIN customers cu ON cu.id=b.customer_id
                           WHERE p.at>=? AND p.receipt LIKE 'MBQ-H-%' ORDER BY p.at""", (_iso(today - dt.timedelta(days=45)),)).fetchall()
@@ -367,8 +367,8 @@ def seed_cycle(c, rnd, today: dt.date, pid: dict, tenant: str, schedule) -> None
         c.execute("INSERT INTO bank_lines(day,amount,reference,matched_payment,imported) VALUES(?,?,?,?,?)", (_iso(today - dt.timedelta(days=3)), amt, ref, None, today.isoformat()))
 
     # قنوات العملاء: واتساب، معاينات، إشعارات، خصوصية
-    for ph, msgs in (("+968 9123 4567", [("in", "السلام عليكم، عندكم شقق غرفتين في العامرات؟"), ("out", f"وعليكم السلام 🌿 نعم، في {an} شقق غرفتين وصالة تبدأ من ٦٣٬٠٠٠ ر.ع بإطلالة جبلية. هل تود حجز معاينة؟"),
-                                        ("in", "نعم السبت العصر"), ("out", "تم حجز معاينتك يوم السبت الساعة ٤:٣٠ عصرًا. سيتواصل معك مستشار المبيعات.")]),
+    for ph, msgs in (("+968 9123 4567", [("in", "السلام عليكم، عندكم شقق غرفتين في العامرات؟"), ("out", f"وعليكم السلام 🌿 نعم، في {an} شقق غرفتين وصالة تبدأ من 63,000 ر.ع بإطلالة جبلية. هل تود حجز معاينة؟"),
+                                        ("in", "نعم السبت العصر"), ("out", "تم حجز معاينتك يوم السبت الساعة 4:30 عصرًا. سيتواصل معك مستشار المبيعات.")]),
                      ("+968 9555 0101", [("in", "كم باقي على قسطي؟"), ("out", "لأمان حسابك، تفاصيل الأقساط متاحة في تطبيق مبانيك بعد تسجيل الدخول.")])):
         for k_, (d_, body) in enumerate(msgs):
             c.execute("INSERT INTO wa_messages(phone,direction,body,at,engine) VALUES(?,?,?,?,?)",
@@ -380,7 +380,7 @@ def seed_cycle(c, rnd, today: dt.date, pid: dict, tenant: str, schedule) -> None
     for t, b, aud, cust in (("سند ملكيتك صدر", "صدر سند ملكية وحدتك في " + qn + ". يمكنك استلامه من مكتب المبيعات.", "customer", cid0),
                             ("رسوم الخدمات السنوية", f"صدرت مطالبة رسوم الخدمات لعام {year}. ادفعها من التطبيق.", "customer", cid0),
                             ("تصويت جديد لاتحاد الملاك", "بند جديد: تحويل سطح المبنى إلى حديقة. صوّت قبل الإغلاق.", "customer", cid0),
-                            ("رخصة بناء قيد المراجعة", f"رخصة بناء {an} قيد المراجعة لدى البلدية منذ أكثر من ٣٠ يومًا.", "staff", None),
+                            ("رخصة بناء قيد المراجعة", f"رخصة بناء {an} قيد المراجعة لدى البلدية منذ أكثر من 30 يومًا.", "staff", None),
                             ("دفعات غير مطابقة", "يوجد حركتان بنكيتان دون مرجع مطابق.", "staff", None)):
         c.execute("INSERT INTO notifications(audience,customer_id,channel,title,body,status,created,dedupe) VALUES(?,?,?,?,?,?,?,?)",
                   (aud, cust, "app", t, b, "queued", _iso(today - dt.timedelta(days=1)) + "T08:00:00", f"cycle:{t}"))

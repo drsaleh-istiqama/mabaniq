@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>تسجيل الدخول — مبانيك</title>
+<link rel="stylesheet" href="./fonts.css">
+<link rel="stylesheet" href="./login.css">
+</head>
+<body>
+<form class="card" id="f" autocomplete="on">
+ <div class="lg">م</div>
+ <h1>مبانيك</h1>
+ <p id="lead">منصة المطوّر العقاري من جدوى. سجّل الدخول بحساب الموظف أو العميل أو الوسيط.</p>
+ <div id="s1">
+  <label for="t">المطوّر</label><select id="t" name="tenant"></select>
+  <label for="u">اسم المستخدم</label><input id="u" name="username" autocomplete="username" dir="ltr" style="text-align:right" required>
+  <label for="p">كلمة المرور</label><input id="p" name="password" type="password" autocomplete="current-password" dir="ltr" style="text-align:right" required>
+ </div>
+ <div id="s2" class="hid">
+  <label for="o">رمز التحقق من تطبيق المصادقة (6 أرقام)</label><input id="o" class="otp" inputmode="numeric" autocomplete="one-time-code" maxlength="6" dir="ltr">
+ </div>
+ <button id="b">دخول</button>
+ <div class="err" id="e" role="alert"></div>
+ <div class="ft">نسخة تجريبية · بيانات افتراضية<br>الحساب يُقفل مؤقتًا بعد 5 محاولات خاطئة</div>
+</form>
+<script type="module" src="./login.js"></script>
+</body>
+</html>

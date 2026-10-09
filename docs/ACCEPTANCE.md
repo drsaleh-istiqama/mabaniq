@@ -28,7 +28,9 @@
 | 13 | الثوابت المالية: فارق الدفتر 0، لا تسليم بلا شروطه، لا إيراد من التأخير، الفواتير بمعرّف العميل، الإيجار متناسب | `tests/test_fixes_041.py`, `tests/test_fixes_050.py` | ✅ |
 | 14 | تمرين استرجاع نسخة احتياطية موثَّق | `docs/RUNBOOK.md` §4 | ⬜ الوحدة 4 |
 | 15 | حمل: p95 لـ`/api/decisions` و`/api/cash` < 500 ملي ثانية مع 300 مستخدم و5 مطوّرين × 500 وحدة | k6 | ⬜ الوحدة 4 (القياس اليدوي الحالي: 134 و114 ملي ثانية لمستخدم واحد على 468 وحدة) |
-| 16 | Playwright للمسار الحرج: حجز ⟵ KYC ⟵ موافقة ⟵ عقد ⟵ توقيع ⟵ سداد ⟵ خطاب بنكي ⟵ تسليم | — | ⬜ الوحدة 3 |
+| 16 | Playwright للمسار الحرج: حجز ⟵ KYC ⟵ موافقة ⟵ عقد ⟵ توقيع ⟵ سداد ⟵ خطاب بنكي ⟵ تسليم | `e2e/critical-path.spec.js` (5 اختبارات متسلسلة في متصفح حقيقي: دخول الموظف من الواجهة، الحجز حتى التوقيع، إنشاء حساب العميل، دخول العميل وتغيير كلمة المرور الإلزامي وسداد «دفعة أولى» من البوابة، رفض التسليم بلا خطاب صرف ثم شهادة `HC-` وفارق دفتر 0، وتبديل اللغة) | ✅ محليًا (Chrome) 10 ث · وظيفة `e2e` في CI |
+| 16ب | الواجهة: حزمة Vite مُجزَّأة immutable، لا سكربت مضمّن، `style-src 'self'`/`font-src 'self'` بلا Google Fonts، JS الأولي ≤ 200 kB gzip | `scripts/size-check.mjs` (31.0 kB gzip JS · 6.2 kB CSS · 55.7 kB خطوط ذاتية) · `tests/test_fixes_050.py::test_m7_*` · `test_unit0.py::test_security_headers_complete` | ✅ |
+| 16ج | أرقام غربية في كل الواجهة (قرار المالك ب) — ثابت واحد `WD()` في طبقة التنسيق يطبّع نصوص الخادم أيضًا؛ لا رقم هندي في المصادر | `scripts/check-web.mjs` · `e2e` يفحص شريط المؤشرات | ✅ |
 
 ## حالة الوحدات
 
@@ -36,8 +38,8 @@
 | --- | --- | --- |
 | و0 الهيكل والأدوات | ✅ (CI مكتوب غير مُشغَّل؛ Docker غير مُجرَّب محليًا) | `backend/config.py`, `backend/observability.py`, `backend/selfcheck.py`, `tests/test_unit0.py`, `.github/workflows/ci.yml`, `deploy/Dockerfile`, `docker-compose.yml`, `docs/*` |
 | و1 PostgreSQL + RLS | ✅ | `backend/dbx.py`, `db/migrations/0001_initial.sql` (676 سطرًا، مولَّد بـ`db/gen_pg_schema.py`), `db/tests/01_rls_isolation.sql`, `db/run_pgtap.py`؛ 512 استدعاء SQL تعمل على المحركين بلا تفريع في منطق الأعمال |
-| و2 الهوية | ⬜ | |
-| و3 الواجهة | ⬜ | |
+| و2 الهوية | ✅ | `backend/auth.py`, `db/migrations/0002_unit2_identity.sql`, `tests/test_unit2.py` |
+| و3 الواجهة | ✅ (TypeScript مؤجَّل — انظر PROGRESS) | `web/` (المصادر) ⟵ `vite.config.js` ⟵ `frontend/dist` (المخرجات، غير مُتتبَّعة) · `web/i18n.js` + `web/locales/{ar,en}.json` · `web/fonts/` · `scripts/check-web.mjs` · `scripts/size-check.mjs` · `playwright.config.js` · `e2e/critical-path.spec.js` · `deploy/Dockerfile` مرحلتان |
 | و4 التشغيل | ⬜ | |
 
 ## قرارات المالك المعلّقة

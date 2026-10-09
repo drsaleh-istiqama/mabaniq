@@ -28,10 +28,10 @@
 | Config      | `backend/config.py` is the only reader of `os.environ`. `settings.validate()` blocks a production start.                                        |
 | Security    | CSP `script-src 'self'` (no inline scripts, no inline handlers — delegation via `data-call`), CSRF double-submit on every mutating request, HSTS 2y, COOP/CORP, rate limits, audit hash chain, PII encrypted at rest, server-side authz on every endpoint. |
 | Logging     | JSON lines with `request_id`; one access line per request; no PII in logs.                                                                      |
-| Frontend    | Arabic RTL first (`dir="rtl" lang="ar"` explicit), Hijri date first in customer-facing pages; Unit 3 moves to Vite + TypeScript + locale files + self-hosted fonts. |
+| Frontend    | Arabic RTL first (`dir="rtl" lang="ar"` explicit), Hijri date first in customer-facing pages; Sources in `web/` (plain ESM, 4 entries) built by Vite into `frontend/dist` (git-ignored; the API refuses to start without it). Locale files `web/locales/{ar,en}.json` via `data-i18n`; Tajawal self-hosted; **Western digits only** — `WD()` inside `esc()` normalises every string, `npm run check` rejects Arabic-Indic digits in sources. |
 | Finance     | Islamic finance only (owner rule 2026-10-04): no interest income or cost; late payment = charity condition (`charity_dues`), never revenue.      |
-| Tests       | pytest (API, security, business modules, regressions per release) · pgTAP for RLS (Unit 1) · Playwright for critical paths (Unit 3) · k6 (Unit 4). |
-| CI/CD       | GitHub Actions `.github/workflows/ci.yml`: quality · test (SQLite) · test-pg (PostgreSQL, blocking once Unit 1 is ✅) · image.                    |
+| Tests       | pytest (API, security, business modules, regressions per release) · pgTAP for RLS (Unit 1) · Playwright critical path `e2e/` (`npm run e2e`) · k6 (Unit 4). |
+| CI/CD       | GitHub Actions `.github/workflows/ci.yml`: quality (ruff · `npm run check` · build · size · audits) · test (SQLite) · test-pg (PostgreSQL + pgTAP) · e2e (Playwright) · image.                    |
 | Version     | Single source `backend/config.py::VERSION`, exposed on `/version` and injected as `MABANIQ_GIT_SHA` by the image build.                         |
 
 ## Run locally
@@ -40,9 +40,11 @@
 python -m venv .venv && .venv/Scripts/pip install -r requirements.txt -r requirements-dev.txt   # Windows
 cp .env.example .env
 .venv/Scripts/uvicorn backend.app:app --port 8800     # http://localhost:8800 — demo data seeds itself
-.venv/Scripts/python -m pytest -q tests                # 73 tests
-.venv/Scripts/python -m backend.selfcheck              # pre-flight: config, health, headers, CSP, authz
-ruff check backend tests && for f in frontend/*.js; do node --check "$f"; done
+npm ci && npm run build                                # web bundle → frontend/dist (required before the API starts)
+.venv/Scripts/python -m pytest -q tests                # 80 tests
+.venv/Scripts/python -m backend.selfcheck              # pre-flight: config, health, headers, CSP, bundle, authz
+ruff check backend tests && npm run check && npm run size
+npm run e2e                                            # Playwright critical path (local Chrome; CI uses Chromium)
 docker compose up --build                              # API + PostgreSQL 17 (API uses PostgreSQL from Unit 1)
 ```
 
@@ -50,8 +52,9 @@ docker compose up --build                              # API + PostgreSQL 17 (AP
 
 - Build order (PROGRESS.md): Unit 0 tooling → Unit 1 PostgreSQL/RLS/pgTAP → Unit 2 identity → Unit 3 frontend → Unit 4 operations. Do not move on while tests fail.
 - One clear commit per completed item; update `PROGRESS.md` in the same commit. Never commit `.env`, `data/`, `.venv/`.
-- Code and comments may be Arabic or English; **user-facing text is Arabic** (English locale arrives in Unit 3 through locale files, never hard-coded strings).
+- Code and comments may be Arabic or English; **user-facing text is Arabic** (English through `web/locales/en.json` + `data-i18n`, never hard-coded strings; dynamic strings from the API stay Arabic until the API grows a locale parameter).
 - Every write endpoint: server-side permission (`need/act_as`), Pydantic model with bounds, one audit line, one DB connection per request, commit once.
-- No new inline `<script>`, no `onclick=`, no external script hosts. New remote origins go through the CSP builder (Unit 3) with a test.
+- No new inline `<script>`, no `onclick=`, no external script/style/font hosts (`npm run check` + `test_security.py` enforce it). A new remote origin is a CSP change in `app.py` with a test and a line in `docs/SECURITY_HEADERS.md`.
+- Never edit `frontend/dist`; edit `web/` and rebuild. Hashed assets are immutable-cached, pages are `no-store`.
 - Bash heredocs in this environment corrupt backslashes: write scripts with the Write tool, not `python - <<EOF`.
 - Never add a git remote or push without the owner's explicit permission (owner decision 10).

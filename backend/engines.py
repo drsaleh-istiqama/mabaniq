@@ -53,7 +53,7 @@ def pricing(c, project_id: int):
         segs.append({"view": r["view"], "type": r["type"], "total": r["total"], "available": r["avail"],
                      "recent_sales": r["recent"], "absorption": round(absorbed, 2),
                      "demand_ratio": round(ratio, 2), "suggested_change": adj,
-                     "reason": f"بيع {r['recent']} من {r['total']} خلال ٩٠ يومًا، أي {ratio:.1f} ضعف متوسط المشروع؛ "
+                     "reason": f"بيع {r['recent']} من {r['total']} خلال 90 يومًا، أي {ratio:.1f} ضعف متوسط المشروع؛ "
                                f"المتاح المتبقي: {r['avail']}."})
     return segs
 
@@ -105,7 +105,7 @@ def default_risk(c, horizon_days: int = 60):
             continue
         reasons = []
         if lates:
-            reasons.append(f"تأخر {lates} من {n} أقساط سابقة أكثر من ٧ أيام")
+            reasons.append(f"تأخر {lates} من {n} أقساط سابقة أكثر من 7 أيام")
         if partial:
             reasons.append(f"{partial} دفعات جزئية")
         if overdue_amt:
@@ -169,7 +169,7 @@ def project_cash(c, project_id: int, apply_plan: bool = False):
         extra_units = 6
         for m in months[:3]:
             inflow[m] += extra_units / 3 * avg * .10
-        actions.append(f"حملة مركّزة لبيع {extra_units} وحدات إضافية خلال ٣ أشهر (عربون ١٠٪)")
+        actions.append(f"حملة مركّزة لبيع {extra_units} وحدات إضافية خلال 3 أشهر (عربون 10٪)")
         early = 0
         for x in c.execute("""SELECT i.amount-i.paid_amount due, substr(i.due_date,1,7) m FROM installments i
                               JOIN bookings b ON b.id=i.booking_id JOIN units u ON u.id=b.unit_id
@@ -181,7 +181,7 @@ def project_cash(c, project_id: int, apply_plan: bool = False):
                 inflow[x["m"]] -= take
                 inflow[big] += take * .98
         if early:
-            actions.append(f"عرض خصم ٢٪ لتقديم أقساط لاحقة (تحصيل مبكر {early:,.0f} ر.ع)")
+            actions.append(f"عرض خصم 2٪ لتقديم أقساط لاحقة (تحصيل مبكر {early:,.0f} ر.ع)")
     opening = float((c.execute("SELECT v FROM settings WHERE k=?", (f"escrow:{project_id}",)).fetchone() or [0])[0])
     bal, series, worst = opening, [], None
     for m in months:
@@ -271,9 +271,9 @@ def match_units(c, lead_id: int, limit: int = 3):
                 s += 3
         if "مرتفع" in words:
             s += u["floor"] / 5
-        if "٣ غرف" in words and "٣" in u["type"]:
+        if ("3 غرف" in words or "3 غرف" in words) and "3" in u["type"]:
             s += 2
-        if "٥ غرف" in words and "٥" in u["type"]:
+        if ("5 غرف" in words or "5 غرف" in words) and "5" in u["type"]:
             s += 2
         return s
     best = sorted(units, key=fit, reverse=True)[:limit]
@@ -342,12 +342,12 @@ def assistant(c, q: str):
         g, name, pace, plan, r = rows[0]
         return {"answer": f"«{name}» هو الأكثر خطرًا: سرعة البيع {pace:.1f} وحدة شهريًا مقابل {plan:.0f} في الخطة "
                           f"({g*100:.0f}٪ أبطأ)، ولديه {r} عملاء بمؤشرات تعثر.",
-                "source": "المبيعات آخر ٩٠ يومًا + نموذج التعثر"}
+                "source": "المبيعات آخر 90 يومًا + نموذج التعثر"}
     if any(k in q for k in ("فجوة", "سيولة", "نقد")):
         cr = cash_radar(c)
         cp = cash_radar(c, True)
         if cr["gap"] <= 0:
-            return {"answer": "لا توجد فجوة سيولة متوقعة خلال ١٢ شهرًا.", "source": "رادار السيولة"}
+            return {"answer": "لا توجد فجوة سيولة متوقعة خلال 12 شهرًا.", "source": "رادار السيولة"}
         return {"answer": f"حساب ضمان «{cr['worst_project']}» يصل إلى عجز {cr['gap']:,.0f} ر.ع في {ar_month(cr['worst']['month'])} "
                           f"({'؛ '.join(cr['worst']['drivers']) or 'المصروفات تتجاوز التحصيل'}). "
                           f"الخطة المقترحة: {'؛ '.join(cp['actions'])} — والعجز بعدها {cp['gap']:,.0f} ر.ع.",
@@ -380,7 +380,7 @@ def assistant(c, q: str):
         return {"answer": "؛ ".join(parts) or "لا مستخلصات معلقة.", "source": "التحقق من الإنجاز"}
     if any(k in q for k in ("مبيعات", "حال", "ملخص", "وضع")):
         k = kpis(c)
-        return {"answer": f"مبيعات آخر ٣٠ يومًا {k['sales_30d_count']} وحدة بقيمة {k['sales_30d_value']:,.0f} ر.ع، "
+        return {"answer": f"مبيعات آخر 30 يومًا {k['sales_30d_count']} وحدة بقيمة {k['sales_30d_value']:,.0f} ر.ع، "
                           f"التحصيل {k['collection_rate']}٪، المتاح {k['available']} من {k['total_units']} وحدة.",
                 "source": "لوحة المؤشرات"}
     return {"answer": "أستطيع الإجابة عن: المخاطر، السيولة، التسعير والتسويق، التعثر، المستخلصات، وملخص المبيعات.",

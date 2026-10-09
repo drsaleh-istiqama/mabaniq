@@ -132,8 +132,11 @@ def test_assistant_and_search(cl):
 
 
 def test_frontend_served(cl):
-    assert "مبانيك" in cl.get("/").text
-    assert cl.get("/static/app.js").status_code == 200
+    import re
+    html = cl.get("/").text
+    assert "مبانيك" in html
+    asset = re.search(r'/static/assets/[^"]+\.js', html).group(0)  # Unit 3: hashed Vite bundle, no inline scripts
+    assert cl.get(asset).status_code == 200
 
 
 # ---------------------------------------------------------------- الهوية والصلاحيات

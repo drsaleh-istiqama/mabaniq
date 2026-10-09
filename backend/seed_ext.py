@@ -10,7 +10,7 @@ def _m(d: dt.date, months: int) -> dt.date:
 
 
 SETTINGS = {
-    # ضريبة القيمة المضافة — عُمان ٥٪؛ معالجة البيع السكني قابلة للضبط ويجب تأكيدها مع مستشار ضريبي
+    # ضريبة القيمة المضافة — عُمان 5٪؛ معالجة البيع السكني قابلة للضبط ويجب تأكيدها مع مستشار ضريبي
     "vat_standard": "0.05", "vat_residential_sale": "0.0", "vat_commercial_sale": "0.05",
     "title_fee_pct": "0.03",          # رسوم تسجيل نقل الملكية (قابلة للضبط)
     "late_penalty_monthly": "0.01",   # غرامة تأخير شهرية على القسط المتأخر بعد فترة سماح
@@ -31,7 +31,7 @@ def seed_ext(c, rnd, today: dt.date, pid: dict, projects: list, tenant: str) -> 
         c.execute("INSERT OR REPLACE INTO settings VALUES(?,?)", (k, v))
 
     # ------------------------------------------------ الأراضي والجدوى
-    lands = [("أرض العامرات ٣", "العامرات", 12500, "سكني متعدد الطوابق", 3.2, 8, 1_450_000, "تحت الدراسة", 23.52, 58.50),
+    lands = [("أرض العامرات 3", "العامرات", 12500, "سكني متعدد الطوابق", 3.2, 8, 1_450_000, "تحت الدراسة", 23.52, 58.50),
              ("أرض بركاء الساحلية", "بركاء", 46000, "سكني فلل", 0.9, 2, 2_100_000, "تفاوض", 23.70, 57.88),
              ("قطعة الموالح التجارية", "الموالح", 6800, "تجاري سكني", 4.0, 10, 1_900_000, "فرصة", 23.60, 58.21)]
     land_ids = []
@@ -104,10 +104,10 @@ def seed_ext(c, rnd, today: dt.date, pid: dict, projects: list, tenant: str) -> 
         c.execute("INSERT INTO change_orders(project_id,no,title,reason,cost,days,status,requested,decided,decided_by) VALUES(?,?,?,?,?,?,?,?,?,?)",
                   (P[code], no, t, r, cost, days, st, (today - dt.timedelta(days=30 + no * 9)).isoformat(),
                    (today - dt.timedelta(days=20)).isoformat() if st == "approved" else None, "مدير المنصة" if st == "approved" else None))
-    for code, t, sev, st, loc in (("RAY", "تعشيش في عمود الطابق ٩ برج A", "major", "open", "A-9"),
-                                  ("RAY", "انحراف في منسوب بلاط الطابق ٤", "minor", "closed", "B-4"),
+    for code, t, sev, st, loc in (("RAY", "تعشيش في عمود الطابق 9 برج A", "major", "open", "A-9"),
+                                  ("RAY", "انحراف في منسوب بلاط الطابق 4", "minor", "closed", "B-4"),
                                   ("SEB", "غطاء خرساني أقل من المواصفة في القاعدة F3", "major", "open", "F3"),
-                                  ("KHD", "تسرب في عزل سطح الفيلا ٠٣٦", "minor", "open", "V-036")):
+                                  ("KHD", "تسرب في عزل سطح الفيلا 036", "minor", "open", "V-036")):
         c.execute("INSERT INTO ncrs(project_id,title,severity,status,raised,closed,location) VALUES(?,?,?,?,?,?,?)",
                   (P[code], t, sev, st, (today - dt.timedelta(days=rnd.randint(3, 25))).isoformat(),
                    today.isoformat() if st == "closed" else None, loc))
@@ -144,9 +144,9 @@ def seed_ext(c, rnd, today: dt.date, pid: dict, projects: list, tenant: str) -> 
     for i, b in enumerate(khd_b[:8]):
         appt = today + dt.timedelta(days=7 + i * 2)
         c.execute("INSERT INTO handovers(booking_id,appointment,status) VALUES(?,?,?)", (b["id"], appt.isoformat(), "scheduled"))
-        for item, loc in rnd.sample([("خدش في باب المدخل", "المدخل"), ("ميلان بسيط في بلاط الحمام", "حمام ٢"),
+        for item, loc in rnd.sample([("خدش في باب المدخل", "المدخل"), ("ميلان بسيط في بلاط الحمام", "حمام 2"),
                                      ("مفتاح إنارة لا يعمل", "المجلس"), ("تسرب بسيط تحت المغسلة", "المطبخ"),
-                                     ("فراغ في سيليكون النافذة", "غرفة ١")], 2):
+                                     ("فراغ في سيليكون النافذة", "غرفة 1")], 2):
             c.execute("INSERT INTO snags(booking_id,item,location,status,raised) VALUES(?,?,?,?,?)",
                       (b["id"], item, loc, "open" if i % 2 else "fixed", today.isoformat()))
     for nm, cat, interval in (("مضخات المياه الرئيسية", "ميكانيك", 90), ("مولد الطوارئ", "كهرباء", 30),
@@ -192,7 +192,7 @@ def seed_ext(c, rnd, today: dt.date, pid: dict, projects: list, tenant: str) -> 
 
     # ------------------------------------------------ توزيعات المستثمرين وقائمة الفحص
     c.execute("INSERT INTO distributions(project_id,investor,amount,day,note) VALUES(?,?,?,?,?)",
-              (P["KHD"], "الشركاء المؤسسون", 350_000, (today - dt.timedelta(days=40)).isoformat(), "توزيع مرحلي بعد تجاوز ٨٥٪ من المبيعات"))
+              (P["KHD"], "الشركاء المؤسسون", 350_000, (today - dt.timedelta(days=40)).isoformat(), "توزيع مرحلي بعد تجاوز 85٪ من المبيعات"))
     for nm in ("مثال: شخص مدرج على قائمة عقوبات", "Example Sanctioned Person"):
         c.execute("INSERT INTO watchlist(name,source) VALUES(?,?)", (nm, "قائمة تجريبية — تُستبدل بمصدر رسمي"))
     c.execute("INSERT INTO settings VALUES('tenant_name',?)", (json.dumps(tenant),))

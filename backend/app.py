@@ -21,7 +21,7 @@ from .seed import schedule, seed
 
 O.setup_logging()
 
-FRONT = Path(__file__).resolve().parent.parent / "frontend"
+FRONT = Path(__file__).resolve().parent.parent / "frontend" / "dist"  # Unit 3: Vite build output (sources live in web/)
 
 
 @asynccontextmanager
@@ -30,6 +30,8 @@ async def lifespan(_app):
     if errs:
         raise RuntimeError("إعدادات الإنتاج ناقصة: " + " | ".join(errs))
     pii.prod_checks()  # 0.5.0 — M6: لا إقلاع في الإنتاج بلا أسرار صريحة
+    if not (FRONT / "index.html").exists():
+        raise RuntimeError("الواجهة غير مبنية: شغّل `npm ci && npm run build` (الوحدة 3 — المصادر في web/ والمخرجات في frontend/dist)")
     O.log.info("startup", extra={"event": "startup"})
     for t in tenants():
         seed(tenant=t)
@@ -76,7 +78,7 @@ from .common import ACTOR, act_as, audit, db  # noqa: E402
 
 
 def expire_holds(c):
-    """تحرير الحجوزات المبدئية التي انتهت مهلتها (٧٢ ساعة) تلقائيًا."""
+    """تحرير الحجوزات المبدئية التي انتهت مهلتها (72 ساعة) تلقائيًا."""
     today = dt.date.today().isoformat()
     for b in c.execute("SELECT id,unit_id FROM bookings WHERE status='pending' AND expires<?", (today,)).fetchall():
         c.execute("UPDATE bookings SET status='cancelled' WHERE id=?", (b["id"],))
@@ -371,7 +373,7 @@ def reset(_=Depends(act_as("admin"))):
 class LoginIn(BaseModel):
     username: str = Field(min_length=2, max_length=40)
     password: str = Field(min_length=4, max_length=200)
-    otp: str | None = Field(default=None, max_length=12)  # رمز TOTP من ٦ أرقام أو رمز استرداد xxxx-xxxx (الوحدة ٢)
+    otp: str | None = Field(default=None, max_length=12)  # رمز TOTP من 6 أرقام أو رمز استرداد xxxx-xxxx (الوحدة 2)
     tenant: str = Field(default="jadwa", max_length=32, pattern=r"^[a-z][a-z0-9-]{1,30}$")
 
 
@@ -448,7 +450,7 @@ def totp_enable(o: OtpIn, request: Request, u=Depends(A.current)):
     if ctr is None:
         raise HTTPException(400, "الرمز غير صحيح")
     c.execute("UPDATE users SET totp_enabled=1, totp_last=? WHERE id=?", (ctr, u["id"]))
-    codes = A.new_recovery_codes(c, u["id"])  # الوحدة ٢: رموز استرداد تُعرض مرة واحدة
+    codes = A.new_recovery_codes(c, u["id"])  # الوحدة 2: رموز استرداد تُعرض مرة واحدة
     A.kill_sessions(c, u["id"], A.token_hash(request))  # رفع مستوى الحماية = إنهاء الجلسات الأخرى (تدوير)
     audit(c, "تفعيل التحقق الثنائي", f"{u['username']} · أُصدرت {len(codes)} رموز استرداد · أُنهيت الجلسات الأخرى", u["name"])
     c.commit()
@@ -468,7 +470,7 @@ def totp_recovery_regen(o: OtpIn, u=Depends(A.current)):
     return {"recovery_codes": codes}
 
 
-# ------------------------------------------------------------------ الجلسات والأجهزة (الوحدة ٢)
+# ------------------------------------------------------------------ الجلسات والأجهزة (الوحدة 2)
 @app.get("/api/me/sessions")
 def my_sessions(request: Request, u=Depends(A.current)):
     c = A.conn()
@@ -603,7 +605,7 @@ PRIVACY_NOTICE = {
     "data": ["الاسم والهاتف والبريد", "وثيقة الهوية ورقمها وتاريخ انتهائها (مشفَّرة)", "تاريخ الميلاد والجنسية", "سجل السداد والعقود والمراسلات"],
     "retention": "مدة العقد ثم المدة التي يفرضها القانون للسجلات المالية والعقارية؛ وما عداها يُحذف أو يُخفى هويته عند الطلب",
     "rights": ["الاطلاع ونسخة من البيانات", "التصحيح", "الحذف أو إخفاء الهوية لما لا يلزم حفظه نظامًا", "سحب الموافقة لما لا يقوم على العقد أو القانون"],
-    "law": "قانون حماية البيانات الشخصية الصادر بالمرسوم السلطاني ٦/٢٠٢٢ ولائحته التنفيذية",
+    "law": "قانون حماية البيانات الشخصية الصادر بالمرسوم السلطاني 6/2022 ولائحته التنفيذية",
     "contact": "مسؤول حماية البيانات لدى المطوّر — يُستكمل عند التشغيل الفعلي",
 }
 
@@ -694,7 +696,7 @@ def portal_resale(r: ResaleIn, u=Depends(need("portal"))):
         raise HTTPException(409, "يوجد طلب إعادة بيع قائم")
     paid = c.execute("SELECT SUM(paid_amount)/SUM(amount) FROM installments WHERE booking_id=?", (r.booking_id,)).fetchone()[0] or 0
     if paid < .3:
-        raise HTTPException(409, "تُتاح إعادة البيع بعد سداد ٣٠٪ من قيمة الوحدة")
+        raise HTTPException(409, "تُتاح إعادة البيع بعد سداد 30٪ من قيمة الوحدة")
     fee = round(r.ask_price * .02)
     rid = c.execute("INSERT INTO resale(booking_id,ask_price,fee,status,created) VALUES(?,?,?,?,?)",
                     (r.booking_id, r.ask_price, fee, "pending", dt.date.today().isoformat())).lastrowid
@@ -829,17 +831,21 @@ async def _inner(request: Request, call_next):
     r = await call_next(request)
     if "content-security-policy" not in r.headers:
         # 0.5.0 — M7: لا سكربتات مضمّنة؛ كل الشيفرة في ملفات /static والمعالجات بالتفويض (data-call)
-        r.headers["Content-Security-Policy"] = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-                                                "font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; object-src 'none'; "
-                                                "base-uri 'self'; form-action 'self'; frame-ancestors 'none'")
+        # Unit 3: no external hosts at all — fonts self-hosted; <style> elements only from our files; inline style="" attributes
+        # remain allowed via style-src-attr (documented debt in docs/SECURITY_HEADERS.md), never 'unsafe-inline' on style-src itself
+        r.headers["Content-Security-Policy"] = ("default-src 'self'; script-src 'self'; style-src 'self'; style-src-elem 'self'; style-src-attr 'unsafe-inline'; "
+                                                "font-src 'self'; img-src 'self' data:; connect-src 'self'; worker-src 'self'; manifest-src 'self'; "
+                                                "object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'")
     r.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"  # سنتان؛ preload قرار مالك
     r.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=()"
     r.headers["Cross-Origin-Opener-Policy"] = "same-origin"
     r.headers["Cross-Origin-Resource-Policy"] = "same-origin"
     if request.url.path.startswith("/api/"):
         r.headers["Cache-Control"] = "no-store"
+    elif request.url.path.startswith("/static/assets/"):
+        r.headers["Cache-Control"] = "public, max-age=31536000, immutable"  # Unit 3: hashed file names from Vite
     elif request.url.path.startswith("/static/"):
-        r.headers["Cache-Control"] = "public, max-age=3600, must-revalidate"  # الملفات تحمل ?v= الإصدار؛ hashed assets في الوحدة 3
+        r.headers["Cache-Control"] = "public, max-age=3600, must-revalidate"
     r.headers["X-Frame-Options"] = "DENY"
     r.headers["X-Content-Type-Options"] = "nosniff"
     r.headers["Referrer-Policy"] = "same-origin"

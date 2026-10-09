@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow"><meta name="theme-color" content="#0F1724">
+<title>وحدتي — مبانيك</title>
+<link rel="stylesheet" href="./fonts.css">
+<link rel="stylesheet" href="./client.css">
+</head>
+<body>
+<div class="wrap">
+<header>
+ <div class="top"><div class="lg"><i>م</i>مبانيك</div><button id="out">خروج</button></div>
+ <h1 id="hi">…</h1><div class="sub" id="hsub"></div>
+ <select class="bk" id="bk" aria-label="الوحدة" hidden></select>
+</header>
+<main>
+ <section class="tab on" id="t-home"></section>
+ <section class="tab" id="t-pay"></section>
+ <section class="tab" id="t-svc"></section>
+ <section class="tab" id="t-sell"></section>
+ <section class="tab" id="t-more"></section>
+</main>
+</div>
+<nav><div>
+ <button class="on" data-t="home"><span>⌂</span>وحدتي</button>
+ <button data-t="pay"><span>▤</span>الدفعات</button>
+ <button data-t="svc"><span>✆</span>الصيانة</button>
+ <button data-t="sell"><span>⇄</span>إعادة البيع</button>
+ <button data-t="more"><span>☰</span>المزيد<i class="badge" id="nb" hidden></i></button>
+</div></nav>
+<div class="toast" id="toast" role="status"></div>
+<div class="sheet" id="sheet"><div id="sh"></div></div>
+<script type="module" src="./client.js"></script>
+</body>
+</html>

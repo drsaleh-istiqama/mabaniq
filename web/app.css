@@ -4,7 +4,7 @@
 body.light{--bg:#EEF1F6;--pane:#fff;--pane2:#F5F7FA;--ink:#152033;--muted:#5D6981;--line:#DCE2EB;--pri:#9C6E14;--pri2:#F6ECD7;--on-pri:#fff;
  --blue:#2F6FC4;--blue2:#E5EFFB;--ok:#1E8A5A;--ok2:#E2F4EA;--bad:#C24137;--bad2:#FBE6E4;--sold:#2E5487;--sold-ink:#fff}
 *{box-sizing:border-box}
-html,body{margin:0;direction:rtl;font-family:'IBM Plex Sans Arabic',system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:14px;height:100%}
+html,body{margin:0;direction:rtl;font-family:'Tajawal',system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:14px;height:100%}
 button,select,input{font-family:inherit;color:inherit}button{cursor:pointer}
 .muted{color:var(--muted);font-weight:400;font-size:12px}
 .num{direction:ltr;unicode-bidi:isolate;display:inline-block;font-variant-numeric:tabular-nums}

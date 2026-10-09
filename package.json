@@ -1,0 +1,34 @@
+{
+  "name": "mabaniq",
+  "version": "0.8.0",
+  "description": "مبانيك | Mabaniq — web sources (Vite) and e2e tests",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite",
+    "preview": "vite preview",
+    "size": "node scripts/size-check.mjs",
+    "e2e": "playwright test",
+    "check": "node scripts/check-web.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/drsaleh-istiqama/mabaniq.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/drsaleh-istiqama/mabaniq/issues"
+  },
+  "homepage": "https://github.com/drsaleh-istiqama/mabaniq#readme",
+  "devDependencies": {
+    "@playwright/test": "1.56",
+    "vite": "^7.3.7"
+  },
+  "private": true
+}

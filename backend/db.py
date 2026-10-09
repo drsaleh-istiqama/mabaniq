@@ -327,6 +327,6 @@ def backup(c, reason="manual") -> str:
     dst.close()
     os.chmod(d / name, 0o600)
     keep = sorted(d.glob(f"{TENANT.get()}-*.db"))
-    for old in keep[:-14]:  # الاحتفاظ بآخر ١٤ نسخة
+    for old in keep[:-14]:  # الاحتفاظ بآخر 14 نسخة
         old.unlink()
     return name

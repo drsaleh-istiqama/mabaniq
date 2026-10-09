@@ -1,7 +1,8 @@
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
-const N = v => new Intl.NumberFormat('ar-OM').format(Math.round(v || 0)).replace(/,/g, '٬');
+const N = v => new Intl.NumberFormat('ar-OM-u-nu-latn').format(Math.round(v || 0));
 const OMR = v => N(v) + '\u00a0ر.ع';
-const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+const WD = t => String(t ?? '').replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/(\d)٫(?=\d)/g, '$1.'); // الوحدة 3 — قرار ب: أرقام غربية في كل الواجهة؛ ثابت واحد يطبَّع هنا
+const esc = s => WD(s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
 const J = v => esc(JSON.stringify(v));
 document.addEventListener('click', e => {
   const el = e.target.closest('[data-call]'); if (!el) return;
@@ -9,9 +10,9 @@ document.addEventListener('click', e => {
   if (typeof f !== 'function') return; e.preventDefault(); f(...(el.dataset.args ? JSON.parse(el.dataset.args) : []));
 });
 
-const D = d => d ? new Date(d).toLocaleDateString('ar-OM', {day: 'numeric', month: 'long', year: 'numeric'}) : '—';
-const H = d => new Intl.DateTimeFormat('ar-SA-u-ca-islamic-umalqura', {day: 'numeric', month: 'long', year: 'numeric'}).format(d ? new Date(d) : new Date());
-const PLAN = {milestone: 'مربوطة بمراحل الإنشاء', '6040': '٦٠/٤٠', murabaha: 'مرابحة عبر بنك شريك'};
+const D = d => d ? new Date(d).toLocaleDateString('ar-OM-u-nu-latn', {day: 'numeric', month: 'long', year: 'numeric'}) : '—';
+const H = d => new Intl.DateTimeFormat('ar-SA-u-ca-islamic-umalqura-nu-latn', {day: 'numeric', month: 'long', year: 'numeric'}).format(d ? new Date(d) : new Date());
+const PLAN = {milestone: 'مربوطة بمراحل الإنشاء', '6040': '60/40', murabaha: 'مرابحة عبر بنك شريك'};
 const SVC = {new: ['جديد', 'p-bl'], in_progress: ['قيد التنفيذ', 'p-w'], done: ['مُنجز', 'p-ok']};
 const RS = {pending: ['بانتظار موافقة المطوّر', 'p-w'], listed: ['معروضة في السوق الثانوي', 'p-ok'], rejected: ['مرفوض', 'p-b'], sold: ['بِيعت وتم التنازل', 'p-bl']};
 let DATA, CUR = 0;
@@ -44,7 +45,7 @@ const sheet = h => { $('#sh').innerHTML = h; $('#sheet').classList.add('on'); };
 const unsheet = () => $('#sheet').classList.remove('on');
 $('#sheet').onclick = e => { if (e.target.id === 'sheet') unsheet(); };
 function forcePw() {
-  sheet(`<h2>غيّر كلمة المرور المؤقتة</h2><div class="muted">هذا أول دخول لك. اختر كلمة مرور خاصة بك (١٠ أحرف على الأقل، حروف وأرقام).</div>
+  sheet(`<h2>غيّر كلمة المرور المؤقتة</h2><div class="muted">هذا أول دخول لك. اختر كلمة مرور خاصة بك (10 أحرف على الأقل، حروف وأرقام).</div>
    <label>كلمة المرور الحالية</label><input id="pc" type="password" dir="ltr"><label>الجديدة</label><input id="pn" type="password" dir="ltr" autocomplete="new-password"><label>تأكيدها</label><input id="pn2" type="password" dir="ltr" autocomplete="new-password">
    <div class="err" id="pe"></div><button class="btn w" id="pgo">حفظ</button>`);
   $('#sheet').onclick = null;
@@ -104,7 +105,7 @@ function svc(b) {
    <div class="err" id="se"></div><button class="btn w" id="sgo">إرسال الطلب</button></div>
    <div class="card"><h2>طلباتي</h2>${b.service.map(s => `<div class="inst"><div class="row"><b>#${N(s.id)} · ${esc(s.category)}</b><span class="pill ${SVC[s.status][1]}">${SVC[s.status][0]}</span></div><div>${esc(s.description)}</div><div class="muted">أُرسل ${D(s.created)}${s.note ? ' · ملاحظة الفريق: ' + esc(s.note) : ''}</div></div>`).join('') || '<div class="muted">لا توجد طلبات.</div>'}</div>`;
   $('#sgo').onclick = async () => {
-    const d = $('#sd').value.trim(); if (d.length < 5) return $('#se').textContent = 'اكتب وصفًا أوضح (٥ أحرف على الأقل)';
+    const d = $('#sd').value.trim(); if (d.length < 5) return $('#se').textContent = 'اكتب وصفًا أوضح (5 أحرف على الأقل)';
     $('#sgo').disabled = true;
     try { const r = await api('/portal/service', {method: 'POST', body: {booking_id: b.booking_id, category: $('#sc').value, description: d}}); toast(`✓ استلمنا طلبك رقم ${N(r.id)}`); await load(); }
     catch (e) { $('#se').textContent = e.message; $('#sgo').disabled = false; }
@@ -116,15 +117,15 @@ function sell(b) {
    <div style="font-size:24px;font-weight:700">${OMR(m.low)} – ${OMR(m.high)}</div>
    <div class="muted">سعر شرائك ${OMR(b.price)} · التغير المقدّر <b style="color:${m.gain_pct >= 0 ? 'var(--ok)' : 'var(--bad)'}">${m.gain_pct >= 0 ? '+' : ''}${N(m.gain_pct)}٪</b></div>
    <div class="ai">أساس التقدير: ${esc(m.basis)}، مع علاوة تقدّم الإنشاء. التقدير استرشادي وليس تقييمًا معتمدًا.</div></div>`;
-  if (open) h += `<div class="card"><h2>طلبك الحالي</h2><div class="row"><b>${OMR(open.ask_price)}</b><span class="pill ${RS[open.status][1]}">${RS[open.status][0]}</span></div><div class="muted">رسوم نقل الملكية للمطوّر: ${OMR(open.fee)} (٢٪)</div></div>`;
+  if (open) h += `<div class="card"><h2>طلبك الحالي</h2><div class="row"><b>${OMR(open.ask_price)}</b><span class="pill ${RS[open.status][1]}">${RS[open.status][0]}</span></div><div class="muted">رسوم نقل الملكية للمطوّر: ${OMR(open.fee)} (2٪)</div></div>`;
   else if (b.status !== 'confirmed') h += `<div class="card muted">تُتاح إعادة البيع بعد تأكيد الشراء.</div>`;
-  else if (paidPct < 30) h += `<div class="card muted">تُتاح إعادة البيع بعد سداد ٣٠٪ من قيمة الوحدة. سدّدت حتى الآن ${N(paidPct)}٪.</div>`;
+  else if (paidPct < 30) h += `<div class="card muted">تُتاح إعادة البيع بعد سداد 30٪ من قيمة الوحدة. سدّدت حتى الآن ${N(paidPct)}٪.</div>`;
   else h += `<div class="card"><h2>اعرض وحدتك للبيع</h2><div class="muted">يُعرض طلبك على المطوّر للموافقة، ثم يظهر للمشترين في السوق الثانوي داخل مبانيك.</div>
      <label for="ap">السعر المطلوب (ر.ع)</label><input id="ap" inputmode="numeric" dir="ltr" style="text-align:right" value="${Math.round(m.mid || b.price)}">
      <div class="muted" id="fee"></div><div class="err" id="re"></div><button class="btn w" id="rgo">إرسال طلب إعادة البيع</button></div>`;
   $('#t-sell').innerHTML = h;
   const ap = $('#ap'); if (!ap) return;
-  const upd = () => { const v = +ap.value.replace(/[^\d]/g, ''); $('#fee').textContent = v ? `رسوم نقل الملكية (٢٪): ${OMR(v * .02)}` : ''; };
+  const upd = () => { const v = +ap.value.replace(/[^\d]/g, ''); $('#fee').textContent = v ? `رسوم نقل الملكية (2٪): ${OMR(v * .02)}` : ''; };
   ap.oninput = upd; upd();
   $('#rgo').onclick = async () => {
     const v = +ap.value.replace(/[^\d]/g, ''); if (!v) return $('#re').textContent = 'أدخل سعرًا صحيحًا';

@@ -1,8 +1,8 @@
 """مبانيك — الهوية والصلاحيات.
 
-- كلمات مرور PBKDF2-SHA256 (٢٠٠ ألف دورة) + سياسة قوة + إلزام بالتغيير عند أول دخول
+- كلمات مرور PBKDF2-SHA256 (200 ألف دورة) + سياسة قوة + إلزام بالتغيير عند أول دخول
 - تحقق ثنائي TOTP (RFC 6238) مع منع إعادة استخدام الرمز، وإلزامي للمدير والمالية في بيئة الإنتاج
-- جلسات بكوكي HttpOnly/Secure/SameSite، وحد ٥ جلسات لكل مستخدم
+- جلسات بكوكي HttpOnly/Secure/SameSite، وحد 5 جلسات لكل مستخدم
 - قفل محاولات الدخول محفوظ في قاعدة البيانات (لا يُمسح بإعادة التشغيل)
 - كل مطوّر (Tenant) له مستخدموه وجلساته في قاعدة بياناته المعزولة
 """
@@ -113,7 +113,7 @@ COMMON = {"password", "12345678", "123456789", "1234567890", "qwerty123", "maban
 
 def policy_errors(pw: str, username: str) -> str | None:
     if len(pw) < 10:
-        return "كلمة المرور يجب ألا تقل عن ١٠ أحرف"
+        return "كلمة المرور يجب ألا تقل عن 10 أحرف"
     if not re.search(r"[A-Za-z\u0600-\u06FF]", pw) or not re.search(r"\d", pw):
         return "كلمة المرور يجب أن تجمع بين الحروف والأرقام"
     if username.lower() in pw.lower() or pw.lower() in COMMON:
@@ -134,7 +134,7 @@ def totp_at(secret: str, counter: int, digits: int = 6) -> str:
 
 
 def totp_verify(secret: str, code: str, last: int = 0) -> int | None:
-    """يعيد رقم العدّاد إن صح الرمز (نافذة ±٣٠ ثانية)، ويرفض الرمز المستخدم سابقًا."""
+    """يعيد رقم العدّاد إن صح الرمز (نافذة ±30 ثانية)، ويرفض الرمز المستخدم سابقًا."""
     if not secret or not re.fullmatch(r"\d{6}", code or ""):
         return None
     now = int(time.time() // 30)
@@ -320,7 +320,7 @@ def login(username: str, pw: str, ip: str, otp: str | None = None, ua: str = "")
         if retry:
             raise HTTPException(429, "محاولات دخول كثيرة من هذا العنوان — حاول بعد قليل", headers={"Retry-After": str(retry), "X-RateLimit-Bucket": "login-db"})
         if _fail_count(c, key, 300) >= 5:
-            raise HTTPException(429, "محاولات كثيرة. حاول بعد ٥ دقائق.", headers={"Retry-After": "300"})
+            raise HTTPException(429, "محاولات كثيرة. حاول بعد 5 دقائق.", headers={"Retry-After": "300"})
         wait = _graded_wait(c, acct)
         if wait:
             raise HTTPException(429, f"انتظر {wait} ثانية قبل المحاولة التالية (حماية متدرّجة للحساب)", headers={"Retry-After": str(wait), "X-Lockout": "graded"})

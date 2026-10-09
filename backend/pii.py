@@ -76,7 +76,7 @@ def dec(value):
 
 
 def mask(value, keep: int = 4) -> str | None:
-    """إخفاء جزئي للعرض في القوائم: آخر ٤ خانات فقط."""
+    """إخفاء جزئي للعرض في القوائم: آخر 4 خانات فقط."""
     v = dec(value)
     if not v:
         return v

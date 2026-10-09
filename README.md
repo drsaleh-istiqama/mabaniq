@@ -6,15 +6,16 @@
 ./run.sh          # يثبّت المتطلبات أول مرة ثم يشغّل الخادم
 # افتح http://localhost:8800
 ```
-المتطلبات: Python 3.11+ و`uv`. البيانات تجريبية (٣ مشاريع، ٣٦٠ وحدة) وتُعاد من زر «إعادة البيانات».
+المتطلبات: Python 3.12 وNode 24 (`npm ci && npm run build` مرة قبل التشغيل). البيانات تجريبية (5 مشاريع، 468 وحدة) وتُعاد من زر «إعادة البيانات».
 
 ## البنية
 - `backend/app.py`: واجهة REST (FastAPI)
 - `backend/engines.py`: محركات الذكاء (التسعير، التعثر، السيولة، التحقق من الإنجاز، القرارات، المساعد)
 - `backend/seed.py`: بيانات تجريبية حتمية
 - `backend/db.py`: SQLite في هذا الإصدار، وPostgreSQL في الإنتاج
-- `frontend/`: الواجهة (HTML/CSS/JS بلا إطار)
-- `tests/`: ٦٥ اختبارًا (`.venv/bin/python -m pytest -q tests`)
+- `web/`: مصادر الواجهة (HTML/CSS/JS بلا إطار، ESM) تُبنى بـVite إلى `frontend/dist` (غير مُتتبَّع؛ `npm ci && npm run build`) — ترجمة `web/locales/`، خط Tajawal ذاتي الاستضافة
+- `e2e/`: Playwright للمسار الحرج (`npm run e2e`)
+- `tests/`: 80 اختبارًا على SQLite وPostgreSQL (`.venv/bin/python -m pytest -q tests`)
 
 ## ما يعمل فعليًا
 - صندوق قرارات يولّده النظام من البيانات، والاعتماد يغيّر البيانات ويُسجَّل

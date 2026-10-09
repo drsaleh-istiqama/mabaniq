@@ -20,7 +20,8 @@
 ## 1. Runtime topology
 
 ```
-Browser (staff SPA · customer app · broker portal — Arabic RTL, no inline JS)
+Browser (staff SPA · customer app · broker portal — Arabic RTL, EN locale, Western digits, no inline JS)
+   │  built by Vite from web/ → frontend/dist (4 entries, hashed assets, self-hosted Tajawal)   ✅ Unit 3
    │  same-origin /api/*  (cookie mbq_session HttpOnly + mbq_csrf double-submit)
    ▼
 Reverse proxy (Cloudflare / platform) ── trusted for client ip only from loopback (MABANIQ_TRUST_PROXY)
@@ -96,7 +97,7 @@ c.columns(table); c.has_table(table); c.in_transaction; c.maintenance()/end_main
 | Structured logs without PII, request id in every 500 | `observability.py` |
 | ⬜ Unit 1: RLS per tenant; rate-limit state in DB; `DELETE` grants removed from financial tables |
 | Graded lockout (cooldown 1→60 s after 3 failures, no account lock), DB-backed per-ip login budget, sessions with device/ip/last-seen + 60-min idle timeout, self and admin revocation, TOTP recovery codes, session rotation when 2FA is enabled or the password changes, admin 2FA reset | `auth.py`, `app.py` (Unit 2) |
-| ⬜ Unit 3: `style-src 'self'`, self-hosted fonts, hashed immutable assets, Playwright e2e |
+| `style-src 'self'` + `font-src 'self'` (no external hosts), `style-src-attr 'unsafe-inline'` as documented debt, hashed immutable assets under `/static/assets/`, no inline scripts, Playwright critical path | `app.py`, `vite.config.js`, `docs/SECURITY_HEADERS.md`, `e2e/` (Unit 3) |
 | ⬜ Unit 4: Sentry, backup drill, retention schedule, k6 |
 
 ## 4. Business invariants the tests enforce

@@ -1,4 +1,4 @@
-"""مبانيك — الوحدات الموسّعة (الجزء ١): الأرض والجدوى، التراخيص، الإنشاء، التحقق من الهوية، العقود والتوقيع،
+"""مبانيك — الوحدات الموسّعة (الجزء 1): الأرض والجدوى، التراخيص، الإنشاء، التحقق من الهوية، العقود والتوقيع،
 الخصومات، الوسطاء، السوق الثانوي، المالية (فواتير، غرامات، فسخ، بوابة دفع، مطابقة بنكية، حساب الضمان، تصدير ERPNext)."""
 import base64
 import csv
@@ -20,7 +20,7 @@ from .common import act_as, audit, db, now_s, rows, today
 from .db import setting, setting_f
 
 router = APIRouter()
-PLAN_LABEL = {"milestone": "مرتبطة بمراحل الإنجاز", "6040": "٦٠/٤٠", "murabaha": "تمويل مرابحة بنكي"}
+PLAN_LABEL = {"milestone": "مرتبطة بمراحل الإنجاز", "6040": "60/40", "murabaha": "تمويل مرابحة بنكي"}
 
 
 def one(c, sql, args=(), msg="غير موجود", code=404):
@@ -105,7 +105,7 @@ def permits(_=Depends(need_any("permits", "view"))):
             elif days <= 60:
                 x["alert"] = f"ينتهي خلال {days} يومًا — ابدأ التجديد"
         if x["status"] in ("submitted", "in_review") and x["applied"] and (t - dt.date.fromisoformat(x["applied"])).days > 30:
-            x["alert"] = "معلق منذ أكثر من ٣٠ يومًا — تابع مع الجهة"
+            x["alert"] = "معلق منذ أكثر من 30 يومًا — تابع مع الجهة"
         out.append(x)
     return out
 
@@ -523,7 +523,7 @@ def commission_pay(cid: int, _=Depends(act_as("finance"))):
     c = db()
     cm = one(c, "SELECT * FROM commissions WHERE id=? AND status='due'", (cid,), "العمولة غير مستحقة", 409)
     if paid_ratio(c, cm["booking_id"]) < .2:
-        raise HTTPException(409, "تُصرف العمولة بعد تحصيل ٢٠٪ من ثمن الوحدة")
+        raise HTTPException(409, "تُصرف العمولة بعد تحصيل 20٪ من ثمن الوحدة")
     c.execute("UPDATE commissions SET status='paid', paid_at=? WHERE id=?", (today().isoformat(), cid))
     audit(c, "صرف عمولة وسيط", f"عمولة {cid} · {cm['amount']:,.0f} ر.ع")
     c.commit()
@@ -983,7 +983,7 @@ def escrow(project_id: int, _=Depends(need_any("finance", "reports"))):
             "contractor_releases": round(released), "retention_held": round(sum(i["approved_pct"] / 100 * i["stage_value"] * ret for i in ipcs)),
             "refunds": round(refunds), "distributions": round(dist), "available_balance_model": round(opening),
             "certified_ipcs": ipcs,
-            "rule": "لا يُصرف من حساب الضمان إلا مقابل مستخلص معتمد بنسبة مثبتة، ويُحتجز ١٠٪ ضمان حسن تنفيذ حتى نهاية فترة الصيانة."}
+            "rule": "لا يُصرف من حساب الضمان إلا مقابل مستخلص معتمد بنسبة مثبتة، ويُحتجز 10٪ ضمان حسن تنفيذ حتى نهاية فترة الصيانة."}
 
 
 # ======================================================================= تصدير إلى ERPNext
