@@ -263,8 +263,8 @@ def _seed_body(c, force: bool, tenant: str) -> None:
                          ORDER BY cu.id LIMIT 1""", (p["id"],)).fetchone()
         if r:
             picks.append((r["id"], r["name"]))
-    from .seed_ext import seed_ext
     from .seed_cycle import seed_cycle
+    from .seed_ext import seed_ext
     brokers = seed_ext(c, rnd, today, pid, projects, tenant)
     seed_cycle(c, rnd, today, pid, tenant, schedule)
     backfill_payments(c, today)

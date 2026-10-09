@@ -1,0 +1,32 @@
+# Local/staging stack: API + PostgreSQL 17. `docker compose up --build` then http://localhost:8800
+# (Unit 1 makes the API use MABANIQ_DATABASE_URL; until then it falls back to SQLite inside the volume.)
+services:
+  api:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+    ports: ["8800:8800"]
+    env_file: [.env]
+    environment:
+      MABANIQ_DATABASE_URL: postgresql://mabaniq:${POSTGRES_PASSWORD:-mabaniq}@db:5432/mabaniq
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes: ["mabaniq_data:/app/data"]
+    restart: unless-stopped
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: mabaniq
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mabaniq}
+      POSTGRES_DB: mabaniq
+    volumes: ["mabaniq_pg:/var/lib/postgresql/data", "./db/migrations:/docker-entrypoint-initdb.d:ro"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mabaniq"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+volumes:
+  mabaniq_data:
+  mabaniq_pg:

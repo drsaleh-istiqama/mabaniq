@@ -7,7 +7,6 @@ import hashlib
 import hmac
 import io
 import json
-import os
 import secrets
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -449,7 +448,7 @@ def _apply_discount(c, bid, pct):
 @router.post("/api/bookings/{bid}/discount")
 def discount(bid: int, d: DiscIn, u=Depends(act_as("book"))):
     c = db()
-    b = one(c, "SELECT * FROM bookings WHERE id=? AND status!='cancelled'", (bid,))
+    one(c, "SELECT * FROM bookings WHERE id=? AND status!='cancelled'", (bid,))
     k = c.execute("SELECT customer_signed_at FROM sale_contracts WHERE booking_id=?", (bid,)).fetchone()
     if k and k["customer_signed_at"]:
         raise HTTPException(409, "لا يُعدّل السعر بعد توقيع العقد — يلزم ملحق عقد")
@@ -895,7 +894,7 @@ async def pay_webhook(request: Request):
         ev = json.loads(raw)
         ts = int(ev["ts"])
     except (ValueError, KeyError, TypeError):
-        raise HTTPException(400, "حمولة غير صالحة")
+        raise HTTPException(400, "حمولة غير صالحة") from None
     if abs(dt.datetime.now().timestamp() - ts) > 300:
         raise HTTPException(401, "انتهت صلاحية الإشعار")
     if ev.get("type") != "payment.succeeded":

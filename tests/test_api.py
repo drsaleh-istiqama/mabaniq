@@ -11,7 +11,6 @@ from fastapi.testclient import TestClient  # noqa: E402
 from backend import auth as A  # noqa: E402
 from backend.app import app  # noqa: E402
 
-
 KYC = {"id_type": "بطاقة مدنية", "id_number": "12345678", "nationality": "عُماني", "id_expiry": "2030-01-01", "source_of_funds": "راتب", "consent_signed": True}
 
 

@@ -18,7 +18,7 @@ from . import pii
 from .auth import need, need_any
 from .common import act_as, audit, db, now_s, rows, today
 from .db import TENANT, audit_verify, backup, data_dir, setting_f
-from .modules import DecideIn, booking_full, issue_invoice, one, paid_ratio, portal_owned
+from .modules import issue_invoice, one, paid_ratio, portal_owned
 
 router = APIRouter()
 
@@ -489,7 +489,7 @@ def wa_reply(c, phone, text) -> dict:
         slot = dt.datetime.combine(today() + dt.timedelta(days=1), dt.time(17, 0))
         c.execute("INSERT INTO viewings(lead_id,project_id,at,status,source) VALUES(?,?,?,?,?)",
                   (lead["id"], lead["project_id"], slot.isoformat(timespec="minutes"), "proposed", "whatsapp"))
-        reply = f"يسعدنا استقبالك. اقترحنا موعد معاينة غدًا الساعة ٥ مساءً. ردّ بكلمة «تأكيد» أو اقترح وقتًا آخر."
+        reply = "يسعدنا استقبالك. اقترحنا موعد معاينة غدًا الساعة ٥ مساءً. ردّ بكلمة «تأكيد» أو اقترح وقتًا آخر."
         actions.append("viewing_proposed")
     elif it["intent"] in ("availability", "greeting"):
         q = "SELECT u.code, u.type, u.view, u.price, p.name project, p.kind FROM units u JOIN projects p ON p.id=u.project_id WHERE u.status='a' AND u.retained=0"

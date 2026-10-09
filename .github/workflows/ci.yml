@@ -1,0 +1,107 @@
+# Continuous integration — Mabaniq (docs/CI.md).
+#
+#   quality      ruff (lint) · node --check on every static script · pip-audit (known CVEs)
+#   test         pytest on SQLite (the development engine) + selfcheck
+#   test-pg      pytest against PostgreSQL 17 — Unit 1 target; allowed to fail until the dbx layer lands
+#   image        Docker image builds and answers /health
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  PYTHON_VERSION: '3.12'
+  PYTHONIOENCODING: utf-8
+
+jobs:
+  quality:
+    name: Lint · static scripts · dependency audit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: pip install -r requirements.txt -r requirements-dev.txt
+      - name: ruff
+        run: ruff check backend tests
+      - name: Static scripts parse (CSP forbids inline scripts, so every script is a file)
+        run: for f in frontend/*.js; do node --check "$f"; done
+      - name: No inline handlers or inline scripts in HTML
+        run: |
+          ! grep -n 'onclick="' frontend/*.html frontend/*.js
+          ! grep -Pzo '<script(?![^>]*\bsrc=)[^>]*>\s*\S' frontend/*.html
+      - name: pip-audit (known vulnerabilities)
+        run: pip-audit -r requirements.txt
+
+  test:
+    name: pytest (SQLite) + selfcheck
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - run: pip install -r requirements.txt -r requirements-dev.txt
+      - run: python -m pytest -q tests
+      - name: selfcheck (demo config)
+        run: python -m backend.selfcheck
+      - name: selfcheck must FAIL on an incomplete production config
+        run: |
+          if MABANIQ_ENV=prod python -m backend.selfcheck; then echo "prod selfcheck passed without secrets — must fail"; exit 1; fi
+
+  test-pg:
+    name: pytest (PostgreSQL 17) — Unit 1 target
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    continue-on-error: true   # becomes blocking when PROGRESS.md marks Unit 1 ✅
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: mabaniq
+          POSTGRES_DB: mabaniq_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      MABANIQ_DATABASE_URL: postgresql://postgres:mabaniq@localhost:5432/mabaniq_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - run: pip install -r requirements.txt -r requirements-dev.txt
+      - run: python -m pytest -q tests
+
+  image:
+    name: Docker image + /health
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f deploy/Dockerfile --build-arg GIT_SHA=${{ github.sha }} -t mabaniq:ci .
+      - run: |
+          docker run -d --name mbq -p 8800:8800 -e MABANIQ_ENV=demo mabaniq:ci
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8800/health && break; sleep 2; done
+          curl -fsS http://127.0.0.1:8800/version
+          docker logs mbq | tail -20

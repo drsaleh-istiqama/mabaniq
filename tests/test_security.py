@@ -8,7 +8,6 @@ from fastapi.testclient import TestClient  # noqa: E402
 from backend import auth as A  # noqa: E402
 from backend.app import app  # noqa: E402
 
-
 CSRF = 'csrf-test-token-' + 'x' * 24
 
 

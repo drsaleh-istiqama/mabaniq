@@ -1,39 +1,75 @@
 """مبانيك | Mabaniq — واجهة برمجية REST (FastAPI)."""
 import datetime as dt
 import os
-from urllib.parse import urlparse
-from pathlib import Path
-
 from contextlib import asynccontextmanager
-
-import contextvars
+from pathlib import Path
+from urllib.parse import urlparse
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import engines as E
 from . import auth as A
-from .auth import need
-from .db import TENANT, audit_insert, audit_verify, backup, connect, init, tenants, valid_tenant
-from .seed import schedule, seed
+from . import engines as E
+from . import observability as O
 from . import pii
+from .auth import need
+from .config import settings
+from .db import TENANT, backup, connect, tenants, valid_tenant
+from .seed import schedule, seed
+
+O.setup_logging()
 
 FRONT = Path(__file__).resolve().parent.parent / "frontend"
 
 
 @asynccontextmanager
 async def lifespan(_app):
+    errs = settings.validate()  # Unit 0: fail fast — an incomplete production configuration never serves a request
+    if errs:
+        raise RuntimeError("إعدادات الإنتاج ناقصة: " + " | ".join(errs))
     pii.prod_checks()  # 0.5.0 — M6: لا إقلاع في الإنتاج بلا أسرار صريحة
+    O.log.info("startup", extra={"event": "startup"})
     for t in tenants():
         seed(tenant=t)
     yield
 
 
 PROD = os.environ.get("MABANIQ_ENV", "demo") == "prod"
-VERSION = "0.5.0"
+VERSION = settings.version
 app = FastAPI(title="Mabaniq API", version=VERSION, lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
+
+
+# ------------------------------------------------------------------ الصحة والإصدار (بلا مصادقة، بلا قاعدة بيانات في /health)
+@app.get("/health")
+def health():
+    return {"status": "ok", "version": VERSION}
+
+
+@app.get("/ready")
+def ready():
+    checks = {}
+    try:
+        c = connect()
+        c.execute("SELECT 1").fetchone()
+        c.close()
+        checks["database"] = "ok"
+    except Exception as e:  # noqa: BLE001
+        checks["database"] = f"error: {type(e).__name__}"
+    try:
+        pii.secret("pii.key", "MABANIQ_PII_KEY", lambda: "")  # raises in prod when missing
+        checks["secrets"] = "ok"
+    except RuntimeError:
+        checks["secrets"] = "missing"
+    checks["config"] = "ok" if not settings.validate() else "invalid"
+    ok = all(v == "ok" for v in checks.values())
+    return JSONResponse({"status": "ready" if ok else "degraded", "checks": checks}, status_code=200 if ok else 503)
+
+
+@app.get("/version")
+def version():
+    return settings.public()
 
 
 from .common import ACTOR, act_as, audit, db  # noqa: E402
@@ -698,6 +734,9 @@ async def security_headers(request: Request, call_next):
 
 
 async def _inner(request: Request, call_next):
+    limited = O.rate_limit(request)  # Unit 0: token bucket per client ip (login / webhook / all api)
+    if limited is not None:
+        return limited
     # حماية CSRF: أي طلب يغيّر البيانات يجب أن يأتي من نفس الأصل
     if request.method not in ("GET", "HEAD", "OPTIONS"):
         origin = request.headers.get("origin") or request.headers.get("referer")
@@ -721,10 +760,14 @@ async def _inner(request: Request, call_next):
         r.headers["Content-Security-Policy"] = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
                                                 "font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; object-src 'none'; "
                                                 "base-uri 'self'; form-action 'self'; frame-ancestors 'none'")
-    r.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-    r.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    r.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"  # سنتان؛ preload قرار مالك
+    r.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=()"
+    r.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+    r.headers["Cross-Origin-Resource-Policy"] = "same-origin"
     if request.url.path.startswith("/api/"):
         r.headers["Cache-Control"] = "no-store"
+    elif request.url.path.startswith("/static/"):
+        r.headers["Cache-Control"] = "public, max-age=3600, must-revalidate"  # الملفات تحمل ?v= الإصدار؛ hashed assets في الوحدة 3
     r.headers["X-Frame-Options"] = "DENY"
     r.headers["X-Content-Type-Options"] = "nosniff"
     r.headers["Referrer-Policy"] = "same-origin"
@@ -732,9 +775,11 @@ async def _inner(request: Request, call_next):
     return r
 
 
-from .modules import router as modules_router, create_commission, issue_invoice  # noqa: E402
+from .modules import create_commission
+from .modules import router as modules_router  # noqa: E402
 from .modules2 import router as modules2_router  # noqa: E402
 
 app.include_router(modules_router)
 app.include_router(modules2_router)
 app.mount("/static", StaticFiles(directory=FRONT), name="static")
+app.add_middleware(O.ObservabilityMiddleware)  # الأبعد خارجيًا: معرّف الطلب وسجل الوصول وتحويل الأعطال إلى JSON 500

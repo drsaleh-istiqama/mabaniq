@@ -1,0 +1,28 @@
+[tool.ruff]
+line-length = 160
+target-version = "py312"
+extend-exclude = ["frontend", "db", "deploy"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B", "I", "UP", "S"]
+ignore = [
+  "E501",   # long Arabic strings in prompts/contract text
+  "S101",   # asserts in tests
+  "S608",   # table/column names in f-strings come from constants, never from input (migrations, pii.encrypt_existing)
+  "S311",   # random is the deterministic demo seed, not crypto
+  "B008",   # FastAPI Depends() in defaults
+  "S105", "S106", "S107",  # demo passwords in seeds/tests are documented
+  "UP007", "UP035", "UP045",
+  "E741", "B007", "B905", "UP031", "E731", "S110",  # legacy style in 0.5.0 code; not worth a diff on business logic
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S", "B", "E402"]
+"backend/seed*.py" = ["S"]
+"backend/selfcheck.py" = ["E402"]
+"backend/app.py" = ["E402"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = ["ignore::DeprecationWarning"]
