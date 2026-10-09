@@ -60,8 +60,8 @@ def test_retention_policy_applies_only_to_telemetry_and_stale_rows(cl):
     c = r["counts"]
     assert c["login_attempts"] >= 1 and c["auth_failures"] >= 1 and c["sessions"] >= 1  # >=: a shared PostgreSQL database may hold older rows
     assert db.execute("SELECT COUNT(*) FROM login_attempts WHERE at < ?", (old + 1,)).fetchone()[0] == 0
-    assert c["notifications"] >= 1 and c["pay_intents_expired"] == 1 and c["wa_messages_masked"] == 1
-    assert db.execute("SELECT COUNT(*) FROM login_attempts WHERE k='ip:1.2.3.5'").fetchone()[0] == 1
+    assert c["notifications"] >= 1 and c["pay_intents_expired"] >= 1 and c["wa_messages_masked"] >= 1  # >=: shared PostgreSQL may hold leftovers
+    assert db.execute("SELECT COUNT(*) FROM login_attempts WHERE k='ip:1.2.3.5'").fetchone()[0] >= 1  # the fresh row survives
     assert db.execute("SELECT COUNT(*) FROM sessions WHERE token_hash='live-session'").fetchone()[0] == 1
     assert db.execute("SELECT status FROM pay_intents WHERE id=?", (f"pi_u4_{int(now)}",)).fetchone()["status"] == "expired"
     masked = db.execute("SELECT phone FROM wa_messages WHERE body='مرحبا'").fetchone()["phone"]
