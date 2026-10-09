@@ -15,7 +15,8 @@
 - `backend/db.py`: SQLite في هذا الإصدار، وPostgreSQL في الإنتاج
 - `web/`: مصادر الواجهة (HTML/CSS/JS بلا إطار، ESM) تُبنى بـVite إلى `frontend/dist` (غير مُتتبَّع؛ `npm ci && npm run build`) — ترجمة `web/locales/`، خط Tajawal ذاتي الاستضافة
 - `e2e/`: Playwright للمسار الحرج (`npm run e2e`)
-- `tests/`: 80 اختبارًا على SQLite وPostgreSQL (`.venv/bin/python -m pytest -q tests`)
+- `scripts/backup/`: نسخ `pg_dump` وتمرين استرجاع كامل (`drill.py`) · `load-tests/`: k6 لـ300 مستخدم (`run.sh`) · `db/migrations/`: ترحيلات PostgreSQL مُرقّمة · `db/tests/`: pgTAP
+- `tests/`: 84 اختبارًا على SQLite و86 على PostgreSQL (`.venv/bin/python -m pytest -q tests`)
 
 ## ما يعمل فعليًا
 - صندوق قرارات يولّده النظام من البيانات، والاعتماد يغيّر البيانات ويُسجَّل

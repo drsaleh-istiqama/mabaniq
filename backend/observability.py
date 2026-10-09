@@ -11,6 +11,7 @@ from __future__ import annotations
 import contextvars
 import json
 import logging
+import re
 import secrets
 import sys
 import threading
@@ -123,6 +124,84 @@ def rate_limit(request: Request):
     return None
 
 
+# ---------------------------------------------------------------- metrics (Unit 4) — Prometheus text format, in-process
+_LAT_BUCKETS = (25, 50, 100, 250, 500, 1000, 2500, 5000)
+_ID_SEG = re.compile(r"(\d|^[0-9a-f]{16,}$|^[A-Za-z0-9_-]{24,}$)")  # any digit (ids, unit codes KHD-V-007), hashes, tokens
+
+
+class Metrics:
+    """Counters by (method, route, status) and a latency histogram by route. Routes have ids collapsed to `{id}` so the
+    label set stays bounded. One instance per worker process."""
+
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.requests: dict[tuple, int] = {}
+        self.hist: dict[tuple, int] = {}
+        self.sum_ms: dict[str, float] = {}
+        self.started = time.time()
+
+    @staticmethod
+    def route(path: str) -> str:
+        if path.startswith("/static/"):
+            return "/static/*"
+        parts = [("{id}" if _ID_SEG.search(p) else p) for p in path.split("/")]
+        return "/".join(parts)[:80] or "/"
+
+    def observe(self, method: str, path: str, status: int, ms: float) -> None:
+        r = self.route(path)
+        with self.lock:
+            k = (method, r, str(status))
+            self.requests[k] = self.requests.get(k, 0) + 1
+            self.sum_ms[r] = self.sum_ms.get(r, 0.0) + ms
+            for b in _LAT_BUCKETS:
+                if ms <= b:
+                    self.hist[(r, str(b))] = self.hist.get((r, str(b)), 0) + 1
+            self.hist[(r, "+Inf")] = self.hist.get((r, "+Inf"), 0) + 1
+
+    def render(self, extra: dict | None = None) -> str:
+        out = ["# HELP mabaniq_http_requests_total Requests by method, route and status", "# TYPE mabaniq_http_requests_total counter"]
+        with self.lock:
+            for (m, r, s), n in sorted(self.requests.items()):
+                out.append(f'mabaniq_http_requests_total{{method="{m}",route="{r}",status="{s}"}} {n}')
+            out += ["# HELP mabaniq_http_request_duration_ms Request latency histogram per route", "# TYPE mabaniq_http_request_duration_ms histogram"]
+            for (r, le), n in sorted(self.hist.items(), key=lambda kv: (kv[0][0], float("inf") if kv[0][1] == "+Inf" else float(kv[0][1]))):
+                out.append(f'mabaniq_http_request_duration_ms_bucket{{route="{r}",le="{le}"}} {n}')
+            for r, s in sorted(self.sum_ms.items()):
+                out.append(f'mabaniq_http_request_duration_ms_sum{{route="{r}"}} {s:.1f}')
+                out.append(f'mabaniq_http_request_duration_ms_count{{route="{r}"}} {self.hist.get((r, "+Inf"), 0)}')
+        out += ["# TYPE mabaniq_process_uptime_seconds gauge", f"mabaniq_process_uptime_seconds {time.time() - self.started:.0f}",
+                "# TYPE mabaniq_build_info gauge", f'mabaniq_build_info{{version="{settings.version}",env="{settings.env}"}} 1']
+        for k, v in (extra or {}).items():
+            out.append(f"# TYPE mabaniq_db_pool_{k} gauge")
+            out.append(f"mabaniq_db_pool_{k} {v}")
+        return "\n".join(out) + "\n"
+
+
+metrics = Metrics()
+
+
+def init_sentry() -> bool:
+    """Optional error monitoring: active only when MABANIQ_SENTRY_DSN is set. No PII, no request bodies, no cookies."""
+    if not settings.sentry_dsn:
+        return False
+    import sentry_sdk
+
+    def scrub(event, _hint):
+        req = event.get("request") or {}
+        req.pop("cookies", None)
+        req.pop("data", None)
+        headers = req.get("headers") or {}
+        for h in ("Cookie", "Authorization", "X-CSRF-Token"):
+            headers.pop(h, None)
+        event.pop("user", None)
+        return event
+
+    sentry_sdk.init(dsn=settings.sentry_dsn, environment=settings.env, release=f"mabaniq@{settings.version}",
+                    send_default_pii=False, traces_sample_rate=0.05, before_send=scrub, max_request_body_size="never")
+    log.info("sentry enabled", extra={"event": "sentry"})
+    return True
+
+
 # ---------------------------------------------------------------- middleware
 class ObservabilityMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
@@ -138,6 +217,7 @@ class ObservabilityMiddleware(BaseHTTPMiddleware):
                 log.exception("unhandled error", extra={"method": request.method, "path": request.url.path, "ip": client_ip(request)})
                 response = JSONResponse({"detail": "خطأ داخلي — أبلغ الدعم برقم الطلب", "request_id": rid}, status_code=500)
             ms = round((time.perf_counter() - t0) * 1000, 1)
+            metrics.observe(request.method, request.url.path, response.status_code, ms)
             response.headers["X-Request-ID"] = rid
             user = getattr(request.state, "user", None)
             log.info("access", extra={"method": request.method, "path": request.url.path, "status": response.status_code, "ms": ms,

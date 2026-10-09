@@ -1,19 +1,24 @@
 """مبانيك | Mabaniq — واجهة برمجية REST (FastAPI)."""
+import asyncio
+import contextlib
 import datetime as dt
+import hmac
+import json
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import urlparse
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from . import auth as A
+from . import cache, dbx, pii, retention
 from . import engines as E
 from . import observability as O
-from . import pii
 from .auth import need
 from .config import settings
 from .db import TENANT, backup, connect, tenants, valid_tenant
@@ -32,10 +37,21 @@ async def lifespan(_app):
     pii.prod_checks()  # 0.5.0 — M6: لا إقلاع في الإنتاج بلا أسرار صريحة
     if not (FRONT / "index.html").exists():
         raise RuntimeError("الواجهة غير مبنية: شغّل `npm ci && npm run build` (الوحدة 3 — المصادر في web/ والمخرجات في frontend/dist)")
+    O.init_sentry()  # Unit 4: optional, DSN from the environment only
     O.log.info("startup", extra={"event": "startup"})
     for t in tenants():
         seed(tenant=t)
-    yield
+    stop = asyncio.Event()
+    task = asyncio.create_task(retention.scheduler(stop)) if settings.retention_enabled else None  # Unit 4: PDPL retention
+    try:
+        yield
+    finally:
+        stop.set()
+        if task:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await task
+        dbx.close_pools()
 
 
 PROD = os.environ.get("MABANIQ_ENV", "demo") == "prod"
@@ -74,6 +90,18 @@ def version():
     return settings.public()
 
 
+@app.get("/metrics", include_in_schema=False)
+def metrics_endpoint(request: Request):
+    """Unit 4: Prometheus text format. Exposed only when MABANIQ_METRICS_TOKEN is set, and only to its bearer."""
+    token = O.settings.metrics_token
+    if not token:
+        raise HTTPException(404)
+    auth = request.headers.get("authorization", "")
+    if not (auth.startswith("Bearer ") and hmac.compare_digest(auth[7:], token)):
+        raise HTTPException(401, "رمز المقاييس غير صحيح")
+    return Response(O.metrics.render(dbx.pool_stats()), media_type="text/plain; version=0.0.4; charset=utf-8", headers={"Cache-Control": "no-store"})
+
+
 from .common import ACTOR, act_as, audit, db  # noqa: E402
 
 
@@ -88,8 +116,20 @@ def expire_holds(c):
 
 
 # ------------------------------------------------------------------ قراءة
+def _cached_json(key: str, compute):
+    """Unit 4: the heavy dashboards are cached per tenant as *serialised* JSON — FastAPI's encoder on a few thousand rows costs
+    more than the query once the computation itself is shared; any write of the tenant invalidates (cache.bump)."""
+    body = cache.get(TENANT.get(), key, lambda: json.dumps(jsonable_encoder(compute()), ensure_ascii=False, separators=(",", ":")).encode(),
+                     settings.cache_ttl)
+    return Response(content=body, media_type="application/json")
+
+
 @app.get("/api/projects")
 def projects(_=Depends(need("view"))):
+    return _cached_json("projects", _projects)
+
+
+def _projects():
     c = db()
     out = []
     for p in c.execute("SELECT * FROM projects ORDER BY id"):
@@ -163,7 +203,7 @@ def risk(_=Depends(need("finance"))):
 
 @app.get("/api/cash")
 def cash(plan: bool = False, _=Depends(need("view"))):
-    return E.cash_radar(db(), plan)
+    return _cached_json(f"cash:{int(plan)}", lambda: E.cash_radar(db(), plan))
 
 
 @app.get("/api/ipcs")
@@ -178,7 +218,8 @@ def ipcs(_=Depends(need("construction"))):
 
 @app.get("/api/decisions")
 def decisions(_=Depends(need("view"))):
-    return E.decisions(db())
+    # Unit 4: whole-portfolio computation (~130 ms) shared by every dashboard for a few seconds; any write of the tenant invalidates it
+    return _cached_json("decisions", lambda: E.decisions(db()))
 
 
 @app.get("/api/audit")
@@ -798,13 +839,16 @@ async def security_headers(request: Request, call_next):
     TENANT.set(t if t != "__none__" else "jadwa")
     if t == "__none__":
         request.scope["headers"] = [(k, v) for k, v in request.scope["headers"] if k != b"cookie"]
-    from .common import OPEN, close_all
+    from .common import close_all
+    from .db import OPEN
     conns = []
     OPEN.set(conns)
     try:
         return await _inner(request, call_next)
     finally:
         close_all(conns)
+        if request.method not in ("GET", "HEAD", "OPTIONS") and request.url.path.startswith("/api/"):
+            cache.bump(TENANT.get())  # Unit 4: a write makes every cached dashboard of this developer stale at once
 
 
 async def _inner(request: Request, call_next):

@@ -31,7 +31,7 @@ mabaniq-api (uvicorn, container deploy/Dockerfile, non-root, /health /ready /ver
    ├─ security middleware: rate limit → CSRF (origin + token) → size/type caps → headers   ✅
    ├─ routers: app.py (core + auth + portal) · modules.py (land→finance) · modules2.py (post-sale→admin)
    ├─ engines.py / engines_ext.py: explainable rule engines (pricing, default risk, cash radar, feasibility, KYC, WA)
-   └─ dbx (⬜ Unit 1): one API over PostgreSQL (prod) / SQLite (dev, tests)
+   └─ dbx: one API over PostgreSQL (prod, psycopg_pool, SET ROLE + app.org_id per checkout) / SQLite (dev, tests)   ✅ Units 1+4
    ▼
 PostgreSQL 17 (prod, RLS, pgTAP)  ·  SQLite WAL (dev/tests)
 Object storage: `data/docs_store/<tenant>/` on disk today → bucket in Unit 4
@@ -98,7 +98,7 @@ c.columns(table); c.has_table(table); c.in_transaction; c.maintenance()/end_main
 | ⬜ Unit 1: RLS per tenant; rate-limit state in DB; `DELETE` grants removed from financial tables |
 | Graded lockout (cooldown 1→60 s after 3 failures, no account lock), DB-backed per-ip login budget, sessions with device/ip/last-seen + 60-min idle timeout, self and admin revocation, TOTP recovery codes, session rotation when 2FA is enabled or the password changes, admin 2FA reset | `auth.py`, `app.py` (Unit 2) |
 | `style-src 'self'` + `font-src 'self'` (no external hosts), `style-src-attr 'unsafe-inline'` as documented debt, hashed immutable assets under `/static/assets/`, no inline scripts, Playwright critical path | `app.py`, `vite.config.js`, `docs/SECURITY_HEADERS.md`, `e2e/` (Unit 3) |
-| ⬜ Unit 4: Sentry, backup drill, retention schedule, k6 |
+| Connection pool with `RESET ROLE; RESET ALL` on return, request-scoped close of every connection, `updated_at` triggers, DELETE revoked on 14 ledgers, scheduled PDPL retention with one audit line per run, backup → restore drill (row counts, audit chain, pgTAP on the copy) in CI, `/metrics` behind a bearer token, optional Sentry without PII | `dbx.py`, `db.py`, `retention.py`, `db/migrations/0003_unit4_integrity.sql`, `scripts/backup/`, `observability.py` (Unit 4) |
 
 ## 4. Business invariants the tests enforce
 

@@ -52,12 +52,19 @@ def db_path(tenant: str | None = None) -> str:
     return str(data_dir() / f"tenant_{t}.db")
 
 
+OPEN = contextvars.ContextVar("open_conns", default=None)  # Unit 4: every connection opened inside a request is closed with it
+
+
 def connect(tenant: str | None = None):
-    """Unit 1: one entry point for both engines (sqlite file per tenant, or PostgreSQL with RLS per tenant)."""
+    """Unit 1: one entry point for both engines (sqlite file per tenant, or PostgreSQL with RLS per tenant).
+    Unit 4: when a request-scoped list is active (set by the app middleware) the connection is registered in it, so
+    auth/business code that forgets `close()` still returns its pooled connection at the end of the request."""
     t = tenant or TENANT.get()
-    if dbx.is_postgres():
-        return dbx.connect(t)
-    return dbx.connect(t, db_path(t))
+    c = dbx.connect(t) if dbx.is_postgres() else dbx.connect(t, db_path(t))
+    lst = OPEN.get()
+    if lst is not None:
+        lst.append(c)
+    return c
 
 
 SCHEMA = """

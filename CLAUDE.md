@@ -31,7 +31,7 @@
 | Frontend    | Arabic RTL first (`dir="rtl" lang="ar"` explicit), Hijri date first in customer-facing pages; Sources in `web/` (plain ESM, 4 entries) built by Vite into `frontend/dist` (git-ignored; the API refuses to start without it). Locale files `web/locales/{ar,en}.json` via `data-i18n`; Tajawal self-hosted; **Western digits only** — `WD()` inside `esc()` normalises every string, `npm run check` rejects Arabic-Indic digits in sources. |
 | Finance     | Islamic finance only (owner rule 2026-10-04): no interest income or cost; late payment = charity condition (`charity_dues`), never revenue.      |
 | Tests       | pytest (API, security, business modules, regressions per release) · pgTAP for RLS (Unit 1) · Playwright critical path `e2e/` (`npm run e2e`) · k6 (Unit 4). |
-| CI/CD       | GitHub Actions `.github/workflows/ci.yml`: quality (ruff · `npm run check` · build · size · audits) · test (SQLite) · test-pg (PostgreSQL + pgTAP) · e2e (Playwright) · image.                    |
+| CI/CD       | GitHub Actions `.github/workflows/ci.yml`: quality (ruff · `npm run check` · build · size · audits) · test (SQLite) · test-pg (PostgreSQL + pgTAP + backup→restore drill) · e2e (Playwright) · image. Load: `sh load-tests/run.sh postgres 300` locally (not in CI).                    |
 | Version     | Single source `backend/config.py::VERSION`, exposed on `/version` and injected as `MABANIQ_GIT_SHA` by the image build.                         |
 
 ## Run locally
@@ -50,11 +50,15 @@ docker compose up --build                              # API + PostgreSQL 17 (AP
 
 ## Working rules
 
-- Build order (PROGRESS.md): Unit 0 tooling → Unit 1 PostgreSQL/RLS/pgTAP → Unit 2 identity → Unit 3 frontend → Unit 4 operations. Do not move on while tests fail.
+- Units 0–4 of PROGRESS.md are complete (0.9.0, 2026-10-10). New work starts from the open items at the end of PROGRESS.md and `docs/OWNER_DECISIONS.md`. Do not move on while tests fail.
 - One clear commit per completed item; update `PROGRESS.md` in the same commit. Never commit `.env`, `data/`, `.venv/`.
 - Code and comments may be Arabic or English; **user-facing text is Arabic** (English through `web/locales/en.json` + `data-i18n`, never hard-coded strings; dynamic strings from the API stay Arabic until the API grows a locale parameter).
 - Every write endpoint: server-side permission (`need/act_as`), Pydantic model with bounds, one audit line, one DB connection per request, commit once.
 - No new inline `<script>`, no `onclick=`, no external script/style/font hosts (`npm run check` + `test_security.py` enforce it). A new remote origin is a CSP change in `app.py` with a test and a line in `docs/SECURITY_HEADERS.md`.
 - Never edit `frontend/dist`; edit `web/` and rebuild. Hashed assets are immutable-cached, pages are `no-store`.
+- Read-heavy dashboards go through `backend/cache.py` (`_cached_json` in app.py): per-tenant, 10 s, invalidated by any mutating `/api` request, single-flight. A write done outside the API (script, SQL) is visible after one TTL. Tests run with `MABANIQ_CACHE_TTL=0` (tests/conftest.py).
+- PostgreSQL connections come from a pool (`dbx.pool()`); every `connect()` inside a request is registered in `db.OPEN` and closed with it — still call `close()` in scripts and background jobs. `RESET ROLE; RESET ALL` runs on every return to the pool: never rely on session state across requests.
+- Financial ledgers have no DELETE for the app role (migration 0003); corrections are new rows. New ledger table → add it to the REVOKE list and to `db/tests/02_unit4_integrity.sql`.
+- Retention rules live only in `backend/retention.py` (documented in RUNBOOK §5); a new table with personal data gets a rule there or an explicit "kept because …" note.
 - Bash heredocs in this environment corrupt backslashes: write scripts with the Write tool, not `python - <<EOF`.
 - Never add a git remote or push without the owner's explicit permission (owner decision 10).

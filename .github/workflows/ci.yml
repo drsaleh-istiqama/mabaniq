@@ -103,15 +103,28 @@ jobs:
           cache: npm
       - run: npm ci --no-audit --no-fund && npm run build
       - run: pip install -r requirements.txt -r requirements-dev.txt
-      - name: pgTAP (extension from the postgres image is not bundled — install it)
+      - name: PostgreSQL 17 client tools (pg_dump must match the server major) + pgTAP
         run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client git make >/dev/null
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client-17 git make >/dev/null
           git clone --depth 1 --branch v1.3.4 https://github.com/theory/pgtap.git /tmp/pgtap
           psql "$MABANIQ_DATABASE_URL" -v ON_ERROR_STOP=1 -q -f /tmp/pgtap/sql/pgtap.sql
-      - name: pytest on PostgreSQL
+      - name: pytest on PostgreSQL (connection pool, RLS, Unit 4 integrity)
         run: python -m pytest tests
-      - name: pgTAP — RLS per organisation on every table
+      - name: pgTAP — RLS per organisation + updated_at triggers + ledger DELETE revoked
         run: python db/run_pgtap.py
+      - name: Backup → restore drill (Unit 4, acceptance 14) — dump, restore into a new database, row counts, audit chain, pgTAP on the copy
+        run: python scripts/backup/drill.py --source "$MABANIQ_DATABASE_URL" --target mabaniq_drill --pgtap --pgtap-sql /tmp/pgtap/sql/pgtap.sql
+        env:
+          PG_BIN: /usr/lib/postgresql/17/bin
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backup-drill-report
+          path: .local/backup-drill/
+          retention-days: 30
 
   e2e:
     name: Playwright — critical path in Chromium

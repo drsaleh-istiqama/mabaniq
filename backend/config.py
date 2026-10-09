@@ -10,7 +10,7 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
-VERSION = "0.8.0"
+VERSION = "0.9.0"
 ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -28,6 +28,10 @@ def _rate(name: str, default: str) -> tuple[int, int]:
     except ValueError:
         n, s = default.split("/")
         return int(n), int(s)
+
+
+# Unit 4 — retention policy in days (backend/retention.py documents what each rule does)
+DEFAULT_RETENTION = {"login": 30, "sessions": 7, "notifications": 180, "pay_intents": 90, "messages": 730}
 
 
 @dataclass(frozen=True)
@@ -51,6 +55,14 @@ class Settings:
     pii_key_set: bool = False
     pay_secret_set: bool = False
     sentry_dsn: str = ""
+    # Unit 4 — operations
+    metrics_token: str = ""                      # bearer token for GET /metrics (empty = endpoint not exposed)
+    pg_pool_max: int = 10                        # psycopg_pool connections per process
+    pg_pool_timeout: float = 10.0                # seconds to wait for a free connection before failing the request
+    retention_enabled: bool = True
+    retention_hours: int = 24
+    retention: dict = field(default_factory=lambda: dict(DEFAULT_RETENTION))
+    cache_ttl: float = 10.0                      # seconds a dashboard computation is shared per tenant (0 = off)
     extra: dict = field(default_factory=dict)
 
     @property
@@ -79,6 +91,13 @@ class Settings:
             pii_key_set=bool(os.environ.get("MABANIQ_PII_KEY")),
             pay_secret_set=bool(os.environ.get("MABANIQ_PAY_SECRET")),
             sentry_dsn=os.environ.get("MABANIQ_SENTRY_DSN", ""),
+            metrics_token=os.environ.get("MABANIQ_METRICS_TOKEN", ""),
+            pg_pool_max=int(os.environ.get("MABANIQ_PG_POOL_MAX", "10")),
+            pg_pool_timeout=float(os.environ.get("MABANIQ_PG_POOL_TIMEOUT", "10")),
+            retention_enabled=_bool("MABANIQ_RETENTION", True),
+            retention_hours=int(os.environ.get("MABANIQ_RETENTION_HOURS", "24")),
+            retention={k: int(os.environ.get(f"MABANIQ_RETENTION_{k.upper()}_DAYS", str(v))) for k, v in DEFAULT_RETENTION.items()},
+            cache_ttl=float(os.environ.get("MABANIQ_CACHE_TTL", "10")),
         )
 
     def validate(self) -> list[str]:

@@ -209,6 +209,27 @@ def ensure_users(c, customers: list[tuple[int, str]], brokers: list[tuple[int, s
         os.chmod(f, 0o600)
 
 
+def apply_demo_password(c) -> int:
+    """Hosted demo on a persistent database: MABANIQ_DEMO_PASSWORD is the declared password of every demo account, so a
+    changed variable (or a database seeded under another one) is honoured at the next start-up without a reseed. Returns the
+    number of accounts re-hashed. Never in production (no demo accounts there)."""
+    demo_pw = os.environ.get("MABANIQ_DEMO_PASSWORD")
+    if prod() or not demo_pw:
+        return 0
+    ensure_schema(c)
+    force = 1 if os.environ.get("MABANIQ_FORCE_PW_CHANGE", "1") == "1" else 0
+    names = [u for u, _n, _r in DEMO]
+    n = 0
+    for u in c.execute("SELECT username, pw FROM users WHERE username IN (%s) OR username LIKE 'client%%' OR username LIKE 'broker%%'"
+                       % ",".join("?" * len(names)), names).fetchall():
+        if not check_pw(demo_pw, u["pw"]):
+            c.execute("UPDATE users SET pw=?, must_change=? WHERE username=?", (hash_pw(demo_pw), force, u["username"]))
+            n += 1
+    if n:
+        c.commit()
+    return n
+
+
 # ---------------------------------------------------------------- قفل المحاولات (دائم)
 def _fail_count(c, k: str, window: int) -> int:
     return c.execute("SELECT COUNT(*) FROM auth_failures WHERE k=? AND at>?", (k, time.time() - window)).fetchone()[0]

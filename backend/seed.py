@@ -99,6 +99,8 @@ def _seed(force: bool, tenant: str) -> None:
 def _seed_body(c, force: bool, tenant: str) -> None:
     init(c)
     if c.execute("SELECT COUNT(*) FROM projects").fetchone()[0] and not force:
+        from .auth import apply_demo_password
+        apply_demo_password(c)  # Unit 4: a persistent database keeps its data, but the declared demo password always applies
         return
     wipe_for_reseed(c, ALL_TABLES)
     # حسابات العملاء/الوسطاء المنشأة أثناء الاستخدام تشير إلى معرّفات عملاء ستُعاد؛ تُحذف مع إعادة البذر (حسابات العرض تُعاد ربطها في ensure_users)

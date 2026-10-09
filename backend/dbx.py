@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import re
 import sqlite3
+import threading
 from pathlib import Path
 
 from .config import settings
@@ -161,9 +162,11 @@ class PgCursor:
 class PgConn:
     dialect = "postgres"
 
-    def __init__(self, raw, tenant: str):
+    def __init__(self, raw, tenant: str, pool=None):
         self._c = raw
         self.tenant = tenant
+        self._pool = pool
+        self._closed = False
 
     # -- sqlite-compatible surface
     def execute(self, sql: str, params=()):
@@ -195,7 +198,27 @@ class PgConn:
         self._c.rollback()
 
     def close(self):
-        self._c.close()
+        """Unit 4: hand the connection back to the pool (role and GUCs are reset there) — idempotent, like sqlite3.close()."""
+        if self._closed:
+            return
+        self._closed = True
+        if self._pool is None:
+            self._c.close()
+            return
+        try:
+            if self.in_transaction:
+                self._c.rollback()
+        except Exception:  # noqa: BLE001 — a broken connection is discarded by the pool on putconn
+            pass
+        self._pool.putconn(self._c)
+
+    def __del__(self):
+        # safety net for callers (tests, scripts) that drop a connection without close(): return it instead of starving the pool
+        if not getattr(self, "_closed", True) and self._pool is not None:
+            try:
+                self.close()
+            except Exception:  # noqa: BLE001
+                pass
 
     @property
     def in_transaction(self) -> bool:
@@ -223,24 +246,79 @@ class PgConn:
         return f"DELETE FROM {table} WHERE org_id = current_setting('app.org_id', true)"
 
 
-_pg_ready: set[str] = set()
+# ---------------------------------------------------------------- connection pool (Unit 4)
+_pools: dict = {}
+_pool_lock = threading.Lock()
+
+
+def _configure(raw) -> None:
+    from psycopg.types.numeric import FloatLoader
+    raw.adapters.register_loader("numeric", FloatLoader)  # SUM(bigint) etc. come back as float like sqlite, not Decimal
+
+
+def _reset(raw) -> None:
+    """Runs when a connection returns to the pool: leave the RLS-bound role and drop every session GUC (app.org_id,
+    app.maintenance) so the next tenant can never inherit the previous one's identity."""
+    from psycopg.pq import TransactionStatus
+    if raw.info.transaction_status != TransactionStatus.IDLE:
+        raw.rollback()
+    with raw.cursor() as cur:
+        cur.execute("RESET ROLE")
+        cur.execute("RESET ALL")
+    raw.commit()
+
+
+def pool():
+    """One psycopg_pool.ConnectionPool per database URL, created on first use; migrations are applied once before it opens."""
+    url = settings.database_url
+    p = _pools.get(url)
+    if p is not None:
+        return p
+    with _pool_lock:
+        p = _pools.get(url)
+        if p is None:
+            import psycopg
+            from psycopg_pool import ConnectionPool
+            with psycopg.connect(url, autocommit=False) as boot:
+                apply_migrations(boot)
+            p = ConnectionPool(url, min_size=1, max_size=settings.pg_pool_max, timeout=settings.pg_pool_timeout, open=True,
+                               configure=_configure, reset=_reset, name="mabaniq", max_idle=300, max_lifetime=3600,
+                               kwargs={"autocommit": False})
+            _pools[url] = p
+    return p
+
+
+def pool_stats() -> dict:
+    p = _pools.get(settings.database_url)
+    if p is None:
+        return {}
+    s = p.get_stats()
+    return {k: s.get(k, 0) for k in ("pool_size", "pool_available", "requests_waiting", "requests_num", "requests_errors", "connections_num", "pool_max")}
+
+
+def close_pools() -> None:
+    for p in list(_pools.values()):
+        try:
+            p.close()
+        except Exception:  # noqa: BLE001
+            pass
+    _pools.clear()
 
 
 def _pg_connect(tenant: str) -> PgConn:
-    import psycopg
-    from psycopg.types.numeric import FloatLoader
-    raw = psycopg.connect(settings.database_url, autocommit=False)
-    raw.adapters.register_loader("numeric", FloatLoader)  # SUM(bigint) etc. come back as float like sqlite, not Decimal
-    if settings.database_url not in _pg_ready:
-        apply_migrations(raw)
-        _pg_ready.add(settings.database_url)
-    with raw.cursor() as cur:
-        cur.execute("SELECT 1 FROM pg_roles WHERE rolname=%s", (APP_ROLE,))
-        if cur.fetchone():
-            cur.execute(f"SET ROLE {APP_ROLE}")
-        cur.execute("SELECT set_config('app.org_id', %s, false)", (tenant,))
-    raw.commit()
-    return PgConn(raw, tenant)
+    p = pool()
+    raw = p.getconn()
+    try:
+        with raw.cursor() as cur:
+            cur.execute("SELECT 1 FROM pg_roles WHERE rolname=%s", (APP_ROLE,))
+            if cur.fetchone():
+                cur.execute(f"SET ROLE {APP_ROLE}")
+            cur.execute("SELECT set_config('app.org_id', %s, false)", (tenant,))
+        raw.commit()
+    except Exception:
+        p.putconn(raw)
+        raise
+    return PgConn(raw, tenant, p)
 
 
 def apply_migrations(raw) -> list[str]:

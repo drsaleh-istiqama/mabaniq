@@ -794,6 +794,20 @@ def do_backup(_=Depends(act_as("admin"))):
     return {"file": name}
 
 
+# ======================================================================= الاحتفاظ بالبيانات (الوحدة 4 — PDPL)
+@router.get("/api/admin/retention")
+def retention_status(_=Depends(need("admin"))):
+    from . import retention as R
+    return {"policy": R.policy(), "last_run": R.last_run(db())}
+
+
+@router.post("/api/admin/retention/run")
+def retention_run(u=Depends(act_as("admin"))):
+    """تشغيل يدوي للسياسة نفسها التي يطبّقها المجدول؛ تُسجَّل الأعداد في سجل التدقيق باسم المنفّذ."""
+    from . import retention as R
+    return R.run(db(), actor=u["name"])
+
+
 @router.get("/api/audit/verify")
 def verify_audit(_=Depends(need("audit"))):
     return audit_verify(db())

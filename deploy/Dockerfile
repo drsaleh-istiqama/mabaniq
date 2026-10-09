@@ -30,4 +30,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8800/health', timeout=3).status==200 else 1)"
 
 # --proxy-headers: trust X-Forwarded-* only behind the platform proxy
-CMD ["sh", "-c", "uvicorn backend.app:app --host ${HOST} --port ${PORT} --proxy-headers --forwarded-allow-ips='*' --no-access-log"]
+CMD ["sh", "-c", "uvicorn backend.app:app --host ${HOST} --port ${PORT} --workers ${WEB_CONCURRENCY:-2} --proxy-headers --forwarded-allow-ips='*' --no-access-log"]

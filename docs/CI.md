@@ -8,6 +8,7 @@
 | `quality` | `ruff check backend tests` · `npm run check` (كل `web/*.js` يُحلَّل، لا `onclick=` ولا `<script>` مضمّن، `dir="rtl" lang="ar"` على الجذر، لا أرقام هندية في المصادر) · `npm run build` + `npm run size` (ميزانية JS الأولي ≤ 200 kB gzip) · `pip-audit` · `npm audit --audit-level=high` | أي خطأ lint، أي فحص ويب، تجاوز الميزانية، أي CVE معروف |
 | `test` | `pytest -q tests` على SQLite (بعد `npm run build` — الخادم يرفض الإقلاع بلا `frontend/dist`) · `python -m backend.selfcheck` · **ويتأكد أن selfcheck يفشل** عند `MABANIQ_ENV=prod` بلا أسرار | أي اختبار؛ أو نجاح الإنتاج بلا أسرار (خلل في fail-fast) |
 | `test-pg` | `pytest` ضد PostgreSQL 17 (خدمة) عبر `MABANIQ_DATABASE_URL` ثم **pgTAP** (`python db/run_pgtap.py`: RLS مفعّلة ومفروضة وسياسة وعمود `org_id` على كل جدول + عزل سلوكي بين مطوّرين) | حاجز منذ الوحدة 1 |
+| `test-pg` (تابع) | **تمرين الاسترجاع** `scripts/backup/drill.py --pgtap --pgtap-sql …` بعميل PostgreSQL 17 من مستودع PGDG (إصدار `pg_dump` يجب أن يطابق الخادم)؛ التقرير يُرفع artifact `backup-drill-report` | أي خطوة من النسخ أو الاسترجاع أو المطابقة أو pgTAP على النسخة |
 | `e2e` | **Playwright** في Chromium على خادم مؤقت (SQLite، كلمة عرض معروفة): المسار الحرج حجز ⟵ KYC ⟵ تأكيد ⟵ عقد ⟵ توقيع ⟵ حساب عميل ⟵ دخول العميل وتغيير كلمة المرور ⟵ سداد من البوابة ⟵ خطاب صرف بنكي ⟵ شهادة تسليم، + CSP/الحزمة المُجزَّأة + تبديل اللغة (`e2e/critical-path.spec.js`) | أي خطوة؛ الآثار (trace) تُرفع عند الفشل |
 | `image` | `docker build` بـ`GIT_SHA` ثم تشغيل الحاوية والتحقق من `/health` و`/version` | فشل البناء أو عدم الاستجابة خلال 60 ثانية |
 

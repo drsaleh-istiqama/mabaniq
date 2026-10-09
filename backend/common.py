@@ -5,10 +5,9 @@ import datetime as dt
 from fastapi import Depends
 
 from .auth import ensure_schema, need
-from .db import TENANT, audit_insert, connect, init
+from .db import TENANT, audit_insert, connect, init  # OPEN lives in db.py since Unit 4 (every connect() registers itself)
 
 ACTOR = contextvars.ContextVar("actor", default="النظام")
-OPEN = contextvars.ContextVar("open_conns", default=None)
 _ready: set = set()
 
 
@@ -24,10 +23,7 @@ def close_all(lst):
 
 
 def db():
-    c = connect()
-    lst = OPEN.get()
-    if lst is not None:
-        lst.append(c)
+    c = connect()  # registered in OPEN by connect()
     t = TENANT.get()
     if t not in _ready:
         init(c)
