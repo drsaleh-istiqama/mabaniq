@@ -42,6 +42,11 @@
    مجدولة (PDPL)، مراقبة أخطاء (Sentry)، k6 لـ300 مستخدم على المسارات الثقيلة (`/api/decisions`، `/api/cash`)،
    تقرير قبول `docs/ACCEPTANCE.md` بنتائج CI لا محلية.
 
+**الاستضافة (2026-10-09، بقرار المالك):** GitHub `drsaleh-istiqama/mabaniq` + Railway مشروع `mabaniq` (خدمة `mabaniq-api`
+من `main` بـ`deploy/Dockerfile` + قالب PostgreSQL)؛ بيئة عرض على `https://mabaniq-api-production.up.railway.app` (`MABANIQ_ENV=demo`،
+بيانات تجريبية، كلمة عرض موحّدة في متغير `MABANIQ_DEMO_PASSWORD` بلوحة Railway). ملاحظة: الدفع إلى GitHub لم يُشغّل بناءً
+تلقائيًا بعد (يلزم تثبيت تطبيق Railway على المستودع من اللوحة)؛ حتى حينه يُعاد ربط المصدر بعد كل دفع ليبدأ البناء.
+
 ## ترتيب الوحدات
 
 | الوحدة | المحتوى                                                | الحالة |
