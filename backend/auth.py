@@ -174,6 +174,7 @@ def ensure_users(c, customers: list[tuple[int, str]], brokers: list[tuple[int, s
             os.chmod(fa, 0o600)
         return
     creds = json.loads(f.read_text()) if f.exists() else {}
+    demo_pw = os.environ.get("MABANIQ_DEMO_PASSWORD") or None  # بيئة عرض مستضافة: كلمة واحدة لكل حسابات العرض بدل ملف يضيع مع الحاوية
     rotate = not f.exists()  # الملف مفقود (قاعدة PostgreSQL قائمة من تشغيل سابق مثلًا) ⟵ تُدوَّر كلمات مرور العرض وتُكتب من جديد
     force = 1 if os.environ.get("MABANIQ_FORCE_PW_CHANGE", "1") == "1" else 0
     wanted = [(u, n, r, None, None) for u, n, r in DEMO]
@@ -182,15 +183,15 @@ def ensure_users(c, customers: list[tuple[int, str]], brokers: list[tuple[int, s
     changed = False
     for un, name, role, cust, brk in wanted:
         if not c.execute("SELECT 1 FROM users WHERE username=?", (un,)).fetchone():
-            pw = creds.get(un) or temp_password()
+            pw = demo_pw or creds.get(un) or temp_password()
             c.execute("INSERT INTO users(username,name,role,pw,customer_id,broker_id,must_change) VALUES(?,?,?,?,?,?,?)",
                       (un, name, role, hash_pw(pw), cust, brk, force))
             creds[un] = pw
             changed = True
         else:
             c.execute("UPDATE users SET customer_id=?, broker_id=?, name=? WHERE username=?", (cust, brk, name, un))
-            if rotate:
-                pw = temp_password()
+            if rotate or (demo_pw and creds.get(un) != demo_pw):
+                pw = demo_pw or temp_password()
                 c.execute("UPDATE users SET pw=?, must_change=? WHERE username=?", (hash_pw(pw), force, un))
                 creds[un] = pw
                 changed = True

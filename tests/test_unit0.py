@@ -85,3 +85,21 @@ def test_settings_validation_prod_fail_fast(monkeypatch):
     assert Settings.from_env().validate() == []
     monkeypatch.setenv("MABANIQ_ENV", "demo")
     assert Settings.from_env().validate() == []
+
+
+def test_demo_password_from_environment(monkeypatch):
+    """Hosted demo: one password for every demo account, applied on (re)seed, never in a file."""
+    from backend import auth as A
+    monkeypatch.setenv("MABANIQ_DEMO_PASSWORD", "Demo-Pass-2026-x")
+    with TestClient(app) as c:
+        c.cookies.set(A.COOKIE, A.issue_session("admin"))
+        c.cookies.set(A.CSRF_COOKIE, "t" * 40)
+        assert c.post("/api/reset", headers={"X-CSRF-Token": "t" * 40}).status_code == 200
+    with TestClient(app) as c2:
+        r = c2.post("/api/auth/login", json={"username": "sales", "password": "Demo-Pass-2026-x"})
+        assert r.status_code == 200 and r.json()["role"] == "sales"
+    monkeypatch.delenv("MABANIQ_DEMO_PASSWORD")
+    with TestClient(app) as c3:
+        c3.cookies.set(A.COOKIE, A.issue_session("admin"))
+        c3.cookies.set(A.CSRF_COOKIE, "t" * 40)
+        c3.post("/api/reset", headers={"X-CSRF-Token": "t" * 40})
