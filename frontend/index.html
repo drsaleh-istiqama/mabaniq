@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>مبانيك | Mabaniq — منصة المطوّر العقاري</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/app.css?v=0.5.0">
+<link rel="stylesheet" href="/static/shell.css?v=0.5.0">
+</head>
+<body>
+<div class="app">
+ <nav class="side" id="side" aria-label="التنقل">
+  <div class="sb-brand"><span class="mk">م</span><div>مبانيك<small>منصة المطوّر العقاري · جدوى</small></div></div>
+  <div class="sb-scroll">
+   <div class="grp"><a class="ni on" data-s="ov" href="#ov"><span>لوحة القيادة</span><i class="bd" id="cDec"></i></a></div>
+   <div class="sec">دورة المشروع</div>
+   <div class="grp"><div class="gh"><b class="gn">١</b>الأرض والتراخيص</div>
+    <a class="ni" data-s="pre" href="#pre"><span>الأراضي والجدوى والتراخيص</span></a></div>
+   <div class="grp"><div class="gh"><b class="gn">٢</b>البيع والإنشاء</div>
+    <a class="ni" data-s="inv" href="#inv"><span>المخزون والتسعير</span></a>
+    <a class="ni" data-s="crm" href="#crm"><span>العملاء المحتملون</span><i class="bd" id="cHot"></i></a>
+    <a class="ni" data-s="sal" href="#sal"><span>العقود والوسطاء</span></a>
+    <a class="ni" data-s="con" href="#con"><span>الإنشاء والمستخلصات</span><i class="bd" id="cIpc"></i></a></div>
+   <div class="grp"><div class="gh"><b class="gn">٣</b>التسليم والتشغيل</div>
+    <a class="ni" data-s="post" href="#post"><span>التسليم والأملاك</span></a>
+    <a class="ni" data-s="svc" href="#svc"><span>خدمة العملاء</span></a></div>
+   <div class="sec">عبر الدورة</div>
+   <div class="grp"><div class="gh">المالية والتحصيل</div>
+    <a class="ni" data-s="fin" href="#fin"><span>السيولة والتعثر</span><i class="bd bad" id="cRisk"></i></a>
+    <a class="ni" data-s="bill" href="#bill"><span>الفواتير والضمان</span></a></div>
+   <div class="grp"><div class="gh">الحوكمة</div>
+    <a class="ni" data-s="rep" href="#rep"><span>تقارير الممولين</span></a>
+    <a class="ni" data-s="log" href="#log"><span>سجل التدقيق</span></a>
+    <a class="ni" data-s="adm" href="#adm"><span>الإدارة والأمان</span></a></div>
+   <details class="grp pf" id="pfSec" open><summary class="sec">المشاريع</summary><div id="projTree"></div></details>
+  </div>
+  <div class="sb-foot">الإصدار ٠٫٤ · بيانات تجريبية <button class="link" id="resetBtn">إعادة تعيين</button></div>
+ </nav>
+ <div class="scrim" id="scrim"></div>
+
+ <section class="center">
+  <div class="bar">
+   <button class="hb" id="hb" aria-label="القائمة">☰</button>
+   <span class="crumb" id="crumb">لوحة القيادة</span>
+   <button class="cmd" id="cmdBtn">ابحث عن وحدة أو عميل، أو نفّذ أمرًا… <kbd>Ctrl K</kbd></button>
+   <button class="tb" id="askBtn">✦ المساعد</button>
+   <button class="tb" id="theme" aria-label="تبديل الوضع الفاتح والداكن">☀</button>
+   <div class="who"><span id="whoName">…</span><small id="whoRole"></small><button class="link" id="logout">خروج</button></div>
+  </div>
+  <div class="body" id="body">
+   <header class="ph"><div><div class="eb" id="phG"></div><h1 id="phT"></h1><p id="phD"></p></div><ol class="lc" id="lc"></ol></header>
+   <!-- نظرة عامة -->
+   <div class="scr on" id="ov">
+    <div class="kp" id="kpis"></div>
+    <div class="box"><div class="hd">صندوق القرارات <span class="pill p-w" id="qc">…</span></div>
+     <div class="tw"><table><thead><tr><th>القرار المقترح</th><th>المصدر</th><th>الأثر</th><th>الأولوية</th><th>الحالة</th></tr></thead><tbody id="dq"></tbody></table></div></div>
+    <div class="box"><div class="hd">المحفظة عبر دورة التطوير <span class="muted">اضغط على مشروع لفتح مخطط وحداته</span></div><div class="cyc" id="cycle"></div></div>
+    <div class="box"><div class="hd">صحة المشاريع</div>
+     <div class="tw"><table><thead><tr><th>المشروع</th><th>الإنجاز</th><th>المبيع/المحجوز</th><th>المتاح</th><th>سرعة البيع</th><th>حساب الضمان</th></tr></thead><tbody id="ph"></tbody></table></div></div>
+   </div>
+   <!-- المخزون -->
+   <div class="scr" id="inv">
+    <div class="toolbar">
+     <select id="selProj" aria-label="المشروع"></select>
+     <select id="selBld" aria-label="المبنى"></select>
+     <select id="fStat" aria-label="الحالة"><option value="">كل الحالات</option><option value="a">متاحة</option><option value="r">محجوزة</option><option value="s">مباعة</option></select>
+     <label class="chk"><input type="checkbox" id="fAi"> ✦ مرشّحة لتعديل السعر</label>
+     <span class="legend"><i class="lg-a"></i>متاحة <i class="lg-r"></i>محجوزة <i class="lg-s"></i>مباعة <i class="lg-up"></i>مقترح تعديل سعرها</span>
+    </div>
+    <div class="box"><div class="hd"><span id="invTitle">المخطط</span><span class="muted" id="invCount"></span></div><div id="heat" class="heat"></div></div>
+    <div class="box"><div class="hd">أداء الشرائح (محرك التسعير)</div>
+     <div class="tw"><table><thead><tr><th>الشريحة</th><th>الإجمالي</th><th>المتاح</th><th>بيع ٩٠ يومًا</th><th>الطلب النسبي</th><th>التوصية</th></tr></thead><tbody id="segs"></tbody></table></div></div>
+   </div>
+   <!-- المبيعات -->
+   <div class="scr" id="crm">
+    <div class="box"><div class="hd">قمع المبيعات</div><div class="pipe" id="pipe"></div></div>
+    <div class="box"><div class="hd">العملاء المحتملون <span class="muted">مرتّبون بدرجة احتمال الشراء</span></div>
+     <div class="tw"><table><thead><tr><th>العميل</th><th>الاهتمام</th><th>المشروع</th><th>المرحلة</th><th>القناة</th><th>آخر تواصل</th><th>درجة AI</th></tr></thead><tbody id="leads"></tbody></table></div></div>
+   </div>
+   <!-- المالية -->
+   <div class="scr" id="fin">
+    <div class="box"><div class="hd">رادار السيولة — أرصدة حسابات الضمان لـ ١٢ شهرًا
+      <span class="seg"><button class="on" data-plan="0">الوضع الحالي</button><button data-plan="1">✦ بعد خطة المعالجة</button></span></div>
+     <div class="chartwrap"><svg id="chart" viewBox="0 0 900 300" role="img" aria-label="مخطط السيولة"></svg></div>
+     <div class="ai" id="cashNote" style="margin:0 16px 16px"></div></div>
+    <div class="box"><div class="hd">عملاء معرّضون للتعثر <span class="muted">نموذج التعثر · أفق ٦٠ يومًا</span></div>
+     <div class="tw"><table><thead><tr><th>العميل</th><th>الوحدة</th><th>القسط القادم</th><th>الاستحقاق</th><th>متأخرات</th><th>الخطر</th><th>الإجراء المقترح</th></tr></thead><tbody id="risk"></tbody></table></div></div>
+   </div>
+   <!-- الإنشاء -->
+   <div class="scr" id="con">
+    <div class="box"><div class="hd">المستخلصات</div>
+     <div class="tw"><table><thead><tr><th>رقم</th><th>المشروع</th><th>المقاول</th><th>المرحلة</th><th>المعلن</th><th>المُتحقق</th><th>المطلوب صرفه</th><th>الحالة</th></tr></thead><tbody id="ipc"></tbody></table></div></div>
+    <div id="conx"></div>
+   </div>
+   <!-- خدمة العملاء -->
+   <div class="scr" id="svc">
+    <div class="box"><div class="hd">طلبات الصيانة <span class="muted">واردة من تطبيق العميل</span></div>
+     <div class="tw"><table><thead><tr><th>رقم</th><th>العميل</th><th>الوحدة</th><th>النوع</th><th>الوصف</th><th>التاريخ</th><th>الحالة</th></tr></thead><tbody id="svcT"></tbody></table></div></div>
+    <div class="box"><div class="hd">طلبات إعادة البيع <span class="muted">السوق الثانوي · رسوم نقل ٢٪</span></div>
+     <div class="tw"><table><thead><tr><th>العميل</th><th>الوحدة</th><th>سعر القائمة الحالي</th><th>السعر المطلوب</th><th>رسوم النقل</th><th>الحالة</th></tr></thead><tbody id="rsT"></tbody></table></div></div>
+   </div>
+   <div class="scr" id="pre"></div>
+   <div class="scr" id="sal"></div>
+   <div class="scr" id="bill"></div>
+   <div class="scr" id="post"></div>
+   <div class="scr" id="rep"></div>
+   <div class="scr" id="adm"></div>
+   <!-- السجل -->
+   <div class="scr" id="log">
+    <div class="box"><div class="hd">سجل التدقيق <span class="muted">كل إجراء يُسجَّل بوقته ومنفّذه</span></div>
+     <div class="tw"><table><thead><tr><th>الوقت</th><th>المنفّذ</th><th>الإجراء</th><th>التفاصيل</th></tr></thead><tbody id="audit"></tbody></table></div></div>
+   </div>
+  </div>
+ </section>
+
+ <aside class="insp" aria-label="التفاصيل">
+  <div class="ih"><span id="ih">التفاصيل</span><button class="x" id="ix" aria-label="إغلاق اللوحة">✕</button></div>
+  <div class="ib" id="ib"><p class="muted">اختر قرارًا أو وحدة أو عميلًا أو مستخلصًا لتظهر تفاصيله وتوصية الذكاء الاصطناعي هنا.</p></div>
+  <div class="copilot">
+   <div class="log" id="clog"><div class="muted">✦ المساعد: أجيب من بياناتك الحية. جرّب: «ما المشروع الأخطر؟» أو «فجوة السيولة».</div></div>
+   <form id="cf"><input id="ci" placeholder="اسأل المساعد…" aria-label="سؤال للمساعد" autocomplete="off"></form>
+  </div>
+ </aside>
+</div>
+
+<div class="palette" id="pal" role="dialog" aria-modal="true"><div><input id="pi" placeholder="اكتب اسم عميل أو رقم وحدة أو أمرًا…" autocomplete="off"><div id="pl"></div></div></div>
+<div class="modal" id="modal" role="dialog" aria-modal="true"><div class="mbox" id="mbox"></div></div>
+<div class="toast" id="toast" role="status"></div>
+<script src="/static/app.js?v=0.5.0"></script>
+<script src="/static/app2.js?v=0.5.0"></script>
+</body>
+</html>

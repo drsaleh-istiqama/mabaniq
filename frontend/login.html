@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>تسجيل الدخول — مبانيك</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0F1724;--pane:#162133;--line:#26354E;--ink:#E8EDF5;--muted:#AEB8CA;--pri:#D4A64A;--bad:#F27A73}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(1200px 600px at 80% -10%,#1d2c47 0,var(--bg) 60%);color:var(--ink);font-family:"IBM Plex Sans Arabic",system-ui,sans-serif;display:grid;place-items:center;padding:20px}
+.card{width:100%;max-width:400px;background:var(--pane);border:1px solid var(--line);border-radius:18px;padding:30px 26px}
+.lg{width:54px;height:54px;border-radius:14px;background:var(--pri);color:#1A1405;font-weight:700;font-size:28px;display:grid;place-items:center;margin-bottom:14px}
+h1{margin:0;font-size:24px}p{color:var(--muted);margin:6px 0 22px;font-size:14px;line-height:1.7}
+label{display:block;font-size:13px;color:var(--muted);margin:14px 0 6px}
+input,select{width:100%;font:inherit;font-size:16px;padding:12px 14px;border-radius:11px;border:1px solid var(--line);background:#0F1724;color:var(--ink)}
+input:focus,select:focus{outline:2px solid var(--pri);outline-offset:1px}
+button{width:100%;margin-top:20px;font:inherit;font-weight:700;font-size:16px;padding:13px;border:0;border-radius:11px;background:var(--pri);color:#1A1405;cursor:pointer}
+button:disabled{opacity:.6}.err{color:var(--bad);font-size:14px;min-height:22px;margin-top:12px}
+.ft{margin-top:18px;font-size:12px;color:var(--muted);text-align:center;line-height:1.8}
+.hid{display:none}.otp{letter-spacing:8px;text-align:center;font-size:22px}
+</style>
+</head>
+<body>
+<form class="card" id="f" autocomplete="on">
+ <div class="lg">م</div>
+ <h1>مبانيك</h1>
+ <p id="lead">منصة المطوّر العقاري من جدوى. سجّل الدخول بحساب الموظف أو العميل أو الوسيط.</p>
+ <div id="s1">
+  <label for="t">المطوّر</label><select id="t" name="tenant"></select>
+  <label for="u">اسم المستخدم</label><input id="u" name="username" autocomplete="username" dir="ltr" style="text-align:right" required>
+  <label for="p">كلمة المرور</label><input id="p" name="password" type="password" autocomplete="current-password" dir="ltr" style="text-align:right" required>
+ </div>
+ <div id="s2" class="hid">
+  <label for="o">رمز التحقق من تطبيق المصادقة (٦ أرقام)</label><input id="o" class="otp" inputmode="numeric" autocomplete="one-time-code" maxlength="6" dir="ltr">
+ </div>
+ <button id="b">دخول</button>
+ <div class="err" id="e" role="alert"></div>
+ <div class="ft">نسخة تجريبية · بيانات افتراضية<br>الحساب يُقفل مؤقتًا بعد ٥ محاولات خاطئة</div>
+</form>
+<script src="/static/login.js?v=0.5.0"></script>
+</body>
+</html>
