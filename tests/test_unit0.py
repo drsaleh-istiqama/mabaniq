@@ -43,16 +43,27 @@ def test_security_headers_complete():
         assert c.get("/login").headers["cache-control"] == "no-store"
 
 
+def _clear_login_budget():
+    from backend.db import connect
+    db = connect()
+    db.execute("DELETE FROM login_attempts")
+    db.execute("DELETE FROM auth_failures")
+    db.commit()
+
+
 def test_login_rate_limit_distinct_from_lockout():
     O.limiter.reset()
+    _clear_login_budget()
     with TestClient(app) as c:
         codes = []
         for i in range(settings.rate_login[0] + 2):
             r = c.post("/api/auth/login", json={"username": f"ghost{i}", "password": "wrong-pass-123"})
             codes.append((r.status_code, r.headers.get("retry-after"), r.headers.get("x-ratelimit-bucket")))
         assert all(code == 401 for code, _, _ in codes[: settings.rate_login[0]])
-        assert codes[-1][0] == 429 and codes[-1][1] and codes[-1][2] == "login"
+        # the 11th attempt is refused by the in-memory bucket or by the database budget (Unit 2) — both carry Retry-After
+        assert codes[-1][0] == 429 and codes[-1][1] and codes[-1][2] in ("login", "login-db")
     O.limiter.reset()
+    _clear_login_budget()
 
 
 def test_unhandled_error_is_json_with_request_id(monkeypatch):
@@ -91,6 +102,8 @@ def test_demo_password_from_environment(monkeypatch):
     """Hosted demo: one password for every demo account, applied on (re)seed, never in a file."""
     from backend import auth as A
     monkeypatch.setenv("MABANIQ_DEMO_PASSWORD", "Demo-Pass-2026-x")
+    O.limiter.reset()
+    _clear_login_budget()
     with TestClient(app) as c:
         c.cookies.set(A.COOKIE, A.issue_session("admin"))
         c.cookies.set(A.CSRF_COOKIE, "t" * 40)

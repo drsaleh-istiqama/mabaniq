@@ -104,9 +104,9 @@ def _seed_body(c, force: bool, tenant: str) -> None:
     # حسابات العملاء/الوسطاء المنشأة أثناء الاستخدام تشير إلى معرّفات عملاء ستُعاد؛ تُحذف مع إعادة البذر (حسابات العرض تُعاد ربطها في ensure_users)
     if c.has_table("users"):
         c.execute(c.wipe_sql("auth_failures"))  # قفل المحاولات من تشغيل سابق لا يُورَّث بعد إعادة البذر
-        c.execute("""DELETE FROM sessions WHERE user_id IN (SELECT id FROM users WHERE role IN ('customer','broker')
+        c.execute("""DELETE FROM sessions WHERE user_id IN (SELECT id FROM users WHERE username NOT IN ('admin','sales','finance','engineer','investor1')
                      AND username NOT LIKE 'client%' AND username NOT LIKE 'broker%')""")
-        c.execute("DELETE FROM users WHERE role IN ('customer','broker') AND username NOT LIKE 'client%' AND username NOT LIKE 'broker%'")
+        c.execute("DELETE FROM users WHERE username NOT IN ('admin','sales','finance','engineer','investor1') AND username NOT LIKE 'client%' AND username NOT LIKE 'broker%'")
         c.commit()
     rnd = random.Random(42 if tenant == "jadwa" else 7)
     today = dt.date.today()

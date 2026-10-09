@@ -150,7 +150,8 @@ function more(b) {
   <div class="card"><h2>خصوصيتي</h2><div class="muted">وفق قانون حماية البيانات الشخصية العُماني يحق لك طلب نسخة من بياناتك أو تصحيحها أو حذف ما لا يلزم حفظه نظامًا.</div>
    <button class="btn w g" style="margin-top:10px" id="pex">تنزيل نسخة من بياناتي</button>
    <select id="pk" style="margin-top:10px"><option value="correct">طلب تصحيح بيانات</option><option value="erase">طلب حذف بيانات</option></select><input id="pnote" placeholder="تفاصيل الطلب" style="margin-top:8px"><button class="btn w" style="margin-top:8px" id="pgo2">إرسال الطلب</button></div>
-  <div class="card"><h2>أمان حسابي</h2><button class="btn w g" id="cpw">تغيير كلمة المرور</button></div>`;
+  <div class="card"><h2>أمان حسابي</h2><button class="btn w g" id="cpw">تغيير كلمة المرور</button><button class="btn w g" style="margin-top:8px" id="sall">تسجيل الخروج من كل الأجهزة الأخرى</button></div>`;
+  $('#sall').onclick = async () => { try { const r = await api('/me/sessions/revoke', {method: 'POST', body: {others: true}}); toast(`✓ أُنهيت ${N(r.revoked)} جلسة على أجهزة أخرى`); } catch (e) { toast(e.message, 1); } };
   $('#pex').onclick = async () => { const d = await api('/portal/privacy/export'); const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(d, null, 1)], {type: 'application/json'})); a.download = 'mabaniq-my-data.json'; a.click(); toast('✓ نُزّلت نسخة بياناتك'); };
   $('#pgo2').onclick = async () => { try { const r = await api('/portal/privacy', {method: 'POST', body: {kind: $('#pk').value, note: $('#pnote').value}}); toast('✓ استلمنا طلبك رقم ' + N(r.id)); } catch (e) { toast(e.message, 1); } };
   $('#cpw').onclick = () => { forcePw(); $('#sh h2').textContent = 'تغيير كلمة المرور'; $('#sh .muted').textContent = ''; $('#sheet').onclick = e => { if (e.target.id === 'sheet') unsheet(); }; };

@@ -371,7 +371,7 @@ def reset(_=Depends(act_as("admin"))):
 class LoginIn(BaseModel):
     username: str = Field(min_length=2, max_length=40)
     password: str = Field(min_length=4, max_length=200)
-    otp: str | None = Field(default=None, max_length=6)
+    otp: str | None = Field(default=None, max_length=12)  # رمز TOTP من ٦ أرقام أو رمز استرداد xxxx-xxxx (الوحدة ٢)
     tenant: str = Field(default="jadwa", max_length=32, pattern=r"^[a-z][a-z0-9-]{1,30}$")
 
 
@@ -389,7 +389,7 @@ def do_login(body: LoginIn, request: Request, response: Response):
     if not valid_tenant(body.tenant):
         raise HTTPException(401, "اسم المستخدم أو كلمة المرور غير صحيحة")
     TENANT.set(body.tenant)
-    token, user = A.login(body.username, body.password, A.client_ip(request), body.otp)
+    token, user = A.login(body.username, body.password, A.client_ip(request), body.otp, request.headers.get("user-agent", ""))
     sec = _secure(request)
     response.set_cookie(A.COOKIE, token, httponly=True, samesite="lax", secure=sec, max_age=A.SESSION_HOURS * 3600, path="/")
     response.set_cookie(A.TENANT_COOKIE, body.tenant, httponly=True, samesite="lax", secure=sec, max_age=A.SESSION_HOURS * 3600, path="/")
@@ -441,14 +441,86 @@ class OtpIn(BaseModel):
 
 
 @app.post("/api/auth/2fa/enable")
-def totp_enable(o: OtpIn, u=Depends(A.current)):
+def totp_enable(o: OtpIn, request: Request, u=Depends(A.current)):
     c = A.conn()
     row = c.execute("SELECT * FROM users WHERE id=?", (u["id"],)).fetchone()
     ctr = A.totp_verify(row["totp_secret"], o.otp, row["totp_last"])
     if ctr is None:
         raise HTTPException(400, "الرمز غير صحيح")
     c.execute("UPDATE users SET totp_enabled=1, totp_last=? WHERE id=?", (ctr, u["id"]))
-    audit(c, "تفعيل التحقق الثنائي", u["username"], u["name"])
+    codes = A.new_recovery_codes(c, u["id"])  # الوحدة ٢: رموز استرداد تُعرض مرة واحدة
+    A.kill_sessions(c, u["id"], A.token_hash(request))  # رفع مستوى الحماية = إنهاء الجلسات الأخرى (تدوير)
+    audit(c, "تفعيل التحقق الثنائي", f"{u['username']} · أُصدرت {len(codes)} رموز استرداد · أُنهيت الجلسات الأخرى", u["name"])
+    c.commit()
+    return {"ok": True, "recovery_codes": codes, "note": "احفظ رموز الاسترداد في مكان آمن؛ كل رمز يُستعمل مرة واحدة بدل رمز التطبيق عند فقدان الجهاز."}
+
+
+@app.post("/api/auth/2fa/recovery")
+def totp_recovery_regen(o: OtpIn, u=Depends(A.current)):
+    """إعادة إصدار رموز الاسترداد (تُبطل القديمة) — يتطلب رمز TOTP حاليًا."""
+    c = A.conn()
+    row = c.execute("SELECT * FROM users WHERE id=?", (u["id"],)).fetchone()
+    if not row["totp_enabled"] or A.totp_verify(row["totp_secret"], o.otp, row["totp_last"]) is None:
+        raise HTTPException(400, "الرمز غير صحيح أو التحقق الثنائي غير مفعّل")
+    codes = A.new_recovery_codes(c, u["id"])
+    audit(c, "إعادة إصدار رموز الاسترداد", u["username"], u["name"])
+    c.commit()
+    return {"recovery_codes": codes}
+
+
+# ------------------------------------------------------------------ الجلسات والأجهزة (الوحدة ٢)
+@app.get("/api/me/sessions")
+def my_sessions(request: Request, u=Depends(A.current)):
+    c = A.conn()
+    return {"idle_minutes": A.IDLE_MINUTES, "absolute_hours": A.SESSION_HOURS, "sessions": A.sessions_of(c, u["id"], A.token_hash(request))}
+
+
+class RevokeIn(BaseModel):
+    id: str | None = Field(default=None, pattern=r"^[0-9a-f]{12}$")
+    others: bool = False
+
+
+@app.post("/api/me/sessions/revoke")
+def my_sessions_revoke(r: RevokeIn, request: Request, u=Depends(A.current)):
+    """إنهاء جلسة بعينها أو كل الجلسات الأخرى (الخروج من كل الأجهزة) — الجلسة الحالية تبقى."""
+    c = A.conn()
+    if not r.id and not r.others:
+        raise HTTPException(400, "حدّد جلسة أو اطلب إنهاء الجلسات الأخرى")
+    n = A.revoke_sessions(c, u["id"], r.id, A.token_hash(request)) if r.others else A.revoke_sessions(c, u["id"], r.id)
+    audit(c, "إنهاء جلسات", f"{u['username']} · {n} جلسة" + (f" ({r.id})" if r.id else " (كل الأجهزة الأخرى)"), u["name"])
+    c.commit()
+    return {"revoked": n}
+
+
+@app.get("/api/users/{uid}/sessions")
+def user_sessions(uid: int, _=Depends(need("users"))):
+    c = A.conn()
+    return A.sessions_of(c, uid)
+
+
+@app.post("/api/users/{uid}/sessions/revoke")
+def user_sessions_revoke(uid: int, u=Depends(act_as("users"))):
+    """إلغاء فوري لكل جلسات مستخدم (جهاز مفقود، مغادرة موظف)."""
+    c = A.conn()
+    t = c.execute("SELECT username FROM users WHERE id=?", (uid,)).fetchone()
+    if not t:
+        raise HTTPException(404, "المستخدم غير موجود")
+    n = A.revoke_sessions(c, uid)
+    audit(c, "إنهاء كل جلسات مستخدم", f"{t['username']} · {n} جلسة")
+    c.commit()
+    return {"revoked": n}
+
+
+@app.post("/api/users/{uid}/2fa/reset")
+def user_2fa_reset(uid: int, u=Depends(act_as("users"))):
+    """فقد الموظف جهاز المصادقة ورموز الاسترداد: المدير يعيد ضبط التحقق الثنائي وينهي الجلسات؛ في الإنتاج يُلزم بإعادة التفعيل عند الدخول."""
+    c = A.conn()
+    t = c.execute("SELECT username FROM users WHERE id=?", (uid,)).fetchone()
+    if not t:
+        raise HTTPException(404, "المستخدم غير موجود")
+    c.execute("UPDATE users SET totp_enabled=0, totp_secret=NULL, totp_last=0, recovery_codes=NULL WHERE id=?", (uid,))
+    A.revoke_sessions(c, uid)
+    audit(c, "إعادة ضبط التحقق الثنائي", t["username"])
     c.commit()
     return {"ok": True}
 

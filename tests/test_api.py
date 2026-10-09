@@ -155,7 +155,7 @@ def test_password_login_and_lockout():
         c.post("/api/auth/logout")
         assert c.get("/api/me").status_code == 401
         codes = [c.post("/api/auth/login", json={"username": "sales", "password": "wrong-pass"}).status_code for _ in range(6)]
-        assert codes[:5] == [401] * 5 and codes[5] == 429
+        assert codes[:A.COOLDOWN_AFTER] == [401] * A.COOLDOWN_AFTER and 429 in codes[A.COOLDOWN_AFTER:]  # Unit 2: graded cooldown, not a lock
 
 
 def test_role_permissions(cl):

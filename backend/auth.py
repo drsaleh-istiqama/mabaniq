@@ -56,12 +56,19 @@ CREATE TABLE IF NOT EXISTS users(
   id INTEGER PRIMARY KEY, username TEXT UNIQUE, name TEXT, role TEXT, pw TEXT, customer_id INTEGER, broker_id INTEGER,
   active INTEGER DEFAULT 1, must_change INTEGER DEFAULT 0, totp_secret TEXT, totp_enabled INTEGER DEFAULT 0,
   totp_last INTEGER DEFAULT 0, pw_changed TEXT);
-CREATE TABLE IF NOT EXISTS sessions(token_hash TEXT PRIMARY KEY, user_id INTEGER REFERENCES users(id), expires REAL);
+CREATE TABLE IF NOT EXISTS sessions(token_hash TEXT PRIMARY KEY, user_id INTEGER REFERENCES users(id), expires REAL,
+  created REAL, last_seen REAL, ip TEXT, ua TEXT, label TEXT);
 CREATE TABLE IF NOT EXISTS auth_failures(k TEXT, at REAL);
 CREATE INDEX IF NOT EXISTS ix_auth_failures ON auth_failures(k, at);
+CREATE TABLE IF NOT EXISTS login_attempts(id INTEGER PRIMARY KEY, k TEXT, at REAL);
+CREATE INDEX IF NOT EXISTS ix_login_attempts ON login_attempts(k, at);
 """
 USER_MIGR = ["broker_id INTEGER", "must_change INTEGER DEFAULT 0", "totp_secret TEXT", "totp_enabled INTEGER DEFAULT 0",
-             "totp_last INTEGER DEFAULT 0", "pw_changed TEXT"]
+             "totp_last INTEGER DEFAULT 0", "pw_changed TEXT", "recovery_codes TEXT"]
+SESSION_MIGR = ["created REAL", "last_seen REAL", "ip TEXT", "ua TEXT", "label TEXT"]  # Unit 2
+IDLE_MINUTES = 60          # Unit 2: a session unused for an hour is over (absolute life stays SESSION_HOURS)
+LOGIN_WINDOW = (10, 60)    # Unit 2: per-ip login attempts kept in the database (shared by every instance)
+COOLDOWN_AFTER = 3         # Unit 2 (M10): graded lockout — after 3 failures each further attempt must wait 1,2,4,…,60 s
 
 DEMO = [  # username, name, role
     ("admin", "مدير المنصة", "admin"),
@@ -150,11 +157,12 @@ def creds_file() -> Path:
 def ensure_schema(c) -> None:
     if getattr(c, "dialect", "sqlite") == "postgres":
         return
-    have = c.columns("users")
-    if have:
-        for col in USER_MIGR:
-            if col.split()[0] not in have:
-                c.execute(f"ALTER TABLE users ADD COLUMN {col}")
+    for table, migr in (("users", USER_MIGR), ("sessions", SESSION_MIGR)):
+        have = c.columns(table)
+        if have:
+            for col in migr:
+                if col.split()[0] not in have:
+                    c.execute(f"ALTER TABLE {table} ADD COLUMN {col}")
     c.executescript(USERS_SQL)
 
 
@@ -239,36 +247,105 @@ def conn():
     return c
 
 
-def login(username: str, pw: str, ip: str, otp: str | None = None) -> tuple[str, dict]:
+def _graded_wait(c, acct: str) -> int:
+    """M10: instead of locking the account (which lets anyone lock anyone out), demand a growing pause between
+    attempts once an account has failed COOLDOWN_AFTER times in 15 minutes: 1, 2, 4, 8 … up to 60 seconds.
+    Returns the seconds still to wait (0 = may try now)."""
+    rows = c.execute("SELECT at FROM auth_failures WHERE k=? AND at>? ORDER BY at DESC", (acct, time.time() - 900)).fetchall()
+    n = len(rows)
+    if n < COOLDOWN_AFTER:
+        return 0
+    required = min(60, 2 ** (n - COOLDOWN_AFTER))
+    elapsed = time.time() - rows[0]["at"]
+    return max(0, int(required - elapsed) + (1 if required - elapsed > int(required - elapsed) else 0))
+
+
+def _login_attempts_ok(c, ip: str) -> int:
+    """Per-ip login budget persisted in the database (survives restarts, shared by all instances). Returns retry-after or 0."""
+    limit, window = LOGIN_WINDOW
+    now = time.time()
+    c.execute("DELETE FROM login_attempts WHERE at<?", (now - 86400,))
+    rows = c.execute("SELECT at FROM login_attempts WHERE k=? AND at>? ORDER BY at", (ip, now - window)).fetchall()
+    if len(rows) >= limit:
+        return max(1, int(window - (now - rows[0]["at"])) + 1)
+    c.execute("INSERT INTO login_attempts(k,at) VALUES(?,?)", (ip, now))
+    c.commit()
+    return 0
+
+
+def _ua_label(ua: str) -> str:
+    ua = ua or ""
+    os_ = next((n for k, n in (("Windows", "Windows"), ("Android", "Android"), ("iPhone", "iPhone"), ("iPad", "iPad"), ("Mac OS", "macOS"), ("Linux", "Linux")) if k in ua), "جهاز")
+    br = next((n for k, n in (("Edg/", "Edge"), ("OPR/", "Opera"), ("Chrome/", "Chrome"), ("Firefox/", "Firefox"), ("Safari/", "Safari")) if k in ua), "متصفح")
+    return f"{br} · {os_}"
+
+
+def _new_session(c, user_id: int, ip: str = "?", ua: str = "") -> str:
+    token = secrets.token_urlsafe(32)
+    now = time.time()
+    c.execute("DELETE FROM sessions WHERE expires<?", (now,))
+    c.execute("""DELETE FROM sessions WHERE user_id=? AND token_hash NOT IN
+                 (SELECT token_hash FROM sessions WHERE user_id=? ORDER BY expires DESC LIMIT 4)""", (user_id, user_id))
+    c.execute("INSERT INTO sessions(token_hash,user_id,expires,created,last_seen,ip,ua,label) VALUES(?,?,?,?,?,?,?,?)",
+              (hashlib.sha256(token.encode()).hexdigest(), user_id, now + SESSION_HOURS * 3600, now, now, ip[:64], (ua or "")[:200], _ua_label(ua)))
+    return token
+
+
+def _recovery_consume(c, u, code: str) -> bool:
+    """One-time recovery code (format xxxx-xxxx); consumed on use."""
+    if not u["recovery_codes"] or not re.fullmatch(r"[a-z0-9]{4}-[a-z0-9]{4}", (code or "").lower()):
+        return False
+    hashes = json.loads(u["recovery_codes"])
+    h = hashlib.sha256(code.lower().encode()).hexdigest()
+    if h not in hashes:
+        return False
+    hashes.remove(h)
+    c.execute("UPDATE users SET recovery_codes=? WHERE id=?", (json.dumps(hashes), u["id"]))
+    return True
+
+
+def new_recovery_codes(c, user_id: int, n: int = 8) -> list[str]:
+    alphabet = "abcdefghjkmnpqrstuvwxyz23456789"
+    codes = ["".join(secrets.choice(alphabet) for _ in range(4)) + "-" + "".join(secrets.choice(alphabet) for _ in range(4)) for _ in range(n)]
+    c.execute("UPDATE users SET recovery_codes=? WHERE id=?", (json.dumps([hashlib.sha256(x.encode()).hexdigest() for x in codes]), user_id))
+    return codes
+
+
+def login(username: str, pw: str, ip: str, otp: str | None = None, ua: str = "") -> tuple[str, dict]:
     username = username.strip().lower()
     c = conn()
     try:
         key, acct = f"{ip}:{username}", f"*:{username}"
+        retry = _login_attempts_ok(c, ip)
+        if retry:
+            raise HTTPException(429, "محاولات دخول كثيرة من هذا العنوان — حاول بعد قليل", headers={"Retry-After": str(retry), "X-RateLimit-Bucket": "login-db"})
         if _fail_count(c, key, 300) >= 5:
-            raise HTTPException(429, "محاولات كثيرة. حاول بعد ٥ دقائق.")
-        if _fail_count(c, acct, 900) >= 20:
-            raise HTTPException(429, "الحساب مقفل مؤقتًا بسبب محاولات كثيرة. حاول بعد ١٥ دقيقة.")
+            raise HTTPException(429, "محاولات كثيرة. حاول بعد ٥ دقائق.", headers={"Retry-After": "300"})
+        wait = _graded_wait(c, acct)
+        if wait:
+            raise HTTPException(429, f"انتظر {wait} ثانية قبل المحاولة التالية (حماية متدرّجة للحساب)", headers={"Retry-After": str(wait), "X-Lockout": "graded"})
         u = c.execute("SELECT * FROM users WHERE username=? AND active=1", (username,)).fetchone()
         if not u:
             check_pw(pw, DUMMY)  # توقيت متقارب لمنع كشف وجود الحساب
         if not u or not check_pw(pw, u["pw"]):
             _fail(c, key, acct)
             raise HTTPException(401, "اسم المستخدم أو كلمة المرور غير صحيحة")
+        via = ""
         if u["totp_enabled"]:
             if not otp:
                 raise HTTPException(401, "OTP_REQUIRED")
             ctr = totp_verify(u["totp_secret"], otp, u["totp_last"])
-            if ctr is None:
+            if ctr is not None:
+                c.execute("UPDATE users SET totp_last=? WHERE id=?", (ctr, u["id"]))
+                via = " · بتحقق ثنائي"
+            elif _recovery_consume(c, u, otp):
+                via = " · برمز استرداد (استُهلك)"
+            else:
                 _fail(c, key, acct)
                 raise HTTPException(401, "رمز التحقق غير صحيح أو مستخدم سابقًا")
-            c.execute("UPDATE users SET totp_last=? WHERE id=?", (ctr, u["id"]))
         c.execute("DELETE FROM auth_failures WHERE k=?", (key,))
-        token = secrets.token_urlsafe(32)
-        c.execute("DELETE FROM sessions WHERE expires<?", (time.time(),))
-        c.execute("""DELETE FROM sessions WHERE user_id=? AND token_hash NOT IN
-                     (SELECT token_hash FROM sessions WHERE user_id=? ORDER BY expires DESC LIMIT 4)""", (u["id"], u["id"]))
-        c.execute("INSERT INTO sessions VALUES(?,?,?)", (hashlib.sha256(token.encode()).hexdigest(), u["id"], time.time() + SESSION_HOURS * 3600))
-        audit_insert(c, u["name"], "تسجيل دخول", f"{u['username']} من {ip}{' · بتحقق ثنائي' if u['totp_enabled'] else ''}")
+        token = _new_session(c, u["id"], ip, ua)
+        audit_insert(c, u["name"], "تسجيل دخول", f"{u['username']} من {ip}{via} · {_ua_label(ua)}")
         c.commit()
         return token, public(u)
     finally:
@@ -280,12 +357,28 @@ def issue_session(username: str) -> str:
     c = conn()
     try:
         u = c.execute("SELECT id FROM users WHERE username=?", (username,)).fetchone()
-        token = secrets.token_urlsafe(32)
-        c.execute("INSERT INTO sessions VALUES(?,?,?)", (hashlib.sha256(token.encode()).hexdigest(), u["id"], time.time() + SESSION_HOURS * 3600))
+        token = _new_session(c, u["id"], "test", "pytest")
         c.commit()
         return token
     finally:
         c.close()
+
+
+def sessions_of(c, user_id: int, current_hash: str | None = None) -> list[dict]:
+    out = []
+    for s in c.execute("SELECT * FROM sessions WHERE user_id=? AND expires>? ORDER BY last_seen DESC", (user_id, time.time())):
+        out.append({"id": s["token_hash"][:12], "created": s["created"], "last_seen": s["last_seen"], "ip": s["ip"], "label": s["label"],
+                    "expires": s["expires"], "current": s["token_hash"] == current_hash})
+    return out
+
+
+def revoke_sessions(c, user_id: int, session_id: str | None = None, keep_hash: str | None = None) -> int:
+    """Revoke one session (by its 12-char id) or all but keep_hash. Returns how many were ended."""
+    if session_id:
+        if not re.fullmatch(r"[0-9a-f]{12}", session_id):
+            return 0
+        return c.execute("DELETE FROM sessions WHERE user_id=? AND substr(token_hash,1,12)=?", (user_id, session_id)).rowcount
+    return c.execute("DELETE FROM sessions WHERE user_id=? AND token_hash!=?", (user_id, keep_hash or "")).rowcount
 
 
 def logout(token: str | None) -> None:
@@ -319,9 +412,20 @@ def session_user(request: Request) -> dict | None:
         return None
     c = conn()
     try:
-        row = c.execute("""SELECT u.* FROM sessions s JOIN users u ON u.id=s.user_id
-                           WHERE s.token_hash=? AND s.expires>? AND u.active=1""", (th, time.time())).fetchone()
-        return public(row) if row else None
+        now = time.time()
+        row = c.execute("""SELECT u.*, s.last_seen s_last_seen FROM sessions s JOIN users u ON u.id=s.user_id
+                           WHERE s.token_hash=? AND s.expires>? AND u.active=1""", (th, now)).fetchone()
+        if not row:
+            return None
+        last = row["s_last_seen"] or now
+        if now - last > IDLE_MINUTES * 60:  # Unit 2: idle timeout — the session is over even before its absolute expiry
+            c.execute("DELETE FROM sessions WHERE token_hash=?", (th,))
+            c.commit()
+            return None
+        if now - last > 60:  # touch at most once a minute
+            c.execute("UPDATE sessions SET last_seen=? WHERE token_hash=?", (now, th))
+            c.commit()
+        return public(row)
     finally:
         c.close()
 
