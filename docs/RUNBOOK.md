@@ -8,8 +8,10 @@
 | البيئة | القاعدة | الخدمة | من ينشر |
 | --- | --- | --- | --- |
 | `local` | SQLite تحت `data/` (قاعدة لكل مطوّر) — أو PostgreSQL عبر `docker compose` من الوحدة 1 | `uvicorn backend.app:app --port 8800` | المطوّر |
-| `staging` (مقترح) | PostgreSQL مُدار + بذور تجريبية | حاوية `deploy/Dockerfile` | تلقائيًا بعد CI أخضر على `main` |
-| `production` (مقترح) | PostgreSQL مُدار، **بلا بيانات تجريبية**، نسخ يومية خارج الموقع | الحاوية نفسها + `MABANIQ_ENV=prod` | وسم `v*` + موافقة |
+| **Railway «mabaniq» / production** (بيئة **عرض** حاليًا، 2026-10-09) | قالب PostgreSQL على Railway (`Postgres`) — `MABANIQ_DATABASE_URL=${{Postgres.DATABASE_URL}}`؛ `MABANIQ_ENV=demo` + بيانات تجريبية + `MABANIQ_DEMO_PASSWORD` | خدمة `mabaniq-api` من GitHub `drsaleh-istiqama/mabaniq` فرع `main` (Dockerfile: `deploy/Dockerfile` في إعدادات الخدمة، فحص `/health`)؛ النطاق `mabaniq-api-production.up.railway.app` | كل دفعة إلى `main` |
+| `production` الفعلي (لاحقًا) | القاعدة نفسها أو مشروع منفصل، **بلا بيانات تجريبية**، نسخ يومية خارج الموقع | الحاوية نفسها + `MABANIQ_ENV=prod` (يشترط المفاتيح والنطاق النهائي) | وسم `v*` + موافقة |
+
+**ملاحظات Railway:** يرفض البنّاء تعليمة `VOLUME` في Dockerfile، و`railway.json` (Config as Code) مهجور — الإعدادات في الخدمة نفسها (`dockerfilePath`, `healthcheckPath`) أو في `.railway/railway.ts` لاحقًا. مجلد `data/` داخل الحاوية مؤقت: الحالة الدائمة في PostgreSQL ومتغيرات البيئة فقط (مفتاح التشفير وسر الدفع وكلمة العرض). `uvicorn --proxy-headers --forwarded-allow-ips='*'` خلف وكيل Railway فقط.
 
 قواعد ثابتة:
 
