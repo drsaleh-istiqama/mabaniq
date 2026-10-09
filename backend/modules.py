@@ -726,7 +726,7 @@ def charity_accrue(c, inst, paid_now: float, customer_id: int, today_d) -> float
     if amt <= 0:
         return 0
     c.execute("""INSERT INTO charity_dues(installment_id,customer_id,amount,rate,late_days,computed_at,status) VALUES(?,?,?,?,?,?,'due')
-                 ON CONFLICT(installment_id) DO UPDATE SET amount=amount+excluded.amount, late_days=excluded.late_days, computed_at=excluded.computed_at""",
+                 ON CONFLICT(installment_id) DO UPDATE SET amount=charity_dues.amount+excluded.amount, late_days=excluded.late_days, computed_at=excluded.computed_at""",
               (inst["id"], customer_id, amt, rate, late, now_s()))
     return amt
 
@@ -857,7 +857,8 @@ def record_payment(c, intent_id: str, gateway_ref: str, amount: float, actor: st
     receipt = f"MBQ-{now:%y%m%d}-{i['id']:05d}-{secrets.token_hex(2).upper()}"
     bk = c.execute("SELECT customer_id FROM bookings WHERE id=?", (i["booking_id"],)).fetchone()
     donation = charity_accrue(c, i, min(amount, i["amount"] - i["paid_amount"]), bk["customer_id"], now.date())
-    c.execute("UPDATE installments SET paid_amount=MIN(amount, paid_amount+?), paid_date=? WHERE id=?", (amount, now.date().isoformat(), i["id"]))
+    c.execute("UPDATE installments SET paid_amount=CASE WHEN paid_amount+?<amount THEN paid_amount+? ELSE amount END, paid_date=? WHERE id=?",
+              (amount, amount, now.date().isoformat(), i["id"]))
     c.execute("INSERT INTO payments(installment_id,amount,at,method,receipt,gateway_ref) VALUES(?,?,?,?,?,?)",
               (i["id"], amount, now.isoformat(timespec="seconds"), pi["provider"], receipt, gateway_ref))
     c.execute("UPDATE pay_intents SET status='paid' WHERE id=?", (intent_id,))
@@ -933,8 +934,9 @@ def bank_import(b: BankIn, _=Depends(act_as("finance"))):
         if ln.reference:
             m = c.execute("SELECT id FROM payments WHERE reconciled=0 AND (receipt=? OR gateway_ref=?)", (ln.reference, ln.reference)).fetchone()
         if not m:
-            m = c.execute("""SELECT id FROM payments WHERE reconciled=0 AND ABS(amount-?)<0.01 AND ABS(julianday(substr(at,1,10))-julianday(?))<=3
-                             ORDER BY id LIMIT 1""", (ln.amount, ln.day.isoformat())).fetchone()
+            lo, hi = (ln.day - dt.timedelta(days=3)).isoformat(), (ln.day + dt.timedelta(days=3)).isoformat()
+            m = c.execute("""SELECT id FROM payments WHERE reconciled=0 AND ABS(amount-?)<0.01 AND substr(at,1,10) BETWEEN ? AND ?
+                             ORDER BY id LIMIT 1""", (ln.amount, lo, hi)).fetchone()
         if m:
             c.execute("UPDATE payments SET reconciled=1 WHERE id=?", (m["id"],))
             matched += 1

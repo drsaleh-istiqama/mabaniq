@@ -304,7 +304,7 @@ def leasing(_=Depends(need("leasing"))):
     units = rows(c.execute("SELECT u.id, u.code, u.type, u.area, p.name project FROM units u JOIN projects p ON p.id=u.project_id WHERE u.retained=1"))
     leases = []
     for l in c.execute("""SELECT l.*, u.code unit, t.name tenant, t.phone FROM leases l JOIN units u ON u.id=l.unit_id
-                         JOIN tenants_l t ON t.id=l.tenant_id ORDER BY l.end"""):
+                         JOIN tenants_l t ON t.id=l.tenant_id ORDER BY l."end" """):
         x = dict(l)
         x["dues"] = rows(c.execute("SELECT * FROM rent_dues WHERE lease_id=? ORDER BY due", (l["id"],)))
         x["arrears"] = round(sum(d["amount"] - d["paid"] for d in x["dues"] if d["due"] <= t.isoformat()))
@@ -332,13 +332,13 @@ class LeaseIn(BaseModel):
 def lease_create(l: LeaseIn, _=Depends(act_as("leasing"))):
     c = db()
     one(c, "SELECT 1 FROM units WHERE id=? AND retained=1", (l.unit_id,), "الوحدة ليست ضمن محفظة التأجير")
-    if c.execute("SELECT 1 FROM leases WHERE unit_id=? AND status='active' AND end>=?", (l.unit_id, l.start.isoformat())).fetchone():
+    if c.execute("SELECT 1 FROM leases WHERE unit_id=? AND status='active' AND \"end\">=?", (l.unit_id, l.start.isoformat())).fetchone():
         raise HTTPException(409, "يوجد عقد إيجار ساري على الوحدة")
     if 12 % l.frequency:
         raise HTTPException(400, "عدد الدفعات السنوية يجب أن يقسم ١٢")
     tid = c.execute("INSERT INTO tenants_l(name,phone,id_number) VALUES(?,?,?)", (l.tenant_name, l.tenant_phone, pii.enc(l.tenant_id_number))).lastrowid
     end = _add_months(l.start, l.months)
-    lid = c.execute("INSERT INTO leases(unit_id,tenant_id,start,end,annual_rent,frequency,deposit,status) VALUES(?,?,?,?,?,?,?,?)",
+    lid = c.execute("INSERT INTO leases(unit_id,tenant_id,start,\"end\",annual_rent,frequency,deposit,status) VALUES(?,?,?,?,?,?,?,?)",
                     (l.unit_id, tid, l.start.isoformat(), end.isoformat(), l.annual_rent, l.frequency, round(l.annual_rent / 12), "active")).lastrowid
     step = 12 // l.frequency
     for k in range(0, l.months, step):

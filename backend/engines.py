@@ -4,7 +4,6 @@
 في MVP هي نماذج إحصائية شفافة؛ يمكن لاحقًا استبدال أي محرك بنموذج تعلّم آلي بالواجهة نفسها.
 """
 import datetime as dt
-import sqlite3
 from collections import defaultdict
 
 TODAY = dt.date.today
@@ -23,13 +22,13 @@ def d(s):
 
 
 # ---------------------------------------------------------------- التسعير الديناميكي
-def pricing(c: sqlite3.Connection, project_id: int):
+def pricing(c, project_id: int):
     """سرعة البيع لكل شريحة (مشروع × إطلالة × نوع) في آخر 90 يومًا مقابل متوسط المشروع."""
     today = TODAY()
     since = (today - dt.timedelta(days=90)).isoformat()
     rows = c.execute("""
       SELECT u.view, u.type, COUNT(*) total,
-        SUM(u.status='a') avail,
+        SUM(CASE WHEN u.status='a' THEN 1 ELSE 0 END) avail,
         SUM(CASE WHEN b.status IN('confirmed','pending') AND b.created>=? THEN 1 ELSE 0 END) recent
       FROM units u LEFT JOIN bookings b ON b.unit_id=u.id AND b.status!='cancelled'
       WHERE u.project_id=? GROUP BY u.view,u.type""", (since, project_id)).fetchall()
@@ -70,7 +69,7 @@ def unit_suggestion(c, unit_row):
 
 
 # ---------------------------------------------------------------- التنبؤ بالتعثر
-def default_risk(c: sqlite3.Connection, horizon_days: int = 60):
+def default_risk(c, horizon_days: int = 60):
     today = TODAY()
     rows = c.execute("""
       SELECT i.*, b.id bid, b.customer_id, cu.name cname, cu.phone, cu.rescheduled, u.code ucode, p.name pname
@@ -196,7 +195,7 @@ def project_cash(c, project_id: int, apply_plan: bool = False):
             "gap": max(0, -worst["balance"]), "actions": actions, "sales_pace": round(pace, 1)}
 
 
-def cash_radar(c: sqlite3.Connection, apply_plan: bool = False, project_id: int | None = None):
+def cash_radar(c, apply_plan: bool = False, project_id: int | None = None):
     names = {p["id"]: p["name"] for p in c.execute("SELECT id,name FROM projects")}
     ids = [project_id] if project_id else list(names)
     per = []
@@ -223,7 +222,7 @@ def cash_radar(c: sqlite3.Connection, apply_plan: bool = False, project_id: int 
 
 
 # ---------------------------------------------------------------- التحقق من المستخلص
-def verify_ipc(c: sqlite3.Connection, ipc_id: int):
+def verify_ipc(c, ipc_id: int):
     ipc = c.execute("SELECT * FROM ipcs WHERE id=?", (ipc_id,)).fetchone()
     items = c.execute("SELECT * FROM ipc_items WHERE ipc_id=?", (ipc_id,)).fetchall()
     if not items:
@@ -282,7 +281,7 @@ def match_units(c, lead_id: int, limit: int = 3):
 
 
 # ---------------------------------------------------------------- صندوق القرارات
-def decisions(c: sqlite3.Connection):
+def decisions(c):
     done = {r["key"]: r["action"] for r in c.execute("SELECT * FROM decisions_log")}
     out = []
     for p in c.execute("SELECT * FROM projects WHERE COALESCE(completed,0)=0"):
@@ -327,7 +326,7 @@ def decisions(c: sqlite3.Connection):
 
 
 # ---------------------------------------------------------------- المساعد
-def assistant(c: sqlite3.Connection, q: str):
+def assistant(c, q: str):
     q = q.strip()
     if any(k in q for k in ("خطر", "أخطر", "مشكلة", "انتباه")):
         rows = []
@@ -394,11 +393,11 @@ def kpis(c, project_id=None):
     since = (today - dt.timedelta(days=30)).isoformat()
     s = c.execute(f"""SELECT COUNT(*) n, COALESCE(SUM(b.price),0) v FROM bookings b JOIN units u ON u.id=b.unit_id
                       WHERE b.created>=? AND b.status!='cancelled' {w}""", (since, *a)).fetchone()
-    col = c.execute(f"""SELECT COALESCE(SUM(i.amount),0) due, COALESCE(SUM(MIN(i.paid_amount,i.amount)),0) paid
+    col = c.execute(f"""SELECT COALESCE(SUM(i.amount),0) due, COALESCE(SUM(CASE WHEN i.paid_amount<i.amount THEN i.paid_amount ELSE i.amount END),0) paid
                         FROM installments i JOIN bookings b ON b.id=i.booking_id JOIN units u ON u.id=b.unit_id
                         WHERE b.status='confirmed' AND i.due_date<=? AND i.due_date>=? {w}""",
                     (today.isoformat(), (today - dt.timedelta(days=90)).isoformat(), *a)).fetchone()
-    un = c.execute(f"SELECT COUNT(*) t, SUM(status='a') av FROM units u WHERE 1=1 {w}", a).fetchone()
+    un = c.execute(f"SELECT COUNT(*) t, SUM(CASE WHEN status='a' THEN 1 ELSE 0 END) av FROM units u WHERE 1=1 {w}", a).fetchone()
     return {"sales_30d_count": s["n"], "sales_30d_value": s["v"],
             "collection_rate": round(100 * col["paid"] / col["due"]) if col["due"] else 100,
             "available": un["av"], "total_units": un["t"]}

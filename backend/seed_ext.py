@@ -175,7 +175,7 @@ def seed_ext(c, rnd, today: dt.date, pid: dict, projects: list, tenant: str) -> 
                              str(rnd.randint(10000000, 99999999)))).lastrowid
             start = today - dt.timedelta(days=60 + i * 90)
             rent = [7800, 6600, 5400][i]
-            lid = c.execute("INSERT INTO leases(unit_id,tenant_id,start,end,annual_rent,frequency,deposit,status,municipality_ref) "
+            lid = c.execute("INSERT INTO leases(unit_id,tenant_id,start,\"end\",annual_rent,frequency,deposit,status,municipality_ref) "
                             "VALUES(?,?,?,?,?,?,?,?,?)", (u["id"], tid, start.isoformat(), (start + dt.timedelta(days=365)).isoformat(),
                                                            rent, 4, rent / 12, "active", f"MCT-L-{rnd.randint(100000, 999999)}")).lastrowid
             for q in range(4):

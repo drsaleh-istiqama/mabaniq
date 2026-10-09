@@ -90,12 +90,12 @@ def encrypt_existing(c) -> int:
     """ترحيل: يشفّر أي قيمة نصية ما زالت مكشوفة في الأعمدة الحساسة (آمن للتكرار)."""
     n = 0
     for table, cols in ENCRYPTED_COLUMNS.items():
-        have = {r[1] for r in c.execute(f"PRAGMA table_info({table})")}
+        have = c.columns(table)
         for col in cols:
             if col not in have:
                 continue
-            for r in c.execute(f"SELECT rowid AS rid, {col} AS v FROM {table} WHERE {col} IS NOT NULL AND {col}!='' AND {col} NOT LIKE 'enc:v1:%'").fetchall():
-                c.execute(f"UPDATE {table} SET {col}=? WHERE rowid=?", (enc(r["v"]), r["rid"]))
+            for r in c.execute(f"SELECT id AS rid, {col} AS v FROM {table} WHERE {col} IS NOT NULL AND {col}!='' AND {col} NOT LIKE 'enc:v1:%'").fetchall():
+                c.execute(f"UPDATE {table} SET {col}=? WHERE id=?", (enc(r["v"]), r["rid"]))
                 n += 1
     return n
 

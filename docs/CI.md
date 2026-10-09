@@ -7,7 +7,7 @@
 | --- | --- | --- |
 | `quality` | `ruff check backend tests` · `node --check` لكل سكربت ثابت · لا `onclick=` ولا `<script>` مضمّن في HTML · `pip-audit` | أي خطأ lint، أي سكربت لا يُحلَّل، أي معالج مضمّن، أي CVE معروف |
 | `test` | `pytest -q tests` على SQLite · `python -m backend.selfcheck` · **ويتأكد أن selfcheck يفشل** عند `MABANIQ_ENV=prod` بلا أسرار | أي اختبار؛ أو نجاح الإنتاج بلا أسرار (خلل في fail-fast) |
-| `test-pg` | `pytest` ضد PostgreSQL 17 (خدمة) عبر `MABANIQ_DATABASE_URL` | `continue-on-error: true` حتى تكتمل الوحدة 1، ثم يصبح حاجزًا |
+| `test-pg` | `pytest` ضد PostgreSQL 17 (خدمة) عبر `MABANIQ_DATABASE_URL` ثم **pgTAP** (`python db/run_pgtap.py`: RLS مفعّلة ومفروضة وسياسة وعمود `org_id` على كل جدول + عزل سلوكي بين مطوّرين) | `continue-on-error: true` حتى تكتمل الوحدة 1، ثم يصبح حاجزًا |
 | `image` | `docker build` بـ`GIT_SHA` ثم تشغيل الحاوية والتحقق من `/health` و`/version` | فشل البناء أو عدم الاستجابة خلال 60 ثانية |
 
 ## التشغيل محليًا بنفس الأوامر

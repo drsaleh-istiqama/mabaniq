@@ -31,12 +31,18 @@ curl -s http://127.0.0.1:8800/version          # الإصدار، البيئة،
 السجلات أسطر JSON على stdout: `{"ts","level","request_id","method","path","status","ms","ip","user"}`. ابحث بمعرّف
 الطلب الذي يراه المستخدم في رسالة الخطأ 500 (`request_id`).
 
-## 3. الترحيلات (الوحدة 1)
+## 3. الترحيلات
 
-- كل تغيير مخطط ملف جديد `db/migrations/NNNN_name.sql`؛ لا يُعدَّل ملف طُبِّق على أي بيئة.
+- PostgreSQL: كل تغيير مخطط ملف جديد `db/migrations/NNNN_name.sql`؛ لا يُعدَّل ملف طُبِّق على أي بيئة. تُطبَّق
+  الملفات غير المسجَّلة في `schema_migrations` تلقائيًا عند أول اتصال في كل عملية (`dbx.apply_migrations`) **بدور
+  الاتصال** (مالك القاعدة)، ثم ينزل كل اتصال إلى `mabaniq_app` ويعيّن `app.org_id`. في الإنتاج يُفضَّل تشغيل
+  الترحيل خطوةً صريحة قبل النشر: `python -c "import psycopg,backend.dbx as d; d.apply_migrations(psycopg.connect('$MABANIQ_DATABASE_URL'))"`.
 - قبل ترحيل يغيّر بيانات: نسخة احتياطية يدوية فورية (§4).
-- حاليًا (SQLite): الترحيل تلقائي عند الإقلاع (`db.init` يضيف الأعمدة الناقصة، و`pii.encrypt_existing` يشفّر أي
-  حقل هوية مكشوف، و`gateway_secret` يحذف أي سر قديم من جدول الإعدادات).
+- SQLite (تطوير): `db.init` يضيف الأعمدة الناقصة من `MIGRATIONS`، و`pii.encrypt_existing` يشفّر أي حقل هوية مكشوف،
+  و`gateway_secret` يحذف أي سر قديم من جدول الإعدادات.
+- الكتلة المحلية: `C:\mabaniq\.local\pgdata` على 54330 (ثنائيات PostgreSQL 17 المحمولة في `C:\istiqama-map\.local\pg\bin`):
+  `pg_ctl -D C:\mabaniq\.local\pgdata -l C:\mabaniq\.local\postgres.log start` · قاعدة `mabaniq_test` + `CREATE EXTENSION pgtap`.
+  اختبارات: `MABANIQ_DATABASE_URL=postgresql://postgres@127.0.0.1:54330/mabaniq_test python -m pytest tests` ثم `python db/run_pgtap.py`.
 
 ## 4. النسخ الاحتياطي والاسترجاع
 

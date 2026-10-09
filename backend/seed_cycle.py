@@ -213,7 +213,7 @@ def seed_cycle(c, rnd, today: dt.date, pid: dict, tenant: str, schedule) -> None
             continue
         tid = c.execute("INSERT INTO tenants_l(name,phone,id_number) VALUES(?,?,?)", (tn, f"+968 9{rnd.randint(1000000, 9999999)}", str(rnd.randint(10000000, 99999999)))).lastrowid
         start = q_ho + dt.timedelta(days=rnd.randint(20, 60))
-        lid = c.execute("""INSERT INTO leases(unit_id,tenant_id,start,end,annual_rent,frequency,deposit,status,municipality_ref)
+        lid = c.execute("""INSERT INTO leases(unit_id,tenant_id,start,"end",annual_rent,frequency,deposit,status,municipality_ref)
                            VALUES(?,?,?,?,?,?,?,?,?)""", (uid, tid, start.isoformat(), (start + dt.timedelta(days=364)).isoformat(), rent, 12, rent / 12,
                                                          "active", f"MCT-L-{rnd.randint(100000, 999999)}")).lastrowid
         for q in range(12):

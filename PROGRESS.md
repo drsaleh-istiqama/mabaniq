@@ -21,15 +21,18 @@
    (سجلات JSON بمعرّف طلب، سجل وصول، JSON 500، دلو رموز للدخول/الإشعار/الـAPI)، `/health` `/ready` `/version`،
    ترويسات كاملة (HSTS سنتان، COOP، CORP، Permissions-Policy، Cache-Control)، `python -m backend.selfcheck`.
    **القياس:** 73 اختبارًا تمرّ · `ruff` صفر · selfcheck أخضر في demo ويفشل كما يجب في prod بلا أسرار.
-2. **و1 — PostgreSQL + RLS + اختبارات قاعدة البيانات** (⬜ التالي): طبقة وصول واحدة `backend/dbx.py` تُخفي الفرق بين
-   SQLite (تطوير سريع/اختبارات) وPostgreSQL (الإنتاج)؛ ترحيلات `db/migrations/NNNN_*.sql` بأعمدة قياسية
-   (`created_at/updated_at/created_by/updated_by/version/deleted_at`) ومحفّزات تدقيق؛ **عزل المطوّرين بـRLS على
-   كل جدول** (`app.tenant_id` في الجلسة) بدل قاعدة لكل مطوّر؛ pgTAP لسياسات RLS. المقياس: الحزمة كلها تمرّ على
-   PostgreSQL (`MABANIQ_DATABASE_URL=postgresql://…`) وpgTAP أخضر. **الحجم المقيس:** 512 استدعاء `execute`،
-   417 معاملًا `?`، ~90 تركيبًا خاصًا بـSQLite (`lastrowid` 51 · `INSERT OR IGNORE` 8 · `INSERT OR REPLACE` 6 ·
-   `PRAGMA` 5 · `substr` 4 · `ON CONFLICT` 3 · `executescript` 2 · `RAISE(ABORT)` 2 · `julianday` 1 · `SUM(bool)` 2).
-   الخطة: (أ) `dbx` بمعاملات مسمّاة و`insert/upsert/returning` على SQLite أولًا والحزمة خضراء؛ (ب) ترجمة الاستدعاءات
-   مجموعةً مجموعة؛ (ج) `0001_initial.sql` لـPostgreSQL بـ`tenant_id` + RLS + محفّزات؛ (د) pgTAP؛ (هـ) جعل `test-pg` حاجزًا.
+2. **و1 — PostgreSQL + RLS + اختبارات قاعدة البيانات** (✅ 2026-10-09، بقرار المالك «مستقلة»): طبقة واحدة
+   `backend/dbx.py` تخدم المحركين بالواجهة نفسها (`?`، `Row` بالاسم والفهرس، `lastrowid` عبر `RETURNING id`،
+   ترجمة `INSERT OR IGNORE/REPLACE` إلى `ON CONFLICT`)؛ `db/migrations/0001_initial.sql` مولَّد بـ`db/gen_pg_schema.py`
+   من مخطط 0.5.0 (60 جدولًا) مع عمود **`org_id`** (المطوّر) وcreated_at على كل جدول، مفاتيح فريدة مركّبة مع `org_id`،
+   دور `mabaniq_app` (NOBYPASSRLS، بلا UPDATE/DELETE على `audit`)، **RLS مفعّلة ومفروضة وسياسة على كل جدول**،
+   وحارس plpgsql للتدقيق؛ pgTAP `db/tests/01_rls_isolation.sql` بمشغّل `db/run_pgtap.py` بلا pg_prove.
+   التركيبات غير القابلة للترجمة أُعيدت كتابتها محايدة (SUM(bool)، MIN العددي، نافذة التواريخ، `"end"`).
+   **القياس:** 73 اختبارًا تمرّ على SQLite (19 ث) **وعلى PostgreSQL 17 (119 ث)** · **pgTAP 250 تحققًا خضراء** ·
+   `test-pg` حاجز في CI. البيئة المحلية: كتلة PostgreSQL محمولة في `.local/pgdata` على 54330 (ثنائيات
+   `C:\istiqama-map\.local\pg`). **ما بقي من مواصفة الوحدة (مؤجَّل إلى و2/و4):** `updated_at/version/deleted_at`
+   بمحفّز، سحب DELETE من الدور على الجداول المالية (الآن يلزم لإعادة البذر التجريبي)، حالة حدّ المعدل في القاعدة،
+   مجمّع اتصالات (كل طلب يفتح اتصالًا).
 3. **و2 — الهوية والجلسات** (⬜): جلسات موقَّعة مع تدوير عند رفع الصلاحية، إلغاء فوري للجلسات/الأجهزة، قفل
    متدرّج بدل القفل الكامل (M10)، MFA إلزامي لمدير/مالية في الإنتاج (موجود) + رموز استرداد، حدّ معدل من القاعدة.
 4. **و3 — الواجهة** (⬜): بناء بـVite + TypeScript، ملفات ترجمة `locales/{ar,en}.json` (الإنجليزية M13)، خط ذاتي
@@ -44,7 +47,7 @@
 | الوحدة | المحتوى                                                | الحالة |
 | ------ | ------------------------------------------------------ | ------ |
 | و0     | الهيكل، الوثائق، الإعدادات، السجلات، الصحة، حدّ المعدل، CI، الحاويات | ✅ (CI غير مُشغَّل على GitHub؛ Docker غير مُجرَّب محليًا) |
-| و1     | PostgreSQL + RLS + ترحيلات + pgTAP + طبقة `dbx`        | ⬜     |
+| و1     | PostgreSQL + RLS + ترحيلات + pgTAP + طبقة `dbx`        | ✅ (73 اختبارًا على المحركين · pgTAP 250 · `test-pg` حاجز) |
 | و2     | الهوية والجلسات والقفل المتدرّج                        | ⬜     |
 | و3     | الواجهة (Vite/TS، ترجمة، خط ذاتي، Playwright)          | ⬜     |
 | و4     | التشغيل: نسخ احتياطي واسترجاع، احتفاظ، مراقبة، حمل، قبول | ⬜     |

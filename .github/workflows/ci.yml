@@ -69,10 +69,9 @@ jobs:
           if MABANIQ_ENV=prod python -m backend.selfcheck; then echo "prod selfcheck passed without secrets — must fail"; exit 1; fi
 
   test-pg:
-    name: pytest (PostgreSQL 17) — Unit 1 target
+    name: pytest + pgTAP (PostgreSQL 17, RLS per organisation) — blocking since Unit 1
     runs-on: ubuntu-24.04
     timeout-minutes: 25
-    continue-on-error: true   # becomes blocking when PROGRESS.md marks Unit 1 ✅
     services:
       postgres:
         image: postgres:17
@@ -91,7 +90,15 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
       - run: pip install -r requirements.txt -r requirements-dev.txt
-      - run: python -m pytest -q tests
+      - name: pgTAP (extension from the postgres image is not bundled — install it)
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client git make >/dev/null
+          git clone --depth 1 --branch v1.3.4 https://github.com/theory/pgtap.git /tmp/pgtap
+          psql "$MABANIQ_DATABASE_URL" -v ON_ERROR_STOP=1 -q -f /tmp/pgtap/sql/pgtap.sql
+      - name: pytest on PostgreSQL
+        run: python -m pytest tests
+      - name: pgTAP — RLS per organisation on every table
+        run: python db/run_pgtap.py
 
   image:
     name: Docker image + /health

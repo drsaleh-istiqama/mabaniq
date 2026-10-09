@@ -1,5 +1,5 @@
 # Local/staging stack: API + PostgreSQL 17. `docker compose up --build` then http://localhost:8800
-# (Unit 1 makes the API use MABANIQ_DATABASE_URL; until then it falls back to SQLite inside the volume.)
+# (the API uses MABANIQ_DATABASE_URL; migrations apply on first start; RLS per organisation.)
 services:
   api:
     build:

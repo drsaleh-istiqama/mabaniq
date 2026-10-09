@@ -83,7 +83,8 @@ def test_m4_contract_clause_is_charity_not_penalty(cl):
     k = cl.post(f"/api/bookings/{body['booking_id']}/contract").json()
     assert "شرط التبرع" in k["body"] and "جهة خيرية" in k["body"] and "لا يعود منه شيء للبائع" in k["body"]
     assert "فائدة" in k["body"] and "مرابحة" in k["body"]
-    f = cl.post("/api/lands/1/feasibility", json={"sell_price_sqm": 620, "build_cost_sqm": 260}).json()
+    land = cl.get("/api/lands").json()[0]["id"]
+    f = cl.post(f"/api/lands/{land}/feasibility", json={"sell_price_sqm": 620, "build_cost_sqm": 260}).json()
     assert "مرابحة" in f["finance_mode"] and any("التمويل الإسلامي" in r for r in f["reasons"])
 
 

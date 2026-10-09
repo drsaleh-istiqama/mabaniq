@@ -148,7 +148,9 @@ def creds_file() -> Path:
 
 
 def ensure_schema(c) -> None:
-    have = {r[1] for r in c.execute("PRAGMA table_info(users)")}
+    if getattr(c, "dialect", "sqlite") == "postgres":
+        return
+    have = c.columns("users")
     if have:
         for col in USER_MIGR:
             if col.split()[0] not in have:
@@ -172,6 +174,7 @@ def ensure_users(c, customers: list[tuple[int, str]], brokers: list[tuple[int, s
             os.chmod(fa, 0o600)
         return
     creds = json.loads(f.read_text()) if f.exists() else {}
+    rotate = not f.exists()  # الملف مفقود (قاعدة PostgreSQL قائمة من تشغيل سابق مثلًا) ⟵ تُدوَّر كلمات مرور العرض وتُكتب من جديد
     force = 1 if os.environ.get("MABANIQ_FORCE_PW_CHANGE", "1") == "1" else 0
     wanted = [(u, n, r, None, None) for u, n, r in DEMO]
     wanted += [(f"client{i + 1}", n, "customer", cid, None) for i, (cid, n) in enumerate(customers)]
@@ -186,6 +189,11 @@ def ensure_users(c, customers: list[tuple[int, str]], brokers: list[tuple[int, s
             changed = True
         else:
             c.execute("UPDATE users SET customer_id=?, broker_id=?, name=? WHERE username=?", (cust, brk, name, un))
+            if rotate:
+                pw = temp_password()
+                c.execute("UPDATE users SET pw=?, must_change=? WHERE username=?", (hash_pw(pw), force, un))
+                creds[un] = pw
+                changed = True
     c.commit()
     if changed:
         f.write_text(json.dumps(creds, ensure_ascii=False, indent=1))

@@ -13,6 +13,8 @@ import re
 import sqlite3
 from pathlib import Path
 
+from . import dbx
+
 DEFAULT_DB = Path(__file__).resolve().parent.parent / "data" / "mabaniq.db"
 DEFAULT_TENANT = "jadwa"
 TENANT = contextvars.ContextVar("tenant", default=DEFAULT_TENANT)
@@ -50,12 +52,12 @@ def db_path(tenant: str | None = None) -> str:
     return str(data_dir() / f"tenant_{t}.db")
 
 
-def connect(tenant: str | None = None) -> sqlite3.Connection:
-    c = sqlite3.connect(db_path(tenant), timeout=15)
-    c.row_factory = sqlite3.Row
-    c.execute("PRAGMA foreign_keys=ON")
-    c.execute("PRAGMA journal_mode=WAL")
-    return c
+def connect(tenant: str | None = None):
+    """Unit 1: one entry point for both engines (sqlite file per tenant, or PostgreSQL with RLS per tenant)."""
+    t = tenant or TENANT.get()
+    if dbx.is_postgres():
+        return dbx.connect(t)
+    return dbx.connect(t, db_path(t))
 
 
 SCHEMA = """
@@ -250,9 +252,14 @@ MIGRATIONS = {
 MIGRATIONS["customers"] += ["consent_version TEXT", "consent_source TEXT", "erased_at TEXT"]  # 0.5.0 — M5
 
 
-def init(c: sqlite3.Connection) -> None:
+def init(c) -> None:
+    if c.dialect == "postgres":  # schema comes from db/migrations (applied in dbx on first connection)
+        from .pii import encrypt_existing
+        encrypt_existing(c)
+        c.commit()
+        return
     for table, cols in MIGRATIONS.items():
-        have = {r[1] for r in c.execute(f"PRAGMA table_info({table})")}
+        have = c.columns(table)
         if have:
             for col in cols:
                 if col.split()[0] not in have:
@@ -300,15 +307,17 @@ def audit_verify(c) -> dict:
 
 def wipe_for_reseed(c, tables) -> None:
     """إعادة البيانات التجريبية فقط (معطّلة في الإنتاج): تُزال حماية السجل مؤقتًا ثم تُعاد."""
-    c.execute("DROP TRIGGER IF EXISTS audit_no_update")
-    c.execute("DROP TRIGGER IF EXISTS audit_no_delete")
+    c.maintenance()
     for t in tables:
-        c.execute(f"DELETE FROM {t}")
+        c.execute(c.wipe_sql(t))
     c.commit()
+    c.end_maintenance()
     init(c)
 
 
 def backup(c, reason="manual") -> str:
+    if getattr(c, "dialect", "sqlite") == "postgres":
+        return "postgres: use pg_dump (docs/RUNBOOK.md §4)"
     d = data_dir() / "backups"
     d.mkdir(exist_ok=True)
     os.chmod(d, 0o700)

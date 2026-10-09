@@ -4,7 +4,6 @@ import hashlib
 import hmac
 import json
 import os
-import sqlite3
 import tempfile
 import time
 
@@ -109,10 +108,11 @@ def test_audit_append_only_and_chain(cl):
     cl.post("/api/notifications/run")
     v = cl.get("/api/audit/verify").json()
     assert v["ok"] and v["entries"] >= 1
-    raw = sqlite3.connect(os.environ["MABANIQ_DB"])
-    with pytest.raises(sqlite3.DatabaseError):
+    raw = connect()
+    with pytest.raises(Exception, match="append-only|denied|permission"):
         raw.execute("UPDATE audit SET detail='x'")
-    with pytest.raises(sqlite3.DatabaseError):
+    raw.rollback()
+    with pytest.raises(Exception, match="append-only|denied|permission"):
         raw.execute("DELETE FROM audit")
     raw.rollback()
     raw.close()
@@ -160,7 +160,7 @@ def test_broker_isolation(cl):
     p = cl.get("/api/broker/portal").json()
     assert p["broker"]["name"] and "inventory" in p
     assert cl.get("/api/leads").status_code == 403 and cl.get("/api/projects").status_code == 403
-    pid = 1
+    pid = cl.get("/api/broker/projects").json()[0]["id"]
     r = cl.post("/api/broker/leads", json={"name": "عميل وسيط", "phone": "+968 9777 0001", "project_id": pid})
     assert r.status_code == 200
     dup = cl.post("/api/broker/leads", json={"name": "مكرر", "phone": "9777 0001", "project_id": pid})
@@ -181,14 +181,15 @@ def test_api_key_readonly(cl):
 
 # ================================================================== منطق الأعمال
 def test_feasibility(cl):
-    r = cl.post("/api/lands/1/feasibility", json={"sell_price_sqm": 620, "build_cost_sqm": 260})
+    land = cl.get("/api/lands").json()[0]["id"]
+    r = cl.post(f"/api/lands/{land}/feasibility", json={"sell_price_sqm": 620, "build_cost_sqm": 260})
     assert r.status_code == 200
     f = r.json()
     assert f["revenue"] > f["total_cost"] > 0 and f["irr"] is not None and len(f["sensitivity"]) == 3
-    bad = cl.post("/api/lands/1/feasibility", json={"sell_price_sqm": 300, "build_cost_sqm": 290}).json()
+    bad = cl.post(f"/api/lands/{land}/feasibility", json={"sell_price_sqm": 300, "build_cost_sqm": 290}).json()
     assert "غير" in bad["verdict"] or bad["margin"] < 12
     login_as(cl, "sales")
-    assert cl.post("/api/lands/1/feasibility", json={"sell_price_sqm": 620, "build_cost_sqm": 260}).status_code == 403
+    assert cl.post(f"/api/lands/{land}/feasibility", json={"sell_price_sqm": 620, "build_cost_sqm": 260}).status_code == 403
 
 
 def test_kyc_watchlist(cl):
@@ -235,11 +236,12 @@ def test_discount_authority(cl):
 def test_commission_on_confirm(cl):
     pid = cl.get("/api/projects").json()[0]["id"]
     u = next(x for x in cl.get(f"/api/units?project_id={pid}").json() if x["status"] == "a")
+    broker_id = cl.get("/api/brokers").json()[0]["id"]
     b = cl.post("/api/bookings", json={"unit_code": u["code"], "customer_name": "عميل عبر وسيط", "phone": "+968 9123 0000",
-                                       "plan": "6040", "broker_id": 1}).json()
+                                       "plan": "6040", "broker_id": broker_id}).json()
     cl.post(f"/api/customers/{b['customer_id']}/kyc", json=KYC)
     assert cl.post(f"/api/bookings/{b['booking_id']}/confirm").status_code == 200
-    br = next(x for x in cl.get("/api/brokers").json() if x["id"] == 1)
+    br = next(x for x in cl.get("/api/brokers").json() if x["id"] == broker_id)
     cm = next(x for x in br["commissions"] if x["booking_id"] == b["booking_id"])
     assert cm["status"] == "due" and cm["amount"] == round(u["price"] * br["rate"])
 
@@ -334,7 +336,8 @@ def test_lender_and_investor_reports(cl):
     seb = next(p for p in r["projects"] if "السيب" in p["project"])
     assert seb["flags"]
     assert cl.get("/api/reports/investor").status_code == 200
-    assert cl.get("/api/leads").status_code == 403 and cl.get("/api/escrow/1").status_code == 200
+    first_project = connect().execute("SELECT id FROM projects ORDER BY id LIMIT 1").fetchone()[0]
+    assert cl.get("/api/leads").status_code == 403 and cl.get(f"/api/escrow/{first_project}").status_code == 200
 
 
 def test_whatsapp_agent(cl):
