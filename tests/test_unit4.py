@@ -165,3 +165,26 @@ def test_dashboard_cache_shares_results_and_invalidates_on_writes(cl):
     g = cache.generation(t)
     cl.post("/api/notifications/run")
     assert cache.generation(t) == g + 1
+
+
+@pg_only
+def test_migrations_apply_concurrently_without_racing():
+    """Several workers start at once (uvicorn --workers): only one applies migrations, the others wait and find them recorded."""
+    import threading
+
+    import psycopg
+    errors = []
+
+    def worker():
+        try:
+            with psycopg.connect(O.settings.database_url) as raw:
+                dbx.apply_migrations(raw)
+        except Exception as e:  # noqa: BLE001
+            errors.append(repr(e))
+
+    threads = [threading.Thread(target=worker) for _ in range(6)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert errors == []

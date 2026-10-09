@@ -321,10 +321,16 @@ def _pg_connect(tenant: str) -> PgConn:
     return PgConn(raw, tenant, p)
 
 
+MIGRATION_LOCK = 7340127  # advisory lock key: one process applies migrations at a time (uvicorn --workers start together)
+
+
 def apply_migrations(raw) -> list[str]:
-    """Apply db/migrations/*.sql not yet recorded in schema_migrations (runs as the connecting user, before SET ROLE)."""
+    """Apply db/migrations/*.sql not yet recorded in schema_migrations (runs as the connecting user, before SET ROLE).
+    Serialised with a transaction-scoped advisory lock: with several workers starting at once, the second waits for the
+    first to commit and then finds everything recorded (Unit 4 incident: concurrent CREATE OR REPLACE FUNCTION raced in pg_proc)."""
     applied: list[str] = []
     with raw.cursor() as cur:
+        cur.execute("SELECT pg_advisory_xact_lock(%s)", (MIGRATION_LOCK,))
         cur.execute("CREATE TABLE IF NOT EXISTS schema_migrations(version text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())")
         cur.execute("SELECT version FROM schema_migrations")
         done = {r[0] for r in cur.fetchall()}
