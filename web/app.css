@@ -167,3 +167,12 @@ a.btn{text-decoration:none;color:inherit;display:inline-flex;align-items:center}
 .pill{line-height:1.6}
 #dq td:first-child{min-width:300px}
 td .muted{display:inline-block}
+
+/* الوحدة 6: المخططات */
+.plan{position:relative;display:inline-block;max-width:100%;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff}
+.plan img{display:block;max-width:100%;height:auto}
+.plan.edit{cursor:crosshair}
+.plan .mk{position:absolute;transform:translate(-50%,-50%);min-width:22px;height:22px;padding:0 5px;border-radius:11px;background:#1E8A5A;color:#fff;font:700 11px/22px 'Tajawal',sans-serif;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.4);direction:ltr}
+.plan .mk.r{background:#D4A64A;color:#1A1405}.plan .mk.s{background:#6B7280}.plan .mk.hl{outline:3px solid #fff;box-shadow:0 0 0 5px var(--pri),0 2px 8px rgba(0,0,0,.5);z-index:2;transform:translate(-50%,-50%) scale(1.25)}
+.docb{display:inline-flex;gap:4px}.docb .btn{padding:4px 8px;font-size:12px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0 14px}.grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px}

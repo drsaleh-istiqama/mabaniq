@@ -364,7 +364,7 @@ def rent_pay(did: int, _=Depends(act_as("leasing"))):
 # ======================================================================= المستندات (رفع آمن)
 ALLOWED = {"application/pdf": (b"%PDF", ".pdf"), "image/png": (b"\x89PNG", ".png"), "image/jpeg": (b"\xff\xd8\xff", ".jpg")}
 MAX_DOC = 5 * 1024 * 1024
-REF_TYPES = "^(booking|customer|project|permit|ipc|lease|land)$"
+REF_TYPES = "^(booking|customer|project|permit|ipc|lease|land|brand|plan)$"
 
 
 def _docs_dir() -> Path:
@@ -378,6 +378,14 @@ async def doc_upload(ref_type: str = Form(..., pattern=REF_TYPES), ref_id: int =
                      title: str = Form(..., min_length=2, max_length=100), category: str = Form("عام", max_length=40),
                      file: UploadFile = File(...), u=Depends(act_as("docs"))):
     data = await file.read(MAX_DOC + 1)
+    c = db()
+    did, sha = store_upload(c, data, file.filename, ref_type, ref_id, title, category, u["name"])
+    c.commit()
+    return {"id": did, "sha256": sha}
+
+
+def store_upload(c, data: bytes, filename: str | None, ref_type: str, ref_id: int, title: str, category: str, by: str) -> tuple[int, str]:
+    """Validated file store shared by documents, plans and the letterhead: size cap, magic-byte type check, random name, hash, audit."""
     if len(data) > MAX_DOC:
         raise HTTPException(413, "الحد الأقصى 5 ميجابايت")
     kind = next((m for m, (magic, _e) in ALLOWED.items() if data.startswith(magic)), None)
@@ -386,13 +394,11 @@ async def doc_upload(ref_type: str = Form(..., pattern=REF_TYPES), ref_id: int =
     sha = hashlib.sha256(data).hexdigest()
     stored = secrets.token_hex(16) + ALLOWED[kind][1]
     (_docs_dir() / stored).write_bytes(data)
-    c = db()
-    safe_name = re.sub(r"[^\w.\- \u0600-\u06FF]", "_", file.filename or "file")[:80]
+    safe_name = re.sub(r"[^\w.\- \u0600-\u06FF]", "_", filename or "file")[:80]
     did = c.execute("INSERT INTO documents(ref_type,ref_id,title,category,filename,mime,size,sha256,stored,uploaded_by,at) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
-                    (ref_type, ref_id, title, category, safe_name, kind, len(data), sha, stored, u["name"], now_s())).lastrowid
+                    (ref_type, ref_id, title, category, safe_name, kind, len(data), sha, stored, by, now_s())).lastrowid
     audit(c, "رفع مستند", f"{title} ({ref_type} {ref_id}) · {len(data)//1024} KB · sha256 {sha[:12]}")
-    c.commit()
-    return {"id": did, "sha256": sha}
+    return did, sha
 
 
 @router.get("/api/documents")

@@ -22,7 +22,7 @@ from . import observability as O
 from .auth import need
 from .config import settings
 from .db import TENANT, backup, connect, tenants, valid_tenant
-from .seed import schedule, seed
+from .seed import seed
 
 O.setup_logging()
 
@@ -263,23 +263,11 @@ def book(b: BookingIn, _=Depends(act_as("book"))):
         raise HTTPException(409, "الوحدة غير متاحة")
     if b.broker_id and not c.execute("SELECT 1 FROM brokers WHERE id=? AND active=1", (b.broker_id,)).fetchone():
         raise HTTPException(404, "الوسيط غير موجود")
-    today = dt.date.today()
-    cid = c.execute("INSERT INTO customers(name,phone,created) VALUES(?,?,?)",
-                    (b.customer_name, b.phone, today.isoformat())).lastrowid
-    bid = c.execute("INSERT INTO bookings(unit_id,customer_id,lead_id,plan,price,status,created,expires,broker_id,list_price) "
-                    "VALUES(?,?,?,?,?,?,?,?,?,?)", (u["id"], cid, b.lead_id, b.plan, u["price"], "pending", today.isoformat(),
-                                                (today + dt.timedelta(days=3)).isoformat(), b.broker_id, u["price"])).lastrowid
-    sched = schedule(b.plan, u["price"], today, dt.date.fromisoformat(u["handover"]))
-    for s, (lb, d, amt) in enumerate(sched, 1):
-        c.execute("INSERT INTO installments(booking_id,seq,label,due_date,amount) VALUES(?,?,?,?,?)",
-                  (bid, s, lb, d.isoformat(), amt))
-    c.execute("UPDATE units SET status='r' WHERE id=?", (u["id"],))
-    if b.lead_id:
-        c.execute("UPDATE leads SET stage=4 WHERE id=?", (b.lead_id,))
+    from .paperwork import create_booking  # Unit 6: one path for manual bookings and quotation conversions
+    res = create_booking(c, u, b.customer_name, b.phone, b.plan, b.lead_id, b.broker_id)
     audit(c, "حجز مبدئي", f"{b.unit_code} لـ {b.customer_name} ({b.plan})")
     c.commit()
-    return {"booking_id": bid, "customer_id": cid, "deposit": sched[0][2], "next_step": "استكمال التحقق من الهوية ثم إصدار العقد للتوقيع", "expires": (today + dt.timedelta(days=3)).isoformat(),
-            "schedule": [{"label": lb, "due": d.isoformat(), "amount": a} for lb, d, a in sched]}
+    return res
 
 
 @app.post("/api/bookings/{bid}/confirm")
@@ -865,7 +853,7 @@ async def _inner(request: Request, call_next):
         p = request.url.path
         if p.startswith("/api/") and p not in CSRF_EXEMPT and not p.startswith("/api/v1/") and request.cookies.get(A.COOKIE) and not A.csrf_ok(request):
             return JSONResponse({"detail": "رمز CSRF مفقود أو غير مطابق — أعد تسجيل الدخول"}, status_code=403)
-        upload = request.url.path == "/api/documents"
+        upload = request.url.path in ("/api/documents", "/api/plans")  # multipart uploads (Unit 6: plans)
         ctype = request.headers.get("content-type", "")
         ok_type = ctype.startswith("multipart/form-data") if upload else ctype.startswith("application/json")
         if not ok_type and request.url.path.startswith("/api/") and int(request.headers.get("content-length") or 0) > 0:
@@ -904,7 +892,11 @@ from .modules2 import router as modules2_router  # noqa: E402
 app.include_router(modules_router)
 app.include_router(modules2_router)
 from .identity import router as identity_router  # noqa: E402
+from .paperwork import router as paperwork_router  # noqa: E402
+from .plans import router as plans_router  # noqa: E402
 
 app.include_router(identity_router)
+app.include_router(paperwork_router)
+app.include_router(plans_router)
 app.mount("/static", StaticFiles(directory=FRONT), name="static")
 app.add_middleware(O.ObservabilityMiddleware)  # الأبعد خارجيًا: معرّف الطلب وسجل الوصول وتحويل الأعطال إلى JSON 500

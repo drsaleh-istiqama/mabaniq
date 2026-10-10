@@ -14,10 +14,11 @@ document.addEventListener('click', e => {
   const el = e.target.closest('[data-call]');
   if (!el) return;
   const [ns, fn] = el.dataset.call.includes('.') ? el.dataset.call.split('.') : [null, el.dataset.call];
-  const f = ns ? (CALLS[ns] || window[ns] || {})[fn] : (CALLS[fn] || window[fn]);
+  const obj = ns ? (CALLS[ns] || window[ns] || {}) : null;
+  const f = obj ? obj[fn] : (CALLS[fn] || window[fn]);
   if (typeof f !== 'function') { console.warn('no handler', el.dataset.call); return; }
   e.preventDefault();
-  f(...(el.dataset.args ? JSON.parse(el.dataset.args) : []));
+  f.apply(obj, el.dataset.args ? JSON.parse(el.dataset.args) : []);  // keep `this` for namespaced handlers (EXT.sub uses this.cur)
 });
 const csrf = () => (document.cookie.match(/(?:^|; )mbq_csrf=([^;]+)/) || [])[1] || '';
 
@@ -207,7 +208,7 @@ async function showUnit(code) {
     const s = u.suggestion;
     h += `<div class="ai"><b class="k">✦ التسعير الديناميكي:</b> ${s.change ? `${s.change > 0 ? 'رفع' : 'خفض'} ${N(Math.abs(s.change * 100))}٪ ← <b>${OMR(s.price)}</b>` : 'السعر الحالي متوافق مع الطلب.'}<br><span class="muted">${tx(s.reason)}</span></div>`;
   }
-  if (u.status === 'a' && can('book')) h += `<button class="btn p w" data-call="openBooking" data-args="${J([u.code])}">حجز الوحدة لعميل</button>`;
+  if (u.status === 'a' && can('book')) h += `<div class="btns"><button class="btn p" data-call="openBooking" data-args="${J([u.code])}">حجز الوحدة لعميل</button><button class="btn" data-call="EXT.newQuote" data-args="${J([u.code])}">عرض سعر</button></div>`;
   if (u.booking) {
     const b = u.booking;
     h += `<dl class="kv"><dt>العميل</dt><dd>${esc(b.cname)}</dd><dt>الهاتف</dt><dd><span class="num">${esc(b.phone)}</span></dd><dt>خطة الدفع</dt><dd>${PLANS[b.plan][0]}</dd><dt>المسدَّد</dt><dd>${OMR(b.paid)} من ${OMR(b.total)}</dd>${b.status === 'pending' ? `<dt>مهلة الحجز</dt><dd>حتى ${fmtDate(b.expires)}</dd>` : ''}</dl>`;
@@ -217,6 +218,14 @@ async function showUnit(code) {
       return `<div class="inst"><span>${esc(i.label)}<br><span class="muted">${fmtDate(i.due_date)}</span></span><span>${OMR(i.amount)} ${st}</span></div>`;
     }).join('');
   }
+  const UP = await api(`/units/${encodeURIComponent(code)}/plans`).catch(() => null);
+  if (UP && (UP.floor_plan || UP.unit_plan || UP.others.length)) {
+    h += `<b>موقع الوحدة ومخططاتها</b>`;
+    if (UP.floor_plan) h += `<div class="muted" style="margin:6px 0 4px">${esc(UP.floor_plan.title)}${UP.floor_plan.me ? '' : ' — لم يُحدَّد موقع الوحدة بعد'}</div>` + planImg(UP.floor_plan, UP.floor_plan.markers, u.code);
+    if (UP.unit_plan) h += `<div class="muted" style="margin:10px 0 4px">${esc(UP.unit_plan.title)}</div>` + planImg(UP.unit_plan, [], null);
+    if (UP.others.length) h += `<div class="btns" style="margin-top:8px">${UP.others.map(o => `<a class="btn" href="${o.url}" target="_blank" rel="noopener">${PLAN_KINDS[o.kind] || o.kind}: ${esc(o.title)}</a>`).join('')}</div>`;
+  } else h += `<div class="muted" style="margin-top:8px">لا مخططات مرفوعة لهذا المشروع — <button class="link" data-call="EXT.plans">المخططات</button></div>`;
+  if (u.booking && u.booking.id) h += `<div style="margin-top:10px"><b>مستندات الحجز</b> ${docBtns('contract', u.booking.id)}</div>`;
   insp('وحدة', h);
 }
 
@@ -529,8 +538,9 @@ EXT.newSite = () => { modal(`<h3>تقرير الموقع اليومي</h3><label
 /* ================================================================ المبيعات الموسّعة */
 EXT.l_sal = async function () {
   const k = this.cur.sal, el = $('#sal');
-  el.innerHTML = SUB('sal', [['kyc', 'التحقق والعقود'], ['brk', 'الوسطاء والعمولات'], ['mkt', 'السوق الثانوي'], ['disc', 'الخصومات'], ['wa', 'وكيل واتساب']], k) + '<div id="salB">…</div>';
+  el.innerHTML = SUB('sal', [['kyc', 'التحقق والعقود'], ['quotes', 'عروض الأسعار'], ['brk', 'الوسطاء والعمولات'], ['mkt', 'السوق الثانوي'], ['disc', 'الخصومات'], ['wa', 'وكيل واتساب']], k) + '<div id="salB">…</div>';
   const B = $('#salB');
+  if (k === 'quotes') return EXT.l_quotes(B);
   if (k === 'kyc') {
     const Q = await api('/kyc');
     B.innerHTML = BOX('الحجوزات بانتظار التحقق من الهوية (KYC) وإصدار العقد', T(['العميل', 'الوحدة', 'الهوية', 'الجنسية', 'حالة التحقق', 'المخاطر', 'الحجز'],
@@ -588,7 +598,7 @@ EXT.contract = async bid => {
    <pre class="contract">${esc(k.body)}</pre>
    ${k.customer_signed_at ? `<div class="ai">✓ وقّعه المشتري في ${fmtDate(k.customer_signed_at)} · سلامة النص: ${k.integrity_ok ? 'مطابقة' : '⚠ غير مطابقة'}</div>` :
    `<div class="ai">يستطيع العميل التوقيع عن بعد من تطبيقه، أو التوقيع الحضوري هنا بحضورك.</div><label>اسم المشتري كما في العقد</label><input id="sn"><label class="chk" style="margin-top:8px"><input type="checkbox" id="sa"> قرأ المشتري العقد ووافق عليه</label><div class="err" id="se3"></div>
-   <div class="btns" style="margin-top:12px"><button class="btn p" id="sgo3">توقيع حضوري</button></div>`}<div class="btns" style="margin-top:8px"><button class="btn" data-call="closeModal">إغلاق</button></div>`);
+   <div class="btns" style="margin-top:12px"><button class="btn p" id="sgo3">توقيع حضوري</button></div>`}<div class="btns" style="margin-top:8px">${docBtns('contract', bid)}<button class="btn" data-call="closeModal">إغلاق</button></div>`);
   if ($('#sgo3')) $('#sgo3').onclick = async () => { try { await api(`/bookings/${bid}/contract/sign-inperson`, {method: 'POST', body: {typed_name: $('#sn').value, accept: $('#sa').checked}}); closeModal(); toast('✓ وُقّع العقد وسُجّل في سجل التدقيق'); } catch (e) { $('#se3').textContent = e.message; } };
 };
 EXT.payCom = async id => { await tryDo(() => api(`/commissions/${id}/pay`, {method: 'POST'}), 'صُرفت العمولة'); EXT.l_sal(); };
@@ -612,7 +622,9 @@ EXT.l_bill = async function () {
   if (k === 'inv') {
     const I = await api('/invoices');
     B.innerHTML = KP([['عدد الفواتير', N(I.summary.n)], ['الصافي', K(I.summary.net) + ' ر.ع'], ['ضريبة القيمة المضافة', K(I.summary.vat) + ' ر.ع'], ['النسبة القياسية', '5٪', 'قابلة للضبط']]) + `<div class="ai">${esc(I.note)}</div>`
-      + BOX('الفواتير الصادرة', T(['الرقم', 'النوع', 'العميل', 'الصافي', 'الضريبة', 'الإجمالي', 'التاريخ', 'البيان'], I.invoices.map(v => `<tr><td><span class="num">${esc(v.number)}</span></td><td>${esc({installment: 'قسط', service_charge: 'رسوم خدمات', rent: 'إيجار', resale_fee: 'رسوم تنازل'}[v.kind] || v.kind)}</td><td>${esc(v.customer)}</td><td>${OMR(v.net)}</td><td>${OMR(v.vat)}</td><td>${OMR(v.total)}</td><td>${fmtDate(v.issued)}</td><td>${esc(v.note)}</td></tr>`), 'تصدر الفواتير تلقائيًا مع كل سداد.'));
+      + BOX('الفواتير الصادرة', T(['الرقم', 'النوع', 'العميل', 'الصافي', 'الضريبة', 'الإجمالي', 'التاريخ', 'البيان', ''], I.invoices.map(v => `<tr><td><span class="num">${esc(v.number)}</span></td><td>${esc({installment: 'قسط', service_charge: 'رسوم خدمات', rent: 'إيجار', resale_fee: 'رسوم تنازل'}[v.kind] || v.kind)}</td><td>${esc(v.customer)}</td><td>${OMR(v.net)}</td><td>${OMR(v.vat)}</td><td>${OMR(v.total)}</td><td>${fmtDate(v.issued)}</td><td>${esc(v.note)}</td><td>${v.id ? docBtns('invoice', v.id) : ''}</td></tr>`), 'تصدر الفواتير تلقائيًا مع كل سداد.'));
+    const R = await api('/receipts');
+    B.innerHTML += BOX('الإيصالات الصادرة <span class="muted">إيصال استلام لكل دفعة — طباعة أو إرسال للعميل</span>', T(['الإيصال', 'العميل', 'الوحدة', 'عن', 'المبلغ', 'التاريخ', 'الطريقة', ''], R.map(r => `<tr><td><span class="num">${esc(r.receipt)}</span></td><td>${esc(r.customer)}</td><td><span class="num">${esc(r.code)}</span></td><td>${esc(r.label)}</td><td>${OMR(r.amount)}</td><td>${fmtDate(r.at)}</td><td>${esc(r.method || '')}</td><td>${docBtns('receipt', r.id)}</td></tr>`), 'لا دفعات مسجلة.'));
   } else if (k === 'pen') {
     const [P, C] = await Promise.all([api('/penalties'), api('/charity')]);
     const CS = {due: ['مستحق على العميل', 'p-w'], collected: ['محصَّل (أمانة)', 'p-bl'], disbursed: ['صُرف للجهة الخيرية', 'p-ok'], waived: ['معفى', '']};
@@ -711,12 +723,20 @@ EXT.l_rep = async function () {
 /* ================================================================ الإدارة والأمان */
 EXT.l_adm = async function () {
   const k = this.cur.adm, el = $('#adm');
-  el.innerHTML = SUB('adm', [['users', 'المستخدمون'], ['sec', 'أماني'], ['ops', 'السجل والنسخ والتكامل'], ['notif', 'الإشعارات'], ['priv', 'طلبات الخصوصية']].filter(([x]) => x === 'sec' || can('admin') || (x === 'notif' && can('notify'))), k) + '<div id="admB">…</div>';
+  el.innerHTML = SUB('adm', [['users', 'المستخدمون'], ['sec', 'أماني'], ['brand', 'هوية المستندات والختم'], ['ops', 'السجل والنسخ والتكامل'], ['notif', 'الإشعارات'], ['priv', 'طلبات الخصوصية']].filter(([x]) => x === 'sec' || can('admin') || (x === 'notif' && can('notify'))), k) + '<div id="admB">…</div>';
   const B = $('#admB');
   if (k === 'users' && can('users')) {
     const U = await api('/users');
     B.innerHTML = BOX('المستخدمون والأدوار', T(['المستخدم', 'الاسم', 'البريد', 'الدور', 'الحالة', 'تحقق ثنائي', 'تغيير كلمة المرور', ''], U.map(u => `<tr><td><span class="num">${esc(u.username)}</span></td><td>${esc(u.name)}</td><td><span class="num">${esc(u.email || '—')}</span>${u.google_linked ? ' <span class="pill p-ok">Google</span>' : ''} <button class="link" data-call="EXT.uemail" data-args="${J([u.id, u.email || ''])}">تعديل</button></td><td>${esc(u.role)}</td><td>${u.active ? pill('مفعّل', 'p-ok') : pill('معطّل', 'p-b')}</td><td>${u.totp_enabled ? '✓' : '—'}</td><td>${u.must_change ? pill('مطلوب', 'p-w') : fmtDate(u.pw_changed)}</td><td><button class="btn" data-call="EXT.ureset" data-args="${J([u.id])}">إعادة تعيين</button> <button class="btn" data-call="EXT.uact" data-args="${J([u.id, u.active ? 0 : 1])}">${u.active ? 'تعطيل' : 'تفعيل'}</button> <button class="btn" data-call="EXT.ukill" data-args="${J([u.id])}">إنهاء الجلسات</button>${u.totp_enabled ? ` <button class="btn" data-call="EXT.u2fa" data-args="${J([u.id])}">إعادة ضبط التحقق</button>` : ''}</td></tr>`)),
       '<button class="btn" data-call="EXT.newUser">+ مستخدم</button>');
+  } else if (k === 'brand' && can('admin')) {
+    const b = await api('/admin/brand');
+    const f = (id, l, v, ph = '') => `<label>${l}</label><input id="${id}" value="${esc(v || '')}" placeholder="${ph}">`;
+    const img = (d) => d ? `<img src="/api/documents/${d}" alt="" style="height:56px;border:1px solid var(--line);border-radius:8px;background:#fff;padding:4px">` : '<span class="muted">لم تُرفع</span>';
+    B.innerHTML = BOX('ترويسة المستندات الصادرة (عروض الأسعار، العقود، الفواتير، الإيصالات)', `<div style="padding:14px"><div class="grid2">${f('brn', 'اسم المطوّر كما يظهر في المستندات', b.name)}${f('brcr', 'رقم السجل التجاري', b.cr)}${f('brvat', 'الرقم الضريبي', b.vat)}${f('brad', 'العنوان', b.address)}${f('brph', 'الهاتف', b.phone)}${f('brem', 'البريد', b.email)}${f('brsg', 'اسم المفوَّض بالتوقيع', b.signatory)}${f('brst', 'صفته', b.signatory_title)}</div>
+      <div class="btns" style="margin-top:12px"><button class="btn p" id="brsave">حفظ</button></div></div>`)
+      + BOX('الشعار والختم والتوقيع المعتمد <span class="muted">صور PNG/JPEG بخلفية بيضاء أو شفافة؛ تُطبع في كل مستند</span>', `<div style="padding:14px" class="grid3">${['logo', 'stamp', 'sign'].map(k => `<div><b>${{logo: 'الشعار', stamp: 'الختم', sign: 'التوقيع'}[k]}</b><div style="margin:8px 0">${img(b[k + '_doc'])}</div><input type="file" id="br_${k}" accept=".png,.jpg,.jpeg"><button class="btn" data-call="EXT.brandUpload" data-args="${J([k])}">رفع</button></div>`).join('')}</div>`);
+    $('#brsave').onclick = async () => { await tryDo(() => api('/admin/brand', {method: 'POST', body: {name: $('#brn').value, cr: $('#brcr').value, vat: $('#brvat').value, address: $('#brad').value, phone: $('#brph').value, email: $('#brem').value, signatory: $('#brsg').value, signatory_title: $('#brst').value}}), 'حُفظت الترويسة'); };
   } else if (k === 'ops' && can('admin')) {
     const v = await api('/audit/verify');
     B.innerHTML = KP([['سلامة سجل التدقيق', v.ok ? '✓ سليم' : '⚠ مكسور', N(v.entries) + ' قيدًا · بصمة ' + (v.head || '')], ['السجل', 'إلحاق فقط', 'لا تعديل ولا حذف'], ['النسخ الاحتياطي', 'آخر 14 نسخة', 'مشفّر في الإنتاج'], ['واجهة التكامل', '/api/v1', 'مفاتيح قراءة فقط']])
@@ -744,6 +764,8 @@ EXT.l_adm = async function () {
     $('#sall').onclick = async () => { const r = await tryDo(() => api('/me/sessions/revoke', {method: 'POST', body: {others: true}})); toast(`أُنهيت ${N(r.revoked)} جلسة`); EXT.l_adm(); };
   }
 };
+EXT.brandUpload = async kind => { const f = $(`#br_${kind}`).files[0]; if (!f) return toast('اختر صورة', 1); const fd = new FormData(); fd.append('ref_type', 'brand'); fd.append('ref_id', '0'); fd.append('title', {logo: 'الشعار', stamp: 'الختم', sign: 'التوقيع'}[kind]); fd.append('category', 'هوية'); fd.append('file', f);
+  try { const r = await fetch('/api/documents', {method: 'POST', headers: {'X-CSRF-Token': csrf()}, body: fd}); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.detail || 'تعذّر الرفع'); await api('/admin/brand', {method: 'POST', body: {[kind + '_doc']: j.id}}); toast('رُفعت الصورة'); EXT.l_adm(); } catch (e) { toast(e.message, 1); } };
 EXT.ureset = async id => { if (!confirm('إعادة تعيين كلمة المرور وإنهاء جلسات المستخدم؟')) return; const r = await tryDo(() => api(`/users/${id}/reset`, {method: 'POST'})); modal(`<h3>كلمة مرور مؤقتة</h3><p>للمستخدم <b>${esc(r.username)}</b>:</p><div class="ai"><span class="num" style="user-select:all">${esc(r.temporary_password)}</span></div><p class="muted">تُعرض مرة واحدة، ويُلزم بتغييرها عند الدخول.</p><button class="btn" data-call="closeModal">إغلاق</button>`); };
 EXT.skill = async id => { await tryDo(() => api('/me/sessions/revoke', {method: 'POST', body: {id}}), 'أُنهيت الجلسة'); EXT.l_adm(); };
 EXT.ukill = async id => { if (!confirm('إنهاء كل جلسات هذا المستخدم فورًا (جهاز مفقود / مغادرة)؟')) return; const r = await tryDo(() => api(`/users/${id}/sessions/revoke`, {method: 'POST'})); toast(`أُنهيت ${N(r.revoked)} جلسة`); };
@@ -778,3 +800,80 @@ Object.assign(CALLS, {approveIPC, cancelBooking, closeModal, confirmBooking, dec
 applyI18n();
 const langBtn = document.getElementById('lang');
 if (langBtn) { langBtn.textContent = lang() === 'ar' ? 'EN' : 'ع'; langBtn.onclick = () => toggleLang(); }
+
+/* ---------------- الوحدة 6: المستندات (PDF · بريد · واتساب) ---------------- */
+const DOCK = {quote: 'عرض السعر', contract: 'العقد', invoice: 'الفاتورة', receipt: 'الإيصال'};
+const docBtns = (kind, id) => `<span class="btns docb"><a class="btn" href="/api/docs/${kind}/${id}.pdf" target="_blank" rel="noopener">PDF</a><button class="btn" data-call="EXT.docSend" data-args="${J([kind, id, 'email'])}">بريد</button><button class="btn" data-call="EXT.docSend" data-args="${J([kind, id, 'whatsapp'])}">واتساب</button></span>`;
+EXT.docSend = async (kind, id, channel) => {
+  const label = channel === 'email' ? 'البريد الإلكتروني للمستلم (فارغ = بريد العميل المسجَّل)' : 'رقم واتساب المستلم (فارغ = هاتف العميل المسجَّل)';
+  const to = prompt(`إرسال ${DOCK[kind]} عبر ${channel === 'email' ? 'البريد' : 'واتساب'}\n${label}`, '');
+  if (to === null) return;
+  try {
+    const r = await api(`/docs/${kind}/${id}/send`, {method: 'POST', body: {channel, to: to.trim() || null}});
+    if (channel === 'whatsapp') { window.open(r.wa_url, '_blank', 'noopener'); toast('فُتح واتساب بالرسالة والرابط (صالح 30 يومًا)'); }
+    else toast(r.delivered ? `أُرسل إلى ${r.to}` : `سُجّل الإرسال إلى ${r.to} (صندوق الصادر — البريد غير مهيّأ على هذا الخادم)`);
+  } catch (e) { toast(e.message, 1); }
+};
+
+/* ---------------- الوحدة 6: عروض الأسعار ---------------- */
+const QS = {issued: ['ساري', 'p-ok'], expired: ['منتهٍ', 'p-w'], converted: ['تحوّل إلى حجز', 'p-bl'], cancelled: ['ملغى', '']};
+EXT.l_quotes = async function (B) {
+  const Q = await api('/quotes');
+  B.innerHTML = BOX('عروض الأسعار', T(['الرقم', 'العميل', 'الوحدة', 'الخطة', 'السعر', 'صالح حتى', 'الحالة', ''], Q.map(q => `<tr><td><span class="num">${esc(q.number)}</span></td><td>${esc(q.customer_name)}<br><span class="muted num">${esc(q.phone)}</span></td><td><span class="num">${esc(q.code)}</span><br><span class="muted">${esc(q.project)}</span></td><td>${PLANS[q.plan] ? PLANS[q.plan][0] : esc(q.plan)}</td><td>${OMR(q.price)}${q.discount_pct ? `<br><span class="muted">خصم ${N(q.discount_pct * 100)}٪</span>` : ''}</td><td>${fmtDate(q.valid_until)}</td><td>${pill(...(QS[q.status] || [q.status, '']))}</td>
+    <td>${docBtns('quote', q.id)}${q.status === 'issued' && can('book') ? ` <button class="btn p" data-call="EXT.quoteConvert" data-args="${J([q.id, q.number])}">تحويل إلى حجز</button> <button class="btn" data-call="EXT.quoteCancel" data-args="${J([q.id])}">إلغاء</button>` : ''}${q.booking_id ? ` <span class="muted">حجز ${N(q.booking_id)}</span>` : ''}</td></tr>`), 'لم يصدر عرض سعر بعد.'),
+    can('book') ? '<button class="btn p" data-call="EXT.newQuote">+ عرض سعر</button>' : '');
+};
+EXT.newQuote = async (code) => {
+  if (!UNITS.length) UNITS = await api(`/units?project_id=${S.proj || S.projects[0].id}`).catch(() => []);  // the inventory screen may not have been opened yet
+  const avail = UNITS.filter(u => u.status === 'a');
+  const opts = (avail.length ? avail : []).map(u => `<option value="${esc(u.code)}" ${u.code === code ? 'selected' : ''}>${esc(u.code)} · ${esc(u.type)} · ${OMR(u.price)}</option>`).join('');
+  const pj = S.projects.find(x => x.id === (S.proj || S.projects[0].id));
+  modal(`<h3>عرض سعر جديد</h3><label>الوحدة المتاحة في ${esc(pj ? pj.name : 'المشروع')} <span class="muted">(غيّر المشروع من شاشة المخزون)</span></label>${opts ? `<select id="qu">${opts}</select>` : `<input id="qu" value="${esc(code || '')}" placeholder="رمز الوحدة" dir="ltr">`}
+   <label>اسم العميل</label><input id="qn"><label>الهاتف</label><input id="qp" dir="ltr" placeholder="+968 9xxx xxxx"><label>البريد الإلكتروني (اختياري — للإرسال)</label><input id="qe" dir="ltr" type="email">
+   <label>خطة السداد</label><select id="qpl">${Object.entries(PLANS).map(([k, v]) => `<option value="${k}">${v[0]}</option>`).join('')}</select>
+   <label>خصم ٪ (صلاحيتك: ${can('decide') ? '15' : '2'}٪ كحد أقصى)</label><input id="qd" type="number" min="0" max="15" step="0.5" value="0" dir="ltr"><label>مدة الصلاحية بالأيام</label><input id="qv" type="number" min="1" max="60" value="7" dir="ltr"><label>ملاحظات تظهر في العرض</label><input id="qno">
+   <div class="err" id="qerr"></div><div class="btns" style="margin-top:12px"><button class="btn p" id="qgo">إصدار العرض</button><button class="btn" data-call="closeModal">إلغاء</button></div>`);
+  $('#qgo').onclick = async () => { try {
+    const q = await api('/quotes', {method: 'POST', body: {unit_code: $('#qu').value.trim(), customer_name: $('#qn').value.trim(), phone: $('#qp').value.trim(), email: $('#qe').value.trim() || null, plan: $('#qpl').value, discount_pct: (+$('#qd').value || 0) / 100, valid_days: +$('#qv').value || 7, notes: $('#qno').value.trim() || null}});
+    modal(`<h3>✓ صدر ${esc(q.number)}</h3><p>السعر <b>${OMR(q.price)}</b> · صالح حتى ${fmtDate(q.valid_until)}.</p>${docBtns('quote', q.id)}<div class="btns" style="margin-top:12px"><button class="btn" data-call="closeModal">إغلاق</button></div>`);
+    if (S.screen === 'sal') EXT.l_sal();
+  } catch (e) { $('#qerr').textContent = e.message; } };
+};
+EXT.quoteConvert = async (id, number) => { if (!confirm(`تحويل ${number} إلى حجز مبدئي بالسعر المعروض؟ تُحجز الوحدة لثلاثة أيام حتى سداد العربون.`)) return; const r = await tryDo(() => api(`/quotes/${id}/convert`, {method: 'POST'}), 'أُنشئ الحجز'); if (r) { toast(`حجز ${N(r.booking_id)} · العربون ${OMR(r.deposit)}`); EXT.l_sal(); } };
+EXT.quoteCancel = async id => { if (!confirm('إلغاء عرض السعر؟')) return; await tryDo(() => api(`/quotes/${id}/cancel`, {method: 'POST'}), 'أُلغي العرض'); EXT.l_sal(); };
+
+/* ---------------- الوحدة 6: المخططات ---------------- */
+const PLAN_KINDS = {site: 'المخطط العام للموقع', floor: 'مخطط طابق', unit: 'مخطط نموذج الوحدة', elevation: 'واجهة', section: 'قطاع', render: 'تصور نهائي', structural: 'مخطط إنشائي', mep: 'كهروميكانيكي'};
+const planImg = (p, markers, hl, cls = '') => p.mime === 'application/pdf'
+  ? `<a class="btn" href="${p.url}" target="_blank" rel="noopener">فتح ${esc(p.title)} (PDF)</a>`
+  : `<div class="plan ${cls}" data-plan="${p.id}"><img src="${p.url}" alt="${esc(p.title)}">${(markers || []).map(m => `<span class="mk ${m.unit_code === hl ? 'hl' : ''} ${m.st || ''}" style="left:${m.x}%;top:${m.y}%" title="${esc(m.unit_code)}">${esc(m.unit_code.split('-').pop())}</span>`).join('')}</div>`;
+EXT.plans = async () => {
+  const p = S.projects.find(x => x.id === S.proj) || S.projects[0];
+  const P = await api(`/plans?project_id=${p.id}`);
+  const st = Object.fromEntries(UNITS.map(u => [u.code, u.status]));
+  let h = `<h3>مخططات ${esc(p.name)}</h3>`;
+  if (can('docs')) h += `<div class="ai"><b class="k">رفع مخطط:</b> <select id="plk">${Object.entries(PLAN_KINDS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select> <input id="plt" placeholder="العنوان" style="width:160px"> <input id="plb" placeholder="المبنى" style="width:70px"> <input id="plf" placeholder="الطابق" style="width:60px" dir="ltr"> <input id="plu" placeholder="نموذج الوحدة (للنماذج)" style="width:150px"> <input type="file" id="plfile" accept=".png,.jpg,.jpeg,.pdf"> <button class="btn p" id="plgo">رفع</button><div class="muted">PDF أو PNG أو JPEG حتى 5 ميجابايت. المخططات الإنشائية والكهروميكانيكية داخلية لا يراها العملاء.</div></div>`;
+  h += P.length ? P.map(x => `<div class="box"><div class="hd"><span>${esc(x.title)} <span class="muted">${PLAN_KINDS[x.kind] || x.kind}${x.building ? ' · ' + esc(x.building) : ''}${x.floor !== null && x.floor !== undefined ? ' · ط ' + N(x.floor) : ''}${x.unit_type ? ' · ' + esc(x.unit_type) : ''}</span> ${x.public ? pill('يراه العملاء', 'p-ok') : pill('داخلي', '')}</span>
+      <span class="btns">${x.kind === 'floor' && can('inventory') && x.mime !== 'application/pdf' ? `<button class="btn" data-call="EXT.planMark" data-args="${J([x.id])}">تحديد مواقع الوحدات</button>` : ''}${can('docs') ? `<button class="btn" data-call="EXT.planRemove" data-args="${J([x.id])}">إزالة</button>` : ''}</span></div>
+      <div style="padding:10px">${planImg(x, x.markers.map(m => ({...m, st: st[m.unit_code] || ''})), null)}</div></div>`).join('') : '<div class="muted">لا مخططات بعد لهذا المشروع.</div>';
+  insp('المخططات', h);
+  if ($('#plgo')) $('#plgo').onclick = async () => { const f = $('#plfile').files[0]; if (!f || !$('#plt').value.trim()) return toast('اختر ملفًا واكتب عنوانًا', 1);
+    const fd = new FormData(); fd.append('project_id', p.id); fd.append('kind', $('#plk').value); fd.append('title', $('#plt').value.trim()); fd.append('building', $('#plb').value.trim()); fd.append('floor', $('#plf').value.trim()); fd.append('unit_type', $('#plu').value.trim()); fd.append('file', f);
+    try { const r = await fetch('/api/plans', {method: 'POST', headers: {'X-CSRF-Token': csrf()}, body: fd}); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.detail || 'تعذّر الرفع'); toast('رُفع المخطط'); EXT.plans(); } catch (e) { toast(e.message, 1); } };
+};
+EXT.planRemove = async id => { if (!confirm('إزالة المخطط من المشروع؟ يبقى الملف في سجل المستندات.')) return; await tryDo(() => api(`/plans/${id}/remove`, {method: 'POST'}), 'أُزيل'); EXT.plans(); };
+EXT.planMark = async id => {
+  const P = await api(`/plans?project_id=${S.proj}`); const x = P.find(q => q.id === id); if (!x) return;
+  let markers = x.markers.map(m => ({...m}));
+  const list = UNITS.filter(u => (!x.building || u.building === x.building) && (x.floor === null || x.floor === undefined || u.floor === x.floor));
+  const draw = () => { modal(`<h3>مواقع الوحدات — ${esc(x.title)}</h3><p class="muted">اختر الوحدة ثم اضغط موضعها على المخطط. اضغط على علامة قائمة لإزالتها.</p>
+    <div class="toolbar"><select id="mku">${list.map(u => `<option value="${esc(u.code)}">${esc(u.code)} · ${esc(u.type)}</option>`).join('')}</select><span class="muted">${N(markers.length)} وحدة محددة</span></div>
+    ${planImg(x, markers, null, 'edit')}<div class="btns" style="margin-top:12px"><button class="btn p" id="mksave">حفظ</button><button class="btn" data-call="closeModal">إغلاق</button></div>`);
+    const box = document.querySelector('.plan.edit');
+    box.onclick = ev => { const mk = ev.target.closest('.mk'); if (mk) { markers = markers.filter(m => m.unit_code !== mk.title); return draw(); }
+      const r = box.querySelector('img').getBoundingClientRect(); const xp = (ev.clientX - r.left) / r.width * 100, yp = (ev.clientY - r.top) / r.height * 100; if (xp < 0 || xp > 100 || yp < 0 || yp > 100) return;
+      const code = $('#mku').value; markers = markers.filter(m => m.unit_code !== code).concat([{unit_code: code, x: +xp.toFixed(2), y: +yp.toFixed(2)}]); draw(); };
+    $('#mksave').onclick = async () => { await tryDo(() => api(`/plans/${id}/markers`, {method: 'POST', body: {markers}}), 'حُفظت المواقع'); closeModal(); EXT.plans(); };
+  };
+  draw();
+};

@@ -30,7 +30,8 @@ $('#out').onclick = async () => { await fetch('/api/auth/logout', {method: 'POST
 $('#bk').onchange = e => { CUR = +e.target.value; render(); };
 
 let EX = {notifications: [], contracts: [], handover: [], invoices: [], motions: [], documents: []};
-async function load() { const me = await api('/me'); if (me.must_change) return forcePw(); [DATA, EX] = await Promise.all([api('/portal'), api('/portal/extra').catch(() => EX)]); render(); if (DATA.consent_required) consentSheet(DATA.consent_required); }
+let DOCS = {contracts: [], invoices: [], receipts: []}, PLANSV = [];
+async function load() { const me = await api('/me'); if (me.must_change) return forcePw(); [DATA, EX, DOCS, PLANSV] = await Promise.all([api('/portal'), api('/portal/extra').catch(() => EX), api('/portal/docs').catch(() => DOCS), api('/portal/plans').catch(() => [])]); render(); if (DATA.consent_required) consentSheet(DATA.consent_required); }
 async function consentSheet(version) {
   const n = await api('/privacy/notice');
   sheet(`<h2>إشعار الخصوصية</h2><div class="muted">الإصدار ${esc(n.version)} · ${esc(n.law)}</div>
@@ -146,7 +147,11 @@ function more(b) {
   ${ho ? `<div class="card"><h2>التسليم</h2><div class="row"><span>الموعد</span><b>${D(ho.appointment)}</b></div>${ho.certificate_no ? `<div class="muted">شهادة ${esc(ho.certificate_no)} · ضمان التشطيب حتى ${D(ho.warranty_until)}</div>` : ''}
      ${ho.snags.length ? ho.snags.map(s => `<div class="inst row"><span>${esc(s.item)}</span><span class="pill ${s.status === 'open' ? 'p-w' : 'p-ok'}">${s.status === 'open' ? 'قيد الإصلاح' : 'أُصلحت'}</span></div>`).join('') : '<div class="muted">لا ملاحظات مسجلة.</div>'}</div>` : ''}
   <div class="card"><h2>الإشعارات</h2>${EX.notifications.map(n => `<div class="inst"><b>${esc(n.title)}</b><div>${esc(n.body)}</div><div class="muted">${D(n.created)}</div></div>`).join('') || '<div class="muted">لا إشعارات جديدة.</div>'}</div>
-  <div class="card"><h2>فواتيري</h2>${EX.invoices.map(v => `<div class="inst"><div class="row"><b><bdi>${esc(v.number)}</bdi></b><b>${OMR(v.total)}</b></div><div class="muted">${D(v.issued)} · ضريبة ${OMR(v.vat)} · ${esc(v.note)}</div></div>`).join('') || '<div class="muted">تصدر الفاتورة مع كل سداد.</div>'}</div>
+  ${planCard(b)}
+  <div class="card"><h2>مستنداتي الرسمية</h2><div class="muted">نسخ PDF موقَّعة ومختومة إلكترونيًا برمز تحقق — للطباعة أو الحفظ.</div>
+   ${DOCS.contracts.filter(c => c.booking_id === b.booking_id).map(c => `<div class="inst row"><span>عقد البيع <bdi>${esc(c.number)}</bdi> ${c.signed ? '<span class="pill p-ok">موقَّع</span>' : ''}</span><a class="pill p-bl" href="${c.pdf}" target="_blank" rel="noopener">PDF</a></div>`).join('')}
+   ${DOCS.receipts.map(r => `<div class="inst row"><span>إيصال <bdi>${esc(r.receipt)}</bdi> · ${esc(r.label)} · ${OMR(r.amount)}</span><a class="pill p-bl" href="${r.pdf}" target="_blank" rel="noopener">PDF</a></div>`).join('') || '<div class="muted">لا إيصالات بعد.</div>'}</div>
+  <div class="card"><h2>فواتيري</h2>${EX.invoices.map(v => `<div class="inst"><div class="row"><b><bdi>${esc(v.number)}</bdi></b><b>${OMR(v.total)}</b></div><div class="muted">${D(v.issued)} · ضريبة ${OMR(v.vat)} · ${esc(v.note)}</div>${(DOCS.invoices.find(x => x.number === v.number) || {}).pdf ? `<a class="pill p-bl" href="${DOCS.invoices.find(x => x.number === v.number).pdf}" target="_blank" rel="noopener">PDF</a>` : ''}</div>`).join('') || '<div class="muted">تصدر الفاتورة مع كل سداد.</div>'}</div>
   ${EX.documents.length ? `<div class="card"><h2>مستنداتي</h2>${EX.documents.map(d => `<div class="inst row"><span>${esc(d.title)}</span><a class="pill p-bl" href="/api/portal/documents/${d.id}" target="_blank" rel="noopener">فتح</a></div>`).join('')}</div>` : ''}
   <div class="card"><h2>خصوصيتي</h2><div class="muted">وفق قانون حماية البيانات الشخصية العُماني يحق لك طلب نسخة من بياناتك أو تصحيحها أو حذف ما لا يلزم حفظه نظامًا.</div>
    <button class="btn w g" style="margin-top:10px" id="pex">تنزيل نسخة من بياناتي</button>
@@ -157,7 +162,16 @@ function more(b) {
   $('#pgo2').onclick = async () => { try { const r = await api('/portal/privacy', {method: 'POST', body: {kind: $('#pk').value, note: $('#pnote').value}}); toast('✓ استلمنا طلبك رقم ' + N(r.id)); } catch (e) { toast(e.message, 1); } };
   $('#cpw').onclick = () => { forcePw(); $('#sh h2').textContent = 'تغيير كلمة المرور'; $('#sh .muted').textContent = ''; $('#sheet').onclick = e => { if (e.target.id === 'sheet') unsheet(); }; };
 }
+const PK = {site: 'المخطط العام', floor: 'مخطط الطابق', unit: 'مخطط الوحدة', elevation: 'الواجهة', section: 'قطاع', render: 'التصور النهائي'};
+function planView(p, hl) { return p.mime === 'application/pdf' ? `<a class="pill p-bl" href="${p.url}" target="_blank" rel="noopener">فتح ${esc(p.title)}</a>` : `<div class="plan"><img src="${p.url}" alt="${esc(p.title)}" loading="lazy">${(p.markers || []).map(m => `<span class="mk ${m.unit_code === hl ? 'hl' : ''}" style="left:${m.x}%;top:${m.y}%">وحدتك</span>`).join('')}</div>`; }
+function planCard(b) {
+  const pv = PLANSV.find(x => x.booking_id === b.booking_id); if (!pv || (!pv.floor_plan && !pv.unit_plan && !pv.others.length)) return '';
+  return `<div class="card"><h2>وحدتي في المبنى</h2>${pv.floor_plan ? `<div class="muted">${esc(pv.floor_plan.title)}${pv.floor_plan.me ? ' — موقع وحدتك محدَّد بالعلامة' : ''}</div>${planView(pv.floor_plan, pv.unit)}` : ''}
+   ${pv.unit_plan ? `<div class="muted" style="margin-top:10px">${esc(pv.unit_plan.title)}</div>${planView(pv.unit_plan)}` : ''}
+   ${pv.others.length ? `<div class="muted" style="margin-top:10px">المشروع</div><div class="gal">${pv.others.map(o => `<figure>${planView(o)}<figcaption>${PK[o.kind] || o.kind}: ${esc(o.title)}</figcaption></figure>`).join('')}</div>` : ''}</div>`;
+}
 async function openContract(bid) {
+  window.__pdf = `/api/portal/docs/contract/${bid}.pdf`;
   try {
     const k = await api('/portal/contract/' + bid);
     sheet(`<h2>عقد بيع ${esc(k.number)}</h2><div class="muted">بصمة النص: <bdi>${esc(k.sha256.slice(0, 16))}…</bdi></div><div class="contract">${esc(k.body)}</div>

@@ -53,7 +53,8 @@ def _html(subject: str, text: str, link: str | None, label: str | None) -> str:
             f'{body}{btn}<p style="color:#6b7280;font-size:12px;margin-top:22px">إن لم تطلب هذه الرسالة فتجاهلها؛ لا يتغيّر شيء في حسابك.</p></div></body></html>')
 
 
-def send(to: str, subject: str, text: str, link: str | None = None, label: str | None = None, kind: str = "message") -> dict:
+def send(to: str, subject: str, text: str, link: str | None = None, label: str | None = None, kind: str = "message",
+         attachments: list[tuple[str, bytes, str]] | None = None) -> dict:
     """Deliver (SMTP) or record (outbox). Returns {"delivered": bool, "outbox": path?, "echo": link?}."""
     if configured():
         s = settings.smtp
@@ -63,6 +64,9 @@ def send(to: str, subject: str, text: str, link: str | None = None, label: str |
         msg["Subject"] = subject
         msg.set_content(text + (f"\n\n{link}\n" if link else ""))
         msg.add_alternative(_html(subject, text, link, label), subtype="html")
+        for fname, blob, mime in attachments or []:
+            maintype, _, subtype = (mime or "application/octet-stream").partition("/")
+            msg.add_attachment(blob, maintype=maintype, subtype=subtype or "octet-stream", filename=fname)
         ctx = ssl.create_default_context()
         if s["tls"] == "ssl":
             server = smtplib.SMTP_SSL(s["host"], s["port"], timeout=20, context=ctx)
@@ -80,6 +84,7 @@ def send(to: str, subject: str, text: str, link: str | None = None, label: str |
         raise RuntimeError("البريد غير مهيّأ في الإنتاج (MABANIQ_SMTP_HOST/FROM)")
     p = outbox_dir() / f"{time.time_ns()}-{secrets.token_hex(3)}.json"  # monotonic name: sorted() = chronological
     p.write_text(json.dumps({"to": to, "subject": subject, "text": text, "link": link, "label": label, "kind": kind,
+                             "attachments": [{"name": n, "bytes": len(b), "mime": m} for n, b, m in attachments or []],
                              "at": time.strftime("%Y-%m-%dT%H:%M:%S")}, ensure_ascii=False, indent=1), encoding="utf-8")
     log.info("mail to outbox", extra={"event": "mail_outbox", "path": kind})
     return {"delivered": False, "outbox": str(p), "echo": link if settings.mail_echo else None}

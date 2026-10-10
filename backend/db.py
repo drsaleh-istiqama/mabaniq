@@ -215,6 +215,18 @@ CREATE TABLE IF NOT EXISTS notifications(
 CREATE TABLE IF NOT EXISTS api_keys(
   id INTEGER PRIMARY KEY, name TEXT, key_hash TEXT UNIQUE, prefix TEXT, created TEXT, last_used TEXT, active INTEGER DEFAULT 1);
 CREATE TABLE IF NOT EXISTS reset_tokens(token_hash TEXT PRIMARY KEY, user_id INTEGER, expires REAL, used INTEGER DEFAULT 0);
+CREATE TABLE IF NOT EXISTS quotes(
+  id INTEGER PRIMARY KEY, number TEXT UNIQUE, unit_id INTEGER REFERENCES units(id), customer_name TEXT, phone TEXT, email TEXT, plan TEXT,
+  list_price REAL, discount_pct REAL DEFAULT 0, price REAL, valid_until TEXT, status TEXT DEFAULT 'issued', schedule TEXT, notes TEXT,
+  created TEXT, created_by TEXT, booking_id INTEGER, lead_id INTEGER);
+CREATE TABLE IF NOT EXISTS doc_issues(
+  id INTEGER PRIMARY KEY, kind TEXT NOT NULL, ref_id INTEGER NOT NULL, number TEXT, verify_code TEXT UNIQUE NOT NULL, sha256 TEXT, issued TEXT, issued_by TEXT, revised TEXT,
+  UNIQUE(kind, ref_id));
+CREATE TABLE IF NOT EXISTS doc_sends(id INTEGER PRIMARY KEY, kind TEXT, ref_id INTEGER, channel TEXT, recipient TEXT, sent_by TEXT, at TEXT);
+CREATE TABLE IF NOT EXISTS share_links(token_hash TEXT PRIMARY KEY, kind TEXT, ref_id INTEGER, expires REAL, created REAL, created_by TEXT, opened INTEGER DEFAULT 0, last_open TEXT);
+CREATE TABLE IF NOT EXISTS plans(
+  id INTEGER PRIMARY KEY, project_id INTEGER REFERENCES projects(id), building TEXT, floor INTEGER, unit_type TEXT, kind TEXT NOT NULL, title TEXT,
+  document_id INTEGER REFERENCES documents(id), markers TEXT DEFAULT '[]', public INTEGER DEFAULT 1, created TEXT, created_by TEXT);
 CREATE TABLE IF NOT EXISTS privacy_requests(
   id INTEGER PRIMARY KEY, customer_id INTEGER, kind TEXT, status TEXT, created TEXT, note TEXT, decided_at TEXT, decided_by TEXT, decision_note TEXT);
 

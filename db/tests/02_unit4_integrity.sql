@@ -2,7 +2,7 @@
 BEGIN;
 SELECT plan(
   (SELECT count(*)::int FROM pg_tables WHERE schemaname='public' AND tablename NOT IN ('schema_migrations','audit')) * 2
-  + 14 + 3
+  + 16 + 3
 );
 
 -- 1) every application table (audit excepted) has updated_at and the trigger
@@ -13,10 +13,10 @@ SELECT is((SELECT count(*) FROM pg_trigger tr JOIN pg_class c ON c.oid = tr.tgre
           format('set_updated_at trigger on %s', t.tablename))
   FROM pg_tables t WHERE t.schemaname='public' AND t.tablename NOT IN ('schema_migrations','audit');
 
--- 2) no DELETE on the ledgers for mabaniq_app (14 tables)
+-- 2) no DELETE on the ledgers for mabaniq_app (16 tables, incl. the issued-document registry since 0005)
 SELECT ok(NOT has_table_privilege('mabaniq_app', x, 'DELETE'), format('mabaniq_app has no DELETE on %s', x))
   FROM unnest(ARRAY['payments','installments','invoices','refunds','charity_dues','bank_lines','distributions','commissions',
-                    'resale_settlements','rent_dues','oa_charges','pay_intents','ipcs','ipc_items']) AS x;
+                    'resale_settlements','rent_dues','oa_charges','pay_intents','ipcs','ipc_items','doc_issues','doc_sends']) AS x;
 
 -- 3) behaviour: the trigger stamps updates; the app role is refused a ledger DELETE but may still insert
 SET ROLE mabaniq_app;

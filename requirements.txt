@@ -8,3 +8,7 @@ cryptography==50.0.2
 psycopg[binary]==3.3.2
 psycopg-pool==3.3.0
 sentry-sdk==2.71.0
+fpdf2==2.8.9
+uharfbuzz==0.56.3
+qrcode==8.2
+hijridate==2.6.0

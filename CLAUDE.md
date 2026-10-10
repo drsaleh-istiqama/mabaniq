@@ -60,6 +60,8 @@ docker compose up --build                              # API + PostgreSQL 17 (AP
 - PostgreSQL connections come from a pool (`dbx.pool()`); every `connect()` inside a request is registered in `db.OPEN` and closed with it — still call `close()` in scripts and background jobs. `RESET ROLE; RESET ALL` runs on every return to the pool: never rely on session state across requests.
 - Financial ledgers have no DELETE for the app role (migration 0003); corrections are new rows. New ledger table → add it to the REVOKE list and to `db/tests/02_unit4_integrity.sql`.
 - External identity lives in `backend/identity.py` (+ `backend/mail.py`): flows never create accounts; tokens are hashed, single-use, short-lived; Google state is signed and browser-bound; TOTP accounts are excluded from link/Google sign-in. New e-mail goes through `mail.send` (SMTP or outbox) — never a direct smtplib call elsewhere.
+- Documents: `backend/pdfgen.py` renders, `backend/paperwork.py` decides who may see/send what and registers every issue in `doc_issues`; never store generated PDFs; new document kind → renderer + `render()` branch + `STAFF_PERMS` + portal ownership check + test. Plans go through `plans.py` and the shared `store_upload`.
+- Click delegation (`data-call="NS.fn"`) calls `fn` with `this = NS` (`apply`); handlers that use `this.cur` depend on it.
 - Retention rules live only in `backend/retention.py` (documented in RUNBOOK §5); a new table with personal data gets a rule there or an explicit "kept because …" note.
 - Bash heredocs in this environment corrupt backslashes: write scripts with the Write tool, not `python - <<EOF`.
 - Never add a git remote or push without the owner's explicit permission (owner decision 10).
