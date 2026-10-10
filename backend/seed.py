@@ -84,18 +84,35 @@ def seed(force: bool = False, tenant: str | None = None) -> None:
         TENANT.reset(tok)
 
 
+SEED_LOCK = 7340129  # PostgreSQL advisory lock: several uvicorn workers start together — one seeds, the others find the data
+
+
+def _unlock(c, pg: bool) -> None:
+    if pg:
+        try:
+            c.execute("SELECT pg_advisory_unlock(%d)" % SEED_LOCK)
+            c.commit()
+        except Exception:  # noqa: BLE001 — a closed connection releases its session locks anyway
+            pass
+
+
 def _seed(force: bool, tenant: str) -> None:
     c = connect()
+    pg = getattr(c, "dialect", "") == "postgres"
     try:
+        if pg:
+            c.execute("SELECT pg_advisory_lock(%d)" % SEED_LOCK)  # 0.13.0: Railway start-up raced two workers into a duplicate-key crash
         _seed_body(c, force, tenant)
+        _unlock(c, pg)
+        c.close()
     except Exception:
         # لا يُترك اتصال البذر مفتوحًا بمعاملة ناقصة: كان ذلك يقفل القاعدة كلها أمام كل الطلبات التالية
         try:
             c.rollback()
         finally:
+            _unlock(c, pg)
             c.close()
         raise
-
 
 def _seed_body(c, force: bool, tenant: str) -> None:
     init(c)
@@ -314,7 +331,6 @@ def _seed_body(c, force: bool, tenant: str) -> None:
     rescore_leads(c)
     c.commit()
     ensure_assets(c, tenant, pf)  # 0.13.0: bundled renders / plans / logo of a profiled developer
-    c.close()
 
 
 if __name__ == "__main__":
