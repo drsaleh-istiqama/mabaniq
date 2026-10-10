@@ -48,11 +48,12 @@ object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
 | --- | --- |
 | `mbq_session` | `HttpOnly; SameSite=Lax; Secure` (عند HTTPS)؛ ١٢ ساعة؛ حد ٥ جلسات للمستخدم. |
 | `mbq_tenant` | `HttpOnly; SameSite=Lax; Secure`. |
+| `mbq_oauth` | `HttpOnly; SameSite=Lax; Secure`؛ 10 دقائق؛ **مقصورة على المسار `/auth/google`**؛ تربط `state` الموقَّع بالمتصفح البادئ (callback من متصفح آخر يُرفض قبل أي اتصال بـGoogle). |
 | `mbq_csrf` | **غير** HttpOnly عمدًا (يقرؤه السكربت ويعيده في `X-CSRF-Token`)؛ `SameSite=Lax; Secure`. |
 
 ## حدود المعدل (الوحدة 0)
 
-دلو رموز لكل عنوان IP (الوكيل الموثوق على loopback فقط): الدخول `10/60s`، إشعار الدفع `60/60s`، كل `/api/*` `600/60s` — قابلة للضبط من البيئة. الرد 429 مع `Retry-After` و`X-RateLimit-Bucket`. الحالة في الذاكرة لكل عملية (الوحدة 1 تنقلها إلى القاعدة لتشاركها النسخ).
+دلو رموز لكل عنوان IP (الوكيل الموثوق على loopback فقط): الدخول `10/60s` (ويشمل منذ 0.10.0 طلبات استعادة كلمة المرور ورابط الدخول وتعيين كلمة المرور)، إشعار الدفع `60/60s`، كل `/api/*` `600/60s` — قابلة للضبط من البيئة. الرد 429 مع `Retry-After` و`X-RateLimit-Bucket`. الحالة في الذاكرة لكل عملية (الوحدة 1 تنقلها إلى القاعدة لتشاركها النسخ).
 
 ## ما بقي
 

@@ -794,7 +794,7 @@ def resale_act(rid: int, r: ResaleActIn, _=Depends(act_as("decide"))):
 
 # ------------------------------------------------------------------ الواجهة
 NOCACHE = {"Cache-Control": "no-store"}
-CSRF_EXEMPT = {"/api/auth/login", "/api/auth/logout", "/api/pay/webhook"}
+CSRF_EXEMPT = {"/api/auth/login", "/api/auth/logout", "/api/pay/webhook", "/api/auth/password/forgot", "/api/auth/password/reset", "/api/auth/email/request"}
 
 
 @app.get("/")
@@ -903,5 +903,8 @@ from .modules2 import router as modules2_router  # noqa: E402
 
 app.include_router(modules_router)
 app.include_router(modules2_router)
+from .identity import router as identity_router  # noqa: E402
+
+app.include_router(identity_router)
 app.mount("/static", StaticFiles(directory=FRONT), name="static")
 app.add_middleware(O.ObservabilityMiddleware)  # الأبعد خارجيًا: معرّف الطلب وسجل الوصول وتحويل الأعطال إلى JSON 500

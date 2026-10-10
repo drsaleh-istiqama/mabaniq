@@ -62,9 +62,12 @@ CREATE TABLE IF NOT EXISTS auth_failures(k TEXT, at REAL);
 CREATE INDEX IF NOT EXISTS ix_auth_failures ON auth_failures(k, at);
 CREATE TABLE IF NOT EXISTS login_attempts(id INTEGER PRIMARY KEY, k TEXT, at REAL);
 CREATE INDEX IF NOT EXISTS ix_login_attempts ON login_attempts(k, at);
+CREATE TABLE IF NOT EXISTS auth_tokens(token_hash TEXT PRIMARY KEY, user_id INTEGER, kind TEXT, expires REAL, used INTEGER DEFAULT 0, created REAL, ip TEXT);
+CREATE INDEX IF NOT EXISTS ix_auth_tokens_user ON auth_tokens(user_id, kind);
 """
 USER_MIGR = ["broker_id INTEGER", "must_change INTEGER DEFAULT 0", "totp_secret TEXT", "totp_enabled INTEGER DEFAULT 0",
-             "totp_last INTEGER DEFAULT 0", "pw_changed TEXT", "recovery_codes TEXT"]
+             "totp_last INTEGER DEFAULT 0", "pw_changed TEXT", "recovery_codes TEXT",
+             "email TEXT", "email_verified INTEGER DEFAULT 0", "google_sub TEXT"]  # 0.10.0 external identity
 SESSION_MIGR = ["created REAL", "last_seen REAL", "ip TEXT", "ua TEXT", "label TEXT"]  # Unit 2
 IDLE_MINUTES = 60          # Unit 2: a session unused for an hour is over (absolute life stays SESSION_HOURS)
 LOGIN_WINDOW = (10, 60)    # Unit 2: per-ip login attempts kept in the database (shared by every instance)
@@ -345,7 +348,7 @@ def login(username: str, pw: str, ip: str, otp: str | None = None, ua: str = "")
         wait = _graded_wait(c, acct)
         if wait:
             raise HTTPException(429, f"انتظر {wait} ثانية قبل المحاولة التالية (حماية متدرّجة للحساب)", headers={"Retry-After": str(wait), "X-Lockout": "graded"})
-        u = c.execute("SELECT * FROM users WHERE username=? AND active=1", (username,)).fetchone()
+        u = c.execute("SELECT * FROM users WHERE (username=? OR lower(email)=?) AND active=1", (username, username)).fetchone()  # 0.10.0: e-mail works too
         if not u:
             check_pw(pw, DUMMY)  # توقيت متقارب لمنع كشف وجود الحساب
         if not u or not check_pw(pw, u["pw"]):

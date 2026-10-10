@@ -10,3 +10,12 @@ button{width:100%;margin-top:20px;font:inherit;font-weight:700;font-size:16px;pa
 button:disabled{opacity:.6}.err{color:var(--bad);font-size:14px;min-height:22px;margin-top:12px}
 .ft{margin-top:18px;font-size:12px;color:var(--muted);text-align:center;line-height:1.8}
 .hid{display:none}.otp{letter-spacing:8px;text-align:center;font-size:22px}
+
+.msg{background:#13261d;border:1px solid #1f5a3a;color:#bfe9cf;border-radius:11px;padding:12px 14px;font-size:14px;line-height:1.7;margin-bottom:6px}
+.msg a.demo{color:var(--pri)}.hint{font-size:12px;margin:8px 0 0}
+.alt{display:flex;flex-wrap:wrap;gap:6px 16px;justify-content:center;margin-top:14px}
+.lnk{width:auto;margin:0;padding:4px 2px;background:none;color:var(--muted);font-weight:400;font-size:13px;text-decoration:underline;text-underline-offset:3px}
+.lnk:hover{color:var(--ink)}
+.gbtn{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:12px;padding:12px;border-radius:11px;border:1px solid var(--line);background:#0F1724;color:var(--ink);text-decoration:none;font-weight:700;font-size:15px}
+.gbtn .g{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:50%;background:#fff;color:#1a73e8;font-weight:900;font-family:system-ui,sans-serif}
+.gbtn.hid,.lnk.hid,.msg.hid{display:none}

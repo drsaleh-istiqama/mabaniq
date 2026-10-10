@@ -10,7 +10,7 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
-VERSION = "0.9.0"
+VERSION = "0.10.0"
 ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -63,6 +63,12 @@ class Settings:
     retention_hours: int = 24
     retention: dict = field(default_factory=lambda: dict(DEFAULT_RETENTION))
     cache_ttl: float = 10.0                      # seconds a dashboard computation is shared per tenant (0 = off)
+    # 0.10.0 — external identity
+    public_url: str = ""                         # absolute origin used in e-mailed links and the Google redirect (empty = from the request)
+    google_client_id: str = ""
+    google_client_secret: str = ""
+    smtp: dict = field(default_factory=dict)
+    mail_echo: bool = False                      # demo only: return the e-mailed link in the API response when no SMTP is configured
     extra: dict = field(default_factory=dict)
 
     @property
@@ -98,6 +104,14 @@ class Settings:
             retention_hours=int(os.environ.get("MABANIQ_RETENTION_HOURS", "24")),
             retention={k: int(os.environ.get(f"MABANIQ_RETENTION_{k.upper()}_DAYS", str(v))) for k, v in DEFAULT_RETENTION.items()},
             cache_ttl=float(os.environ.get("MABANIQ_CACHE_TTL", "10")),
+            public_url=os.environ.get("MABANIQ_PUBLIC_URL", "").strip(),
+            google_client_id=os.environ.get("MABANIQ_GOOGLE_CLIENT_ID", "").strip(),
+            google_client_secret=os.environ.get("MABANIQ_GOOGLE_CLIENT_SECRET", "").strip(),
+            smtp={"host": os.environ.get("MABANIQ_SMTP_HOST", "").strip(), "port": int(os.environ.get("MABANIQ_SMTP_PORT", "587") or 587),
+                  "user": os.environ.get("MABANIQ_SMTP_USER", ""), "password": os.environ.get("MABANIQ_SMTP_PASS", ""),
+                  "from_addr": os.environ.get("MABANIQ_SMTP_FROM", "").strip(), "from_name": os.environ.get("MABANIQ_SMTP_FROM_NAME", "مبانيك"),
+                  "tls": os.environ.get("MABANIQ_SMTP_TLS", "starttls").lower()},
+            mail_echo=_bool("MABANIQ_MAIL_ECHO", False) and os.environ.get("MABANIQ_ENV", "demo") != "prod",
         )
 
     def validate(self) -> list[str]:
@@ -117,6 +131,10 @@ class Settings:
             errs.append("MABANIQ_APP_DOMAIN ما زال القيمة المؤقتة example.org (قرار المالك 4)")
         if self.log_level == "DEBUG":
             errs.append("MABANIQ_LOG_LEVEL=DEBUG يسرّب تفاصيل في سجلات الإنتاج")
+        if bool(self.google_client_id) != bool(self.google_client_secret):
+            errs.append("MABANIQ_GOOGLE_CLIENT_ID وMABANIQ_GOOGLE_CLIENT_SECRET يُعيَّنان معًا أو لا يُعيَّنان")
+        if (self.google_client_id or self.smtp.get("host")) and not self.public_url:
+            errs.append("MABANIQ_PUBLIC_URL مطلوب في الإنتاج مع Google أو البريد (أصل الروابط الموقَّعة)")
         return errs
 
     def public(self) -> dict:

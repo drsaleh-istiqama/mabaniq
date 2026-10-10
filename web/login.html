@@ -8,19 +8,39 @@
 <link rel="stylesheet" href="./login.css">
 </head>
 <body>
-<form class="card" id="f" autocomplete="on">
+<form class="card" id="f" autocomplete="on" novalidate>
  <div class="lg">م</div>
  <h1>مبانيك</h1>
  <p id="lead">منصة المطوّر العقاري من جدوى. سجّل الدخول بحساب الموظف أو العميل أو الوسيط.</p>
+ <div class="msg hid" id="msg" role="status"></div>
  <div id="s1">
   <label for="t">المطوّر</label><select id="t" name="tenant"></select>
-  <label for="u">اسم المستخدم</label><input id="u" name="username" autocomplete="username" dir="ltr" style="text-align:right" required>
+  <label for="u">اسم المستخدم أو البريد الإلكتروني</label><input id="u" name="username" autocomplete="username" dir="ltr" style="text-align:right" required>
   <label for="p">كلمة المرور</label><input id="p" name="password" type="password" autocomplete="current-password" dir="ltr" style="text-align:right" required>
  </div>
  <div id="s2" class="hid">
-  <label for="o">رمز التحقق من تطبيق المصادقة (6 أرقام)</label><input id="o" class="otp" inputmode="numeric" autocomplete="one-time-code" maxlength="6" dir="ltr">
+  <label for="o">رمز التحقق من تطبيق المصادقة (6 أرقام) أو رمز استرداد</label><input id="o" class="otp" inputmode="numeric" autocomplete="one-time-code" maxlength="9" dir="ltr">
+ </div>
+ <div id="sForgot" class="hid">
+  <label for="fi">اسم المستخدم أو البريد الإلكتروني</label><input id="fi" dir="ltr" style="text-align:right" autocomplete="username">
+  <p class="hint">سنرسل رابطًا صالحًا لثلاثين دقيقة إلى البريد المسجَّل في حسابك.</p>
+ </div>
+ <div id="sMagic" class="hid">
+  <label for="mi">البريد الإلكتروني المسجَّل في حسابك</label><input id="mi" type="email" dir="ltr" style="text-align:right" autocomplete="email">
+  <p class="hint">رابط دخول لمرة واحدة صالح لخمس عشرة دقيقة. الحسابات المحمية بالتحقق الثنائي تدخل بكلمة المرور.</p>
+ </div>
+ <div id="sReset" class="hid">
+  <label for="n1">كلمة المرور الجديدة</label><input id="n1" type="password" dir="ltr" autocomplete="new-password" minlength="10">
+  <label for="n2">تأكيد كلمة المرور</label><input id="n2" type="password" dir="ltr" autocomplete="new-password" minlength="10">
+  <p class="hint">عشرة أحرف على الأقل، لا تشبه اسم المستخدم. بعد التعيين تُنهى كل جلساتك السابقة.</p>
  </div>
  <button id="b">دخول</button>
+ <a class="gbtn hid" id="gbtn" href="/auth/google/start"><span class="g">G</span> الدخول بحساب Google</a>
+ <div class="alt" id="alt">
+  <button type="button" class="lnk" id="goForgot">نسيت كلمة المرور؟</button>
+  <button type="button" class="lnk hid" id="goMagic">دخول برابط إلى بريدي</button>
+  <button type="button" class="lnk hid" id="goBack">رجوع إلى الدخول بكلمة المرور</button>
+ </div>
  <div class="err" id="e" role="alert"></div>
  <div class="ft">نسخة تجريبية · بيانات افتراضية<br>الحساب يُقفل مؤقتًا بعد 5 محاولات خاطئة</div>
 </form>

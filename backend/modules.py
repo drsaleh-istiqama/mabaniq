@@ -683,7 +683,11 @@ def customer_account(cid: int, a: AccountIn, _=Depends(act_as("users"))):
     if c.execute("SELECT 1 FROM users WHERE username=? OR customer_id=?", (a.username, cid)).fetchone():
         raise HTTPException(409, "اسم المستخدم مستخدم أو للعميل حساب قائم")
     temp = temp_password()
-    c.execute("INSERT INTO users(username,name,role,pw,customer_id,must_change) VALUES(?,?,?,?,?,1)", (a.username, cu["name"], "customer", hash_pw(temp), cid))
+    from .identity import norm_email
+    email = norm_email(cu["email"]) or None  # 0.10.0: the customer file's e-mail becomes the login e-mail
+    if email and c.execute("SELECT 1 FROM users WHERE lower(email)=?", (email,)).fetchone():
+        email = None
+    c.execute("INSERT INTO users(username,name,role,pw,customer_id,must_change,email) VALUES(?,?,?,?,?,1,?)", (a.username, cu["name"], "customer", hash_pw(temp), cid, email))
     audit(c, "إنشاء حساب عميل", f"{a.username} للعميل {cid} ({ROLES['customer']})")
     c.commit()
     return {"username": a.username, "temporary_password": temp}

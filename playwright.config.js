@@ -7,7 +7,10 @@ import {join} from 'node:path';
 
 const PORT = Number(process.env.MABANIQ_E2E_PORT || 8831);
 const DEMO_PASSWORD = process.env.MABANIQ_DEMO_PASSWORD || 'E2e-Demo-Pass-2026';
-const db = join(mkdtempSync(join(tmpdir(), 'mbq-e2e-')), 'e2e.db');
+// the config is evaluated again inside each worker: keep ONE temp dir (the runner creates it, workers inherit it through the environment)
+const dataDir = process.env.MABANIQ_E2E_DATA || mkdtempSync(join(tmpdir(), 'mbq-e2e-'));
+process.env.MABANIQ_E2E_DATA = dataDir;  // the outbox of the test server lives here
+const db = join(dataDir, 'e2e.db');
 const python = process.env.PYTHON || (process.platform === 'win32' ? '.venv\\Scripts\\python.exe' : 'python');
 
 export default defineConfig({

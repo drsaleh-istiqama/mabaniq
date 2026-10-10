@@ -733,13 +733,18 @@ def privacy_process(rid: int, d: PrivDecide, u=Depends(act_as("admin"))):
 @router.get("/api/users")
 def users(_=Depends(need("users"))):
     c = A.conn()
-    return rows(c.execute("SELECT id, username, name, role, active, must_change, totp_enabled, pw_changed FROM users ORDER BY id"))
+    out = rows(c.execute("SELECT id, username, name, role, active, must_change, totp_enabled, pw_changed, email, email_verified, google_sub FROM users ORDER BY id"))
+    for u in out:
+        u["google_linked"] = bool(u.pop("google_sub", None))
+        u["email_verified"] = bool(u.get("email_verified"))
+    return out
 
 
 class UserIn(BaseModel):
     username: str = Field(min_length=3, max_length=30, pattern=r"^[a-z][a-z0-9._-]+$")
     name: str = Field(min_length=3, max_length=60)
     role: str = Field(pattern="^(admin|sales|finance|engineer|investor)$")
+    email: str | None = Field(default=None, max_length=120)  # 0.10.0: enables recovery links, e-mail sign-in and Google matching
 
 
 @router.post("/api/users")
@@ -747,9 +752,15 @@ def user_create(n: UserIn, _=Depends(act_as("users"))):
     c = A.conn()
     if c.execute("SELECT 1 FROM users WHERE username=?", (n.username,)).fetchone():
         raise HTTPException(409, "اسم المستخدم مستخدم")
+    from .identity import EMAIL_RE, norm_email
+    email = norm_email(n.email) or None
+    if email and not EMAIL_RE.match(email):
+        raise HTTPException(400, "صيغة البريد غير صحيحة")
+    if email and c.execute("SELECT 1 FROM users WHERE lower(email)=?", (email,)).fetchone():
+        raise HTTPException(409, "هذا البريد مسجَّل لحساب آخر")
     temp = A.temp_password()
-    c.execute("INSERT INTO users(username,name,role,pw,must_change) VALUES(?,?,?,?,1)", (n.username, n.name, n.role, A.hash_pw(temp)))
-    audit(c, "إنشاء مستخدم", f"{n.username} ({A.ROLES[n.role]})")
+    c.execute("INSERT INTO users(username,name,role,pw,must_change,email) VALUES(?,?,?,?,1,?)", (n.username, n.name, n.role, A.hash_pw(temp), email))
+    audit(c, "إنشاء مستخدم", f"{n.username} ({A.ROLES[n.role]}){' · ' + email if email else ''}")
     c.commit()
     return {"username": n.username, "temporary_password": temp, "note": "تُعرض مرة واحدة فقط، ويُلزم المستخدم بتغييرها عند أول دخول."}
 

@@ -104,6 +104,9 @@ def client_ip(request: Request) -> str:
     return peer
 
 
+AUTH_PATHS = {"/api/auth/login", "/api/auth/password/forgot", "/api/auth/password/reset", "/api/auth/email/request"}  # 0.10.0
+
+
 def rate_limit(request: Request):
     """Returns a 429 response when the client exceeded its budget, else None."""
     p = request.url.path
@@ -111,7 +114,7 @@ def rate_limit(request: Request):
         return None
     ip = client_ip(request)
     checks = [("api", ip, *settings.rate_api)]
-    if p == "/api/auth/login" and request.method == "POST":
+    if p in AUTH_PATHS and request.method == "POST":
         checks.append(("login", ip, *settings.rate_login))
     if p == "/api/pay/webhook":
         checks.append(("webhook", ip, *settings.rate_webhook))

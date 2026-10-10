@@ -33,6 +33,9 @@
 | 15 | حمل: p95 لـ`/api/decisions` و`/api/cash` < 500 ملي ثانية مع 300 مستخدم و5 مطوّرين × 500 وحدة | `sh load-tests/run.sh postgres 300` (`load-tests/mix.js`، نتائج في `load-tests/results/`) | ✅ جزئيًا (2026-10-10، محليًا، PostgreSQL، مطوّر واحد × 468 وحدة): **بأربع عمليات p95 = 51 / 36 ms، 36,869 طلبًا، 0٪ فشل**؛ بعملية واحدة 584 / 561 ms (لا يحقق). ⚠️ حجم 5 مطوّرين × 500 وحدة والقياس على Railway لم يُجرَيا بعد — `load-tests/README.md` |
 | 16 | Playwright للمسار الحرج: حجز ⟵ KYC ⟵ موافقة ⟵ عقد ⟵ توقيع ⟵ سداد ⟵ خطاب بنكي ⟵ تسليم | `e2e/critical-path.spec.js` (5 اختبارات متسلسلة في متصفح حقيقي: دخول الموظف من الواجهة، الحجز حتى التوقيع، إنشاء حساب العميل، دخول العميل وتغيير كلمة المرور الإلزامي وسداد «دفعة أولى» من البوابة، رفض التسليم بلا خطاب صرف ثم شهادة `HC-` وفارق دفتر 0، وتبديل اللغة) | ✅ محليًا (Chrome) 10 ث · وظيفة `e2e` في CI |
 | 16ب | الواجهة: حزمة Vite مُجزَّأة immutable، لا سكربت مضمّن، `style-src 'self'`/`font-src 'self'` بلا Google Fonts، JS الأولي ≤ 200 kB gzip | `scripts/size-check.mjs` (31.0 kB gzip JS · 6.2 kB CSS · 55.7 kB خطوط ذاتية) · `tests/test_fixes_050.py::test_m7_*` · `test_unit0.py::test_security_headers_complete` | ✅ |
+| 17 | الدخول بالبريد أو اسم المستخدم؛ رابط دخول بريدي لمرة واحدة؛ استرجاع كلمة المرور برابط مُجزَّأ ينهي الجلسات؛ لا تسريب لوجود الحساب | `tests/test_identity.py::test_login_with_email_*`, `::test_forgot_and_reset_flow`, `::test_forgot_is_enumeration_safe`, `::test_email_link_*` · `e2e/recovery.spec.js` | ✅ |
+| 17ب | Google OIDC: `state` مربوط بالمتصفح، تحقق aud/iss/exp/nonce/email_verified، مطابقة حساب قائم فقط (لا إنشاء)، ربط/فصل من «أماني»، مخفي حين غير مهيّأ | `tests/test_identity.py::test_google_*` (التبادل محاكى) | ✅ محليًا — ⚠️ لم يُجرَّب مع Google الفعلي بعد (يحتاج عميل OAuth من المالك) |
+| 17ج | الحسابات المحمية بالتحقق الثنائي لا تدخل برابط أو Google وحده | `::test_email_link_refused_for_totp_accounts` | ✅ |
 | 16ج | أرقام غربية في كل الواجهة (قرار المالك ب) — ثابت واحد `WD()` في طبقة التنسيق يطبّع نصوص الخادم أيضًا؛ لا رقم هندي في المصادر | `scripts/check-web.mjs` · `e2e` يفحص شريط المؤشرات | ✅ |
 
 ## حالة الوحدات
@@ -43,6 +46,7 @@
 | و1 PostgreSQL + RLS | ✅ | `backend/dbx.py`, `db/migrations/0001_initial.sql` (676 سطرًا، مولَّد بـ`db/gen_pg_schema.py`), `db/tests/01_rls_isolation.sql`, `db/run_pgtap.py`؛ 512 استدعاء SQL تعمل على المحركين بلا تفريع في منطق الأعمال |
 | و2 الهوية | ✅ | `backend/auth.py`, `db/migrations/0002_unit2_identity.sql`, `tests/test_unit2.py` |
 | و3 الواجهة | ✅ (TypeScript مؤجَّل — انظر PROGRESS) | `web/` (المصادر) ⟵ `vite.config.js` ⟵ `frontend/dist` (المخرجات، غير مُتتبَّعة) · `web/i18n.js` + `web/locales/{ar,en}.json` · `web/fonts/` · `scripts/check-web.mjs` · `scripts/size-check.mjs` · `playwright.config.js` · `e2e/critical-path.spec.js` · `deploy/Dockerfile` مرحلتان |
+| و5 الهوية الخارجية | ✅ (التفعيل الحي بيد المالك) | `backend/identity.py`, `backend/mail.py`, `db/migrations/0004_identity_external.sql`, `web/login.{html,js}`, `tests/test_identity.py`, `e2e/recovery.spec.js` |
 | و4 التشغيل | ✅ (النسخ اليومي المجدول وDSN Sentry وحجم 5×500 بيد المالك/بيئته) | `backend/dbx.py` (مجمّع)، `backend/db.py` (`OPEN`)، `db/migrations/0003_unit4_integrity.sql`، `db/tests/02_unit4_integrity.sql`، `backend/retention.py`، `backend/cache.py`، `backend/observability.py` (`/metrics`، Sentry)، `scripts/backup/{dump,drill}.py`، `load-tests/`، `tests/test_unit4.py` |
 
 ## قرارات المالك المعلّقة

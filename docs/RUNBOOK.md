@@ -72,6 +72,18 @@ curl -s http://127.0.0.1:8800/version          # الإصدار، البيئة،
 - سجل التدقيق append-only (محفّزات) ويحفظ «اطلاع على بيانات هوية» باسم المطّلع. منذ الترحيل `0003` للدور `mabaniq_app` **لا DELETE**
   على 14 جدولًا ماليًا (التصحيح قيد معاكس لا حذف) و`updated_at` يُضبط بمحفّز على كل جدول.
 
+## 5أ. الهوية الخارجية (0.10.0) — ما يلزم لتفعيلها
+
+| الميزة | المتغيرات | ملاحظات |
+| --- | --- | --- |
+| استرجاع كلمة المرور ورابط الدخول البريدي | `MABANIQ_SMTP_HOST/PORT/USER/PASS/FROM/FROM_NAME/TLS` + `MABANIQ_PUBLIC_URL` | بلا مضيف: العرض يكتب الرسائل في `data/outbox/` (و`MABANIQ_MAIL_ECHO=1` يعيد الرابط في الرد)، والإنتاج يعلن الميزة غير متاحة (503) ولا يتظاهر بالإرسال. المرسِل يحتاج SPF/DKIM على نطاقه. |
+| الدخول عبر Google | `MABANIQ_GOOGLE_CLIENT_ID` + `MABANIQ_GOOGLE_CLIENT_SECRET` + `MABANIQ_PUBLIC_URL` | في Google Cloud Console: مشروع ⟵ OAuth consent screen (خارجي، نطاق الشركة) ⟵ Credentials ⟵ OAuth client (Web) ⟵ Authorized redirect URI = `<PUBLIC_URL>/auth/google/callback`. كما في محافل (مشروع `mahafil-platform`): السر بيد د. صالح ولا يُكتب إلا في متغيرات Railway. |
+| سر `state` | `MABANIQ_AUTH_SECRET` | مطلوب في الإنتاج؛ العرض يولّده في `data/secrets/auth.key`. تغييره يُبطل محاولات Google الجارية فقط. |
+
+**من يستطيع الدخول عبر Google أو الرابط؟** حساب قائم ومفعّل فقط: Google يطابق بالمعرّف المربوط أو ببريد Google موثَّق يساوي بريد الحساب (ثم يُربط).
+لا يُنشأ حساب تلقائيًا — مدير المنصة يضيف البريد إلى حساب المستخدم من جدول المستخدمين (أو يضعه المستخدم في «أماني»)، وحسابات العملاء ترث بريد
+ملف العميل. الحسابات المحمية بالتحقق الثنائي تدخل بكلمة المرور والرمز فقط. كل محاولة (طلب رابط، تعيين، دخول، ربط، هوية غير معروفة) في سجل التدقيق.
+
 ## 5ب. المراقبة (الوحدة 4)
 
 - `GET /metrics` (Prometheus text): يظهر فقط حين يُعيَّن `MABANIQ_METRICS_TOKEN` ويُطلب بـ`Authorization: Bearer <token>`؛ عدّادات

@@ -7,7 +7,7 @@ customers' identity data (erasure goes through `privacy_requests`, which has leg
 
 Rule set (days are settings, see `.env.example`):
   login_attempts / auth_failures   older than RETENTION_LOGIN_DAYS        → deleted   (security telemetry only)
-  sessions expired, reset_tokens   expired/used more than SESSIONS_DAYS ago → deleted   (nothing to recover from them)
+  sessions expired, reset_tokens, auth_tokens (recovery/sign-in links) expired or used → deleted after SESSIONS_DAYS
   notifications                    older than NOTIFICATIONS_DAYS           → deleted   (reminders already delivered)
   pay_intents still 'pending'      older than PAY_INTENT_DAYS              → status 'expired' (kept — financial trail)
   wa_messages                      older than MESSAGES_DAYS                → phone masked to the last 4 digits (content kept for audit)
@@ -51,6 +51,7 @@ def run(c, now: float | None = None, actor: str = "النظام") -> dict:
     counts["auth_failures"] = c.execute("DELETE FROM auth_failures WHERE at < ?", (now - r["login"] * day,)).rowcount
     counts["sessions"] = c.execute("DELETE FROM sessions WHERE expires < ?", (now - r["sessions"] * day,)).rowcount
     counts["reset_tokens"] = c.execute("DELETE FROM reset_tokens WHERE expires < ? OR used=1", (now - r["sessions"] * day,)).rowcount
+    counts["auth_tokens"] = c.execute("DELETE FROM auth_tokens WHERE expires < ? OR used=1", (now - r["sessions"] * day,)).rowcount
     counts["notifications"] = c.execute("DELETE FROM notifications WHERE created < ?", (iso(r["notifications"]),)).rowcount
     counts["pay_intents_expired"] = c.execute("UPDATE pay_intents SET status='expired' WHERE status='pending' AND created < ?",
                                               (iso(r["pay_intents"]),)).rowcount
