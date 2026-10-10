@@ -119,9 +119,16 @@ class Doc(FPDF):
                 self.set_text_color(*MUTED)
                 self.cell(w - 3, 4.5, k, align="R", new_x=XPos.LEFT, new_y=YPos.NEXT)
                 self.set_x(x)
-                self.set_font("Tajawal", "B", 10.5)
                 self.set_text_color(*INK)
-                self.cell(w - 3, 6, str(v if v not in (None, "") else "—"), align="R")
+                text = str(v if v not in (None, "") else "—")
+                size = 10.5  # a long value (e.g. location + view) shrinks instead of overflowing into the neighbouring cell
+                self.set_font("Tajawal", "B", size)
+                while size > 7 and self.get_string_width(text) > w - 4:
+                    size -= 0.5
+                    self.set_font("Tajawal", "B", size)
+                while self.get_string_width(text) > w - 4 and len(text) > 4:
+                    text = text[:-2].rstrip() + "…"
+                self.cell(w - 3, 6, text, align="R")
                 x_right -= w
             self.set_y(y + 12)
         self.ln(2)
