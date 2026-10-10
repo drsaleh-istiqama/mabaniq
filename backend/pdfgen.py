@@ -10,12 +10,15 @@ from __future__ import annotations
 
 import datetime as dt
 import io
+import logging
 from pathlib import Path
 
 import qrcode
 from fpdf import FPDF
 from fpdf.enums import XPos, YPos
 from hijridate import Gregorian
+
+logging.getLogger("fontTools").setLevel(logging.WARNING)  # the subsetter logs every glyph at INFO — dozens of lines per PDF
 
 FONTS = Path(__file__).resolve().parent / "assets" / "fonts"
 GOLD = (212, 166, 74)
@@ -81,9 +84,11 @@ class Doc(FPDF):
         self.line(16, self.get_y(), self.w - 16, self.get_y())
         self.set_font("Tajawal", "", 7.5)
         self.set_text_color(*MUTED)
-        self.cell(0, 5, f"{KIND_TITLES.get(self.kind, '')} {self.number} · صدر إلكترونيًا من منصة مبانيك · رمز التحقق {self.verify_code} · صفحة {self.page_no()} من {{nb}}",
+        tail = f" · رمز التحقق {self.verify_code}" if self.verify_code else ""
+        self.cell(0, 5, f"{KIND_TITLES.get(self.kind, 'تقرير')} {self.number} · صدر إلكترونيًا من منصة مبانيك{tail} · صفحة {self.page_no()} من {{nb}}",
                   align="R", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-        self.cell(0, 4, self.verify_url, align="L")
+        if self.verify_url:
+            self.cell(0, 4, self.verify_url, align="L")
 
     # ---- building blocks
     def heading(self, text: str, sub: str = ""):

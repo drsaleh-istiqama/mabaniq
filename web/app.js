@@ -1,3 +1,4 @@
+import * as CH from './charts.js';
 import {t, applyI18n, toggleLang, lang} from './i18n.js';
 /* مبانيك — منطق الواجهة. كل البيانات تأتي من الـ API الحي. */
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
@@ -45,8 +46,8 @@ const scoreC = v => v >= 75 ? 'p-ok' : v >= 50 ? 'p-w' : 'p-b';
 
 /* ---------------- الحالة والتنقل ---------------- */
 const S = {screen: 'ov', projects: [], proj: null, bld: null, plan: 0, me: null};
-const SCREEN_PERM = {ov: 'view', inv: 'inventory', crm: 'leads', fin: 'finance', con: 'construction', svc: 'service', log: 'audit', pre: 'permits', sal: 'kyc', bill: 'invoices', post: 'handover', rep: 'reports', adm: 'view'};
-const SCREEN_ANY = {pre: ['permits', 'land'], post: ['handover', 'oa', 'leasing', 'service'], sal: ['kyc', 'brokers', 'market']};
+const SCREEN_PERM = {ov: 'view', inv: 'inventory', crm: 'leads', fin: 'finance', con: 'construction', svc: 'service', log: 'audit', pre: 'permits', sal: 'kyc', bill: 'invoices', post: 'handover', rep: 'reports', mk: 'leads', adm: 'view'};
+const SCREEN_ANY = {pre: ['permits', 'land'], post: ['handover', 'oa', 'leasing', 'service'], sal: ['kyc', 'brokers', 'market'], rep: ['reports', 'finance', 'view'], mk: ['leads', 'inventory', 'reports']};  // Unit 7: reports for every staff role (the API filters by permission), marketing for sales/inventory/reports
 const can = p => S.me?.perms.includes(p);
 const canS = s => (SCREEN_ANY[s] || [SCREEN_PERM[s]]).some(can);
 function go(s) {
@@ -56,7 +57,7 @@ function go(s) {
   $$('.scr').forEach(x => x.classList.toggle('on', x.id === s));
   localStorage.setItem('mbq-screen', s);
   ({ov: loadOverview, inv: loadInventory, crm: loadCRM, fin: loadFinance, con: () => { loadIPC(); EXT.l_conx(); }, svc: loadService, log: loadAudit,
-    pre: () => EXT.l_pre(), sal: () => EXT.l_sal(), bill: () => EXT.l_bill(), post: () => EXT.l_post(), rep: () => EXT.l_rep(), adm: () => EXT.l_adm()})[s]?.()?.catch?.(e => toast(e.message, 1));
+    pre: () => EXT.l_pre(), sal: () => EXT.l_sal(), bill: () => EXT.l_bill(), post: () => EXT.l_post(), rep: () => EXT.l_rep(), mk: () => EXT.l_mk(), adm: () => EXT.l_adm()})[s]?.()?.catch?.(e => toast(e.message, 1));
   crumb(); shell(s);
 }
 $$('[data-s]').forEach(b => b.onclick = e => { e.preventDefault(); document.body.classList.remove('nav-open'); go(b.dataset.s); });
@@ -71,7 +72,8 @@ const META = {
   bill: ['عبر الدورة · المالية', 'الفواتير والضمان', 'الفواتير والضريبة، والغرامات والفسخ، والمطابقة البنكية وحساب الضمان والتصدير المحاسبي.'],
   post: ['3 · التسليم والتشغيل', 'التسليم والأملاك', 'التسليم وملاحظات الفحص، ونقل الملكية، والمرافق واتحاد الملاك والتأجير.'],
   svc: ['3 · التسليم والتشغيل', 'خدمة العملاء', 'طلبات الصيانة وإعادة البيع الواردة من تطبيق العميل.'],
-  rep: ['الحوكمة', 'تقارير الممولين', 'تقرير البنك الممول بتقييم المخاطر، وتقرير المستثمرين بالربحية والتوزيعات.'],
+  mk: ['2 · البيع والإنشاء', 'تسويق المشاريع', 'حالة كل مشروع تسويقيًا، الحملات وقياسها، استوديو الإعلانات، والتنبيهات من حركة السوق.'],
+  rep: ['الحوكمة', 'التقارير والتحليلات', 'تقرير البنك الممول بتقييم المخاطر، وتقرير المستثمرين بالربحية والتوزيعات.'],
   log: ['الحوكمة', 'سجل التدقيق', 'كل إجراء مسجّل بوقته ومنفّذه في سجل متسلسل يكشف أي تعديل.'],
   adm: ['الحوكمة', 'الإدارة والأمان', 'المستخدمون والصلاحيات، والتحقق الثنائي، والنسخ الاحتياطي والإشعارات والخصوصية.']};
 const CYCLE = [['pre', 'الأرض والتراخيص'], ['inv', 'البيع والإنشاء'], ['post', 'التسليم والتشغيل']];
@@ -459,7 +461,7 @@ const tryDo = async (fn, ok) => { try { const r = await fn(); if (ok) toast(type
 const projOpts = (cur) => S.projects.map(p => `<option value="${p.id}" ${p.id === cur ? 'selected' : ''}>${esc(p.name)}</option>`).join('');
 
 const EXT = {
-  cur: {pre: 'land', post: 'hand', sal: 'kyc', bill: 'inv', adm: 'users'},
+  cur: {pre: 'land', post: 'hand', sal: 'kyc', bill: 'inv', adm: 'users', rep: 'ready', mk: 'board'},
   data: {},
   sub(id, k) { this.cur[id] = k; this.load(id); },
   load(id) { return this['l_' + id](); },
@@ -710,10 +712,10 @@ EXT.newLease = () => { const L = EXT.data.leasing, used = new Set(L.leases.filte
   $('#lgo').onclick = async () => { try { await api('/leases', {method: 'POST', body: {unit_id: +$('#lu').value, tenant_name: $('#ln').value, tenant_phone: $('#lp').value, tenant_id_number: $('#li').value, start: $('#ls').value, months: +$('#lm').value, annual_rent: +$('#lr').value, frequency: +$('#lf').value}}); closeModal(); toast('سُجّل العقد — يلزم توثيقه لدى البلدية'); EXT.l_post(); } catch (e) { $('#le').textContent = e.message; } }; };
 
 /* ================================================================ التقارير */
-EXT.l_rep = async function () {
+EXT.l_lender = async function (el) {
   const [L, I] = await Promise.all([api('/reports/lender'), api('/reports/investor')]);
   const col = r => r === 'أخضر' ? 'p-ok' : r === 'أصفر' ? 'p-w' : 'p-b';
-  $('#rep').innerHTML = BOX(`تقرير الممول (البنك) <span class="muted">كما في ${fmtDate(L.as_of)}</span>`, T(['المشروع', 'الإنجاز', 'المبيعات', 'التحصيل', 'التغطية', 'عجز متوقع', 'فرق الإنجاز', 'التقييم'],
+  el.innerHTML = BOX(`تقرير الممول (البنك) <span class="muted">كما في ${fmtDate(L.as_of)}</span>`, T(['المشروع', 'الإنجاز', 'المبيعات', 'التحصيل', 'التغطية', 'عجز متوقع', 'فرق الإنجاز', 'التقييم'],
       L.projects.map(p => `<tr title="${esc(p.flags.join(' · '))}"><td>${esc(p.project)}</td><td>${pct(p.build_pct)}</td><td>${pct(p.sold_pct)}</td><td>${pct(p.collection_rate)}</td><td>${ND(p.coverage)}×</td><td>${p.cash_gap ? OMR(p.cash_gap) : '—'}</td><td>${p.claimed_vs_verified ? N(p.claimed_vs_verified) + ' نقاط' : '—'}</td><td>${pill(p.rating, col(p.rating))}</td></tr>`)))
     + `<div class="ai">${L.projects.filter(p => p.flags.length).map(p => `<b class="k">${esc(p.project)}:</b> ${p.flags.map(AR).join(' · ')}`).join('<br>') || 'لا ملاحظات.'}<br><span class="muted">${esc(L.method)}</span></div>`
     + BOX('تقرير المستثمرين', T(['المشروع', 'القيمة الإجمالية للمبيعات', 'المباع', 'التكلفة التقديرية', 'الربح التقديري', 'الهامش', 'التوزيعات'],
@@ -876,4 +878,220 @@ EXT.planMark = async id => {
     $('#mksave').onclick = async () => { await tryDo(() => api(`/plans/${id}/markers`, {method: 'POST', body: {markers}}), 'حُفظت المواقع'); closeModal(); EXT.plans(); };
   };
   draw();
+};
+
+/* ================================================================ الوحدة 7: التقارير والتحليلات */
+const RF = {money: v => OMR(v), pct: v => (v === null || v === undefined ? '—' : N(v) + '٪'), num: v => (typeof v === 'number' ? (Number.isInteger(v) ? N(v) : ND(v)) : esc(v)), int: v => N(v), date: v => (v ? fmtDate(v) : '—'), bool: v => (v ? 'نعم' : 'لا'), text: v => esc(v ?? '—'), enum: v => esc(v ?? '—')};
+const fmtCell = (v, t) => (v === null || v === undefined || v === '') ? '—' : (RF[t] || RF.text)(v);
+let REP = {cat: null, doc: null, ctx: null};
+EXT.l_rep = async function () {
+  const k = this.cur.rep, el = $('#rep');
+  el.innerHTML = SUB('rep', [['ready', 'التقارير الجاهزة'], ['custom', 'منشئ التقارير'], ['saved', 'المحفوظة والمجدولة'], ['lender', 'تقارير الممولين']], k) + '<div id="repB">…</div>';
+  const B = $('#repB');
+  if (!REP.cat) REP.cat = await api('/reports/catalog');
+  if (k === 'lender') return EXT.l_lender(B);
+  if (k === 'saved') return EXT.repSaved(B);
+  if (k === 'custom') return EXT.repBuilder(B);
+  const groups = {};
+  for (const r of REP.cat.ready) (groups[r.group] = groups[r.group] || []).push(r);
+  B.innerHTML = Object.entries(groups).map(([g, items]) => BOX(g, `<div class="rcards">${items.map(r => `<button class="rcard" data-call="EXT.repOpen" data-args="${J(['ready', r.key])}"><b>${esc(r.title)}</b><span>${esc(r.desc)}</span></button>`).join('')}</div>`)).join('')
+    + BOX('تقارير خارجية', `<div class="rcards">${REP.cat.links.map(l => `<button class="rcard" data-call="EXT.sub" data-args="${J(['rep', 'lender'])}"><b>${esc(l.title)}</b><span>للبنك الممول والمستثمرين</span></button>`).join('')}</div>`)
+    + '<div id="repView"></div>';
+};
+EXT.repOpen = async (kind, ref, params = {}, savedId = null) => {
+  const B = $('#repB');
+  if (!B) return;
+  REP.ctx = {kind, ref, params, savedId};
+  let doc;
+  try { doc = kind === 'ready' ? await api(`/reports/ready/${ref}?` + new URLSearchParams(params)) : kind === 'saved' ? await api(`/reports/saved/${savedId}/run?` + new URLSearchParams(params)) : await api('/reports/custom/run', {method: 'POST', body: ref}); }
+  catch (e) { return toast(e.message, 1); }
+  REP.doc = doc;
+  const pOpts = `<option value="">كل المشاريع</option>` + REP.cat.projects.map(p => `<option value="${p.id}" ${String(params.project_id) === String(p.id) ? 'selected' : ''}>${esc(p.name)}</option>`).join('');
+  B.innerHTML = `<div class="toolbar"><button class="btn" data-call="EXT.sub" data-args="${J(['rep', kind === 'custom' ? 'custom' : 'ready'])}">← رجوع</button>
+    ${kind !== 'custom' ? `<label>من</label><input type="date" id="rpFrom" value="${esc(params.from || '')}"><label>إلى</label><input type="date" id="rpTo" value="${esc(params.to || '')}"><select id="rpProj">${pOpts}</select><button class="btn p" id="rpRun">تحديث</button>` : ''}
+    <span class="btns" style="margin-inline-start:auto"><button class="btn" data-call="EXT.repExport" data-args="${J(['csv'])}">CSV</button><button class="btn" data-call="EXT.repExport" data-args="${J(['pdf'])}">PDF</button>${can('reports') && kind !== 'saved' ? `<button class="btn" data-call="EXT.repSave">حفظ</button>` : ''}${savedId && can('reports') ? `<button class="btn" data-call="EXT.repSchedule" data-args="${J([savedId])}">جدولة بالبريد</button>` : ''}</span></div>`
+    + renderDoc(doc);
+  doc.charts.forEach((ch, i) => CH.render($(`#ch${i}`), ch));
+  if ($('#rpRun')) $('#rpRun').onclick = () => EXT.repOpen(kind, ref, {from: $('#rpFrom').value, to: $('#rpTo').value, project_id: $('#rpProj').value}, savedId);
+};
+function renderDoc(doc) {
+  const kp = doc.kpis && doc.kpis.length ? KP(doc.kpis.slice(0, 4).map(k => [k.label, fmtCell(k.value, k.format || 'num'), k.hint || ''])) : '';
+  const charts = doc.charts.length ? `<div class="chgrid">${doc.charts.map((c, i) => `<div class="box"><div id="ch${i}" class="chbox"></div></div>`).join('')}</div>` : '';
+  const tables = doc.tables.map((t, ti) => BOX(`${esc(t.title)} <span class="muted">${N(t.rows.length)} صف</span>`, T(t.columns.map(c => esc(c.label)), t.rows.slice(0, 400).map(r => `<tr>${t.columns.map(c => `<td>${fmtCell(r[c.key], c.type)}</td>`).join('')}</tr>`)), `<button class="btn" data-call="EXT.repExport" data-args="${J(['csv', ti])}">CSV</button>`)).join('');
+  const notes = (doc.notes || []).filter(Boolean).map(n => `<div class="muted">• ${esc(n)}</div>`).join('');
+  return `<h2 style="margin:6px 0 2px">${esc(doc.title)}</h2><div class="muted" style="margin-bottom:12px">${esc(doc.subtitle || '')}</div>${kp}${charts}${tables}${notes}`;
+}
+EXT.repExport = async (format, table = 0) => {
+  const c = REP.ctx; if (!c) return;
+  const body = {format, table, kind: c.kind, ref: c.kind === 'ready' ? c.ref : null, spec: c.kind === 'custom' ? c.ref : null, params: c.params || {}, saved_id: c.savedId};
+  try {
+    const r = await fetch('/api/reports/export', {method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRF-Token': csrf()}, body: JSON.stringify(body)});
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || 'تعذّر التصدير');
+    const blob = await r.blob(); const url = URL.createObjectURL(blob);
+    if (format === 'pdf') window.open(url, '_blank', 'noopener'); else { const a = document.createElement('a'); a.href = url; a.download = (REP.doc?.title || 'report') + '.csv'; a.click(); }
+  } catch (e) { toast(e.message, 1); }
+};
+EXT.repSave = async () => {
+  const c = REP.ctx; const name = prompt('اسم التقرير المحفوظ', REP.doc?.title || ''); if (!name) return;
+  await tryDo(() => api('/reports/saved', {method: 'POST', body: {name, kind: c.kind, ref: c.kind === 'ready' ? c.ref : null, spec: c.kind === 'custom' ? c.ref : null, params: c.params || {}, shared: true}}), 'حُفظ التقرير');
+};
+EXT.repSaved = async (B) => {
+  const [S_, SC] = await Promise.all([api('/reports/saved'), api('/reports/schedules')]);
+  B.innerHTML = BOX('التقارير المحفوظة', T(['الاسم', 'النوع', 'المالك', 'مشترك', ''], S_.map(s => `<tr><td>${esc(s.name)}</td><td>${s.kind === 'ready' ? 'جاهز: ' + esc(s.ref) : 'مخصّص: ' + esc(s.spec?.dataset)}</td><td>${esc(s.owner)}</td><td>${s.shared ? 'نعم' : 'لا'}</td>
+      <td class="btns"><button class="btn p" data-call="EXT.repOpen" data-args="${J(['saved', null, s.params || {}, s.id])}">فتح</button>${can('reports') ? `<button class="btn" data-call="EXT.repSchedule" data-args="${J([s.id])}">جدولة</button><button class="btn" data-call="EXT.repRemove" data-args="${J([s.id])}">حذف</button>` : ''}</td></tr>`), 'لا تقارير محفوظة بعد — افتح تقريرًا واضغط «حفظ».'))
+    + BOX('الجدولة بالبريد', T(['التقرير', 'الدورية', 'الساعة', 'المستلمون', 'الصيغة', 'التالي', 'آخر إرسال', ''], SC.map(s => `<tr><td>${esc(s.report_name)}</td><td>${{daily: 'يوميًا', weekly: 'أسبوعيًا (الأحد)', monthly: 'شهريًا'}[s.cadence]}</td><td>${N(s.hour)}:00</td><td><span class="num">${esc(s.recipients)}</span></td><td>${esc(s.format)}</td><td>${esc(s.next_run || '')}</td><td>${esc(s.last_run || '—')}${s.last_error ? ` <span class="pill p-b" title="${esc(s.last_error)}">خطأ</span>` : ''}</td>
+      <td>${can('reports') ? `<button class="btn" data-call="EXT.schedRemove" data-args="${J([s.id])}">إلغاء</button>` : ''}</td></tr>`), 'لا جدولة بعد.'));
+};
+EXT.repRemove = async id => { if (!confirm('حذف التقرير المحفوظ وجدولاته؟')) return; await tryDo(() => api(`/reports/saved/${id}/remove`, {method: 'POST'}), 'حُذف'); EXT.l_rep(); };
+EXT.schedRemove = async id => { await tryDo(() => api(`/reports/schedules/${id}/remove`, {method: 'POST'}), 'أُلغيت الجدولة'); EXT.l_rep(); };
+EXT.repSchedule = id => {
+  modal(`<h3>جدولة تقرير بالبريد</h3><label>الدورية</label><select id="scC"><option value="daily">يوميًا</option><option value="weekly" selected>أسبوعيًا (صباح الأحد)</option><option value="monthly">شهريًا (أول الشهر)</option></select>
+   <label>الساعة (0–23)</label><input id="scH" type="number" min="0" max="23" value="7" dir="ltr"><label>المستلمون (بريد، افصل بفاصلة)</label><input id="scR" dir="ltr" placeholder="ceo@…, cfo@…"><label>الصيغة</label><select id="scF"><option value="pdf">PDF</option><option value="csv">CSV</option></select>
+   <div class="err" id="scE"></div><div class="btns" style="margin-top:12px"><button class="btn p" id="scGo">جدولة</button><button class="btn" data-call="closeModal">إلغاء</button></div>`);
+  $('#scGo').onclick = async () => { try { await api('/reports/schedules', {method: 'POST', body: {report_id: id, cadence: $('#scC').value, hour: +$('#scH').value, recipients: $('#scR').value, format: $('#scF').value}}); closeModal(); toast('جُدول التقرير'); EXT.cur.rep = 'saved'; EXT.l_rep(); } catch (e) { $('#scE').textContent = e.message; } };
+};
+/* منشئ التقارير */
+let RB = {ds: null, cols: [], filters: [], groups: [], aggs: [], sort: null, chart: 'bar'};
+EXT.repBuilder = (B) => {
+  const ds = REP.cat.datasets; if (!RB.ds) RB.ds = ds[0]?.key;
+  const d = ds.find(x => x.key === RB.ds) || ds[0];
+  const colOpt = (sel, numOnly = false) => d.columns.filter(c => !numOnly || ['num', 'money', 'int', 'pct'].includes(c.type)).map(c => `<option value="${c.key}" ${sel === c.key ? 'selected' : ''}>${esc(c.label)}</option>`).join('');
+  const ops = t => (t === 'text' || t === 'enum') ? [['eq', 'يساوي'], ['ne', 'لا يساوي'], ['contains', 'يحتوي'], ['null', 'فارغ'], ['notnull', 'غير فارغ']] : (t === 'date') ? [['between', 'بين'], ['gte', 'من'], ['lte', 'إلى']] : [['eq', '='], ['ne', '≠'], ['gte', '≥'], ['lte', '≤'], ['between', 'بين']];
+  B.innerHTML = `<div class="box"><div class="hd">1 · مجموعة البيانات</div><div style="padding:14px"><select id="rbDs">${ds.map(x => `<option value="${x.key}" ${x.key === d.key ? 'selected' : ''}>${esc(x.label)}</option>`).join('')}</select>
+    <div class="muted" style="margin-top:8px">الأعمدة: ${d.columns.map(c => `<label class="chk"><input type="checkbox" class="rbCol" value="${c.key}" ${RB.cols.length ? (RB.cols.includes(c.key) ? 'checked' : '') : 'checked'}> ${esc(c.label)}</label>`).join(' ')}</div></div></div>
+   <div class="box"><div class="hd">2 · الفلاتر <button class="btn" id="rbAddF">+ فلتر</button></div><div style="padding:14px" id="rbF">${RB.filters.map((f, i) => `<div class="toolbar"><select class="rbFc" data-i="${i}">${colOpt(f.col)}</select><select class="rbFo" data-i="${i}">${ops((d.columns.find(c => c.key === f.col) || {}).type).map(([k, l]) => `<option value="${k}" ${f.op === k ? 'selected' : ''}>${l}</option>`).join('')}</select><input class="rbFv" data-i="${i}" value="${esc(Array.isArray(f.value) ? f.value.join(' , ') : (f.value ?? ''))}" placeholder="القيمة (للـ«بين»: أ , ب)"><button class="btn" data-call="EXT.rbDelF" data-args="${J([i])}">×</button></div>`).join('') || '<div class="muted">بلا فلاتر — كل الصفوف.</div>'}</div></div>
+   <div class="box"><div class="hd">3 · التجميع والمقاييس <span class="muted">اتركه فارغًا لعرض الصفوف كما هي</span></div><div style="padding:14px">
+    <div class="toolbar"><label>تجميع حسب</label><select id="rbG"><option value="">—</option>${colOpt(RB.groups[0]?.col)}</select><select id="rbGb"><option value="">كما هو</option><option value="month" ${RB.groups[0]?.bucket === 'month' ? 'selected' : ''}>شهر</option><option value="year" ${RB.groups[0]?.bucket === 'year' ? 'selected' : ''}>سنة</option><option value="day" ${RB.groups[0]?.bucket === 'day' ? 'selected' : ''}>يوم</option></select>
+     <label>ثم</label><select id="rbG2"><option value="">—</option>${colOpt(RB.groups[1]?.col)}</select></div>
+    <div class="toolbar"><label>المقاييس</label><label class="chk"><input type="checkbox" id="rbCount" ${RB.aggs.some(a => a.fn === 'count') || !RB.aggs.length ? 'checked' : ''}> العدد</label>
+     <select id="rbAggFn"><option value="sum">مجموع</option><option value="avg">متوسط</option><option value="min">أدنى</option><option value="max">أعلى</option></select><select id="rbAggCol">${colOpt(null, true)}</select><button class="btn" id="rbAddA">+ مقياس</button>
+     <span id="rbAggs">${RB.aggs.filter(a => a.fn !== 'count').map((a, i) => `<span class="pill p-bl">${{sum: 'مجموع', avg: 'متوسط', min: 'أدنى', max: 'أعلى'}[a.fn]} ${esc((d.columns.find(c => c.key === a.col) || {}).label)} <button class="link" data-call="EXT.rbDelA" data-args="${J([i])}">×</button></span>`).join(' ')}</span></div></div></div>
+   <div class="box"><div class="hd">4 · الرسم البياني والترتيب</div><div style="padding:14px" class="toolbar"><select id="rbChart"><option value="bar">أعمدة</option><option value="stacked">أعمدة مكدّسة</option><option value="line">خط</option><option value="pie">دائري</option><option value="none">بلا رسم</option></select>
+    <label>ترتيب</label><select id="rbSort"><option value="">افتراضي</option>${d.columns.map(c => `<option value="${c.key}">${esc(c.label)}</option>`).join('')}</select><select id="rbDir"><option value="desc">تنازلي</option><option value="asc">تصاعدي</option></select>
+    <label>حد الصفوف</label><input id="rbLim" type="number" value="500" min="1" max="5000" dir="ltr" style="width:90px"><input id="rbTitle" placeholder="عنوان التقرير (اختياري)" style="min-width:220px"><button class="btn p" id="rbRun">تشغيل</button></div></div><div id="rbOut"></div>`;
+  $('#rbChart').value = RB.chart;
+  $('#rbDs').onchange = e => { RB = {ds: e.target.value, cols: [], filters: [], groups: [], aggs: [], sort: null, chart: 'bar'}; EXT.repBuilder(B); };
+  $('#rbAddF').onclick = () => { readRB(); RB.filters.push({col: d.columns[0].key, op: 'eq', value: ''}); EXT.repBuilder(B); };
+  $('#rbAddA').onclick = () => { readRB(); RB.aggs.push({fn: $('#rbAggFn').value, col: $('#rbAggCol').value}); EXT.repBuilder(B); };
+  $('#rbRun').onclick = async () => {
+    readRB();
+    const spec = {dataset: RB.ds, columns: RB.cols.length === d.columns.length ? [] : RB.cols, filters: RB.filters.map(f => ({col: f.col, op: f.op, value: f.op === 'between' ? String(f.value).split(',').map(x => x.trim()) : (f.op === 'null' || f.op === 'notnull') ? null : f.value})),
+      group_by: RB.groups, aggs: RB.groups.length ? (($('#rbCount').checked ? [{fn: 'count'}] : []).concat(RB.aggs.filter(a => a.fn !== 'count'))) : [], sort: RB.sort ? [RB.sort] : [], limit: +$('#rbLim').value || 500,
+      chart: {type: RB.chart, x: RB.groups[0] ? (RB.groups[0].bucket ? `${RB.groups[0].col}_${RB.groups[0].bucket}` : RB.groups[0].col) : null, y: []}, title: $('#rbTitle').value.trim() || null};
+    REP.ctx = {kind: 'custom', ref: spec, params: {}};
+    try { const doc = await api('/reports/custom/run', {method: 'POST', body: spec}); REP.doc = doc; $('#rbOut').innerHTML = `<div class="toolbar"><span class="btns"><button class="btn" data-call="EXT.repExport" data-args="${J(['csv'])}">CSV</button><button class="btn" data-call="EXT.repExport" data-args="${J(['pdf'])}">PDF</button>${can('reports') ? '<button class="btn" data-call="EXT.repSave">حفظ</button>' : ''}</span></div>` + renderDoc(doc); doc.charts.forEach((ch, i) => CH.render($(`#ch${i}`), ch)); $('#rbOut').scrollIntoView({behavior: 'smooth'}); }
+    catch (e) { toast(e.message, 1); }
+  };
+  function readRB() {
+    RB.cols = $$('.rbCol:checked').map(x => x.value);
+    RB.filters = $$('.rbFc').map((sel, i) => ({col: sel.value, op: $$('.rbFo')[i].value, value: $$('.rbFv')[i].value}));
+    RB.groups = []; if ($('#rbG').value) RB.groups.push({col: $('#rbG').value, bucket: $('#rbGb').value || null}); if ($('#rbG2').value) RB.groups.push({col: $('#rbG2').value});
+    RB.chart = $('#rbChart').value; RB.sort = $('#rbSort').value ? {col: $('#rbSort').value, dir: $('#rbDir').value} : null;
+  }
+  EXT.rbDelF = i => { readRB(); RB.filters.splice(i, 1); EXT.repBuilder(B); };
+  EXT.rbDelA = i => { readRB(); RB.aggs.splice(i, 1); EXT.repBuilder(B); };
+};
+
+/* ================================================================ الوحدة 7: تسويق المشاريع */
+const MKS = {launch: 'p-bl', steady: 'p-ok', near_complete: 'p-w', slow: 'p-b', completed: '', sold_out: 'p-ok'};
+let MK = {meta: null, board: null};
+EXT.l_mk = async function () {
+  const k = this.cur.mk, el = $('#mk');
+  el.innerHTML = SUB('mk', [['board', 'لوحة التسويق'], ['camp', 'الحملات'], ['studio', 'استوديو الإعلانات'], ['alerts', 'التنبيهات التسويقية']], k) + '<div id="mkB">…</div>';
+  const B = $('#mkB');
+  if (!MK.meta) MK.meta = await api('/campaigns/meta');
+  if (k === 'camp') return EXT.mkCampaigns(B);
+  if (k === 'studio') return EXT.mkStudio(B);
+  if (k === 'alerts') return EXT.mkAlerts(B);
+  const b = await api('/marketing/board'); MK.board = b;
+  const sum = b.summary;
+  B.innerHTML = KP([['إطلاق', N(sum.launch)], ['ضعيف البيع', N(sum.slow), 'يحتاج تدخلًا'], ['شبه مكتمل', N(sum.near_complete)], ['مستقر/مكتمل', N(sum.steady + sum.completed + sum.sold_out)]])
+    + `<div class="mkgrid">${b.projects.map(p => `<div class="box mkcard"><div class="hd"><span><b>${esc(p.project)}</b> <span class="muted">${esc(p.location)}</span></span>${pill(p.status_label, MKS[p.status])}</div>
+      <div class="mkk"><div><small>متاح</small><b>${N(p.available)}</b><small>من ${N(p.total)} · ${N(p.sold_pct)}٪ مبيع</small></div><div><small>وتيرة 30 يومًا</small><b>${N(p.pace30)}</b><small>${p.planned_monthly ? 'مخطط ' + N(p.planned_monthly) + (p.pace_ratio !== null ? ' · ' + ND(p.pace_ratio, 2) + '×' : '') : '—'}</small></div>
+        <div><small>الطلب النسبي</small><b>${ND(p.demand_ratio, 2)}×</b><small>↑${N(p.raise_segments)} ↓${N(p.cut_segments)} شرائح</small></div><div><small>عملاء 30 يومًا</small><b>${N(p.leads30)}</b><small>${p.conversion90 !== null ? 'تحويل 90 يومًا ' + N(p.conversion90) + '٪' : 'لا بيانات تحويل'} · متوقفون ${N(p.stale_leads)}</small></div></div>
+      <div class="bar-s" title="الإنجاز ${N(p.build_pct)}٪"><i style="width:${p.build_pct}%"></i></div><div class="muted" style="font-size:12px;margin:4px 0 8px">الإنجاز ${N(p.build_pct)}٪ · قيمة غير المباع ${OMR(p.unsold_value)} · في السوق ${N(p.days_on_market)} يومًا · حملات نشطة ${N(p.active_campaigns)}</div>
+      ${p.flags.length ? `<div class="ai">${p.flags.map(f => '⚠ ' + esc(f)).join('<br>')}</div>` : ''}
+      <details><summary class="muted">الإجراءات المقترحة (${N(p.actions.length)})</summary><ul class="acts">${p.actions.map(a => `<li><b>${esc(a.title)}</b><div class="muted">${esc(a.detail)}</div></li>`).join('')}</ul></details>
+      <div class="btns" style="margin-top:8px">${can('leads') ? `<button class="btn p" data-call="EXT.mkNewCampaign" data-args="${J([p.project_id, p.status])}">حملة جديدة</button><button class="btn" data-call="EXT.mkStudioFor" data-args="${J([p.project_id, p.status])}">إعلان</button>` : ''}<button class="btn" data-call="EXT.repOpenFromMk" data-args="${J([p.project_id])}">تقرير المبيعات</button></div></div>`).join('')}</div>`;
+};
+EXT.repOpenFromMk = pid => { EXT.cur.rep = 'ready'; go('rep'); setTimeout(() => EXT.repOpen('ready', 'sales', {project_id: pid}), 400); };
+const camStatus = {draft: ['مسودة', ''], active: ['نشطة', 'p-ok'], paused: ['متوقفة', 'p-w'], done: ['منتهية', 'p-bl']};
+EXT.mkCampaigns = async (B, openId = null) => {
+  const C = await api('/campaigns');
+  B.innerHTML = BOX('الحملات', T(['الحملة', 'المشروع', 'الهدف', 'القنوات', 'الجمهور', 'الميزانية', 'عملاء', 'عروض', 'حجوزات', 'كلفة العميل', 'الحالة', ''], C.map(c => `<tr><td><b>${esc(c.name)}</b><br><span class="muted num">${esc(c.utm)}</span></td><td>${esc(c.project)}</td><td>${esc(c.objective_label)}</td><td>${c.channel_labels.map(esc).join('، ')}</td><td>${esc(c.audience_label)}</td><td>${OMR(c.budget)}</td><td>${N(c.metrics.leads)}</td><td>${N(c.metrics.quotes)}</td><td>${N(c.metrics.bookings)}<br><span class="muted">${OMR(c.metrics.value)}</span></td><td>${c.metrics.cpl !== null ? OMR(c.metrics.cpl) : '—'}</td><td>${pill(...camStatus[c.status])}</td>
+      <td class="btns"><button class="btn p" data-call="EXT.mkOpen" data-args="${J([c.id])}">فتح</button></td></tr>`), 'لا حملات بعد.'), can('leads') ? '<button class="btn p" data-call="EXT.mkNewCampaign">+ حملة</button>' : '') + '<div id="mkDetail"></div>';
+  if (openId) EXT.mkOpen(openId);
+};
+EXT.mkOpen = async id => {
+  const [c, a] = await Promise.all([api(`/campaigns/${id}`), api(`/campaigns/${id}/audience`)]);
+  const D = $('#mkDetail'); if (!D) return;
+  D.innerHTML = BOX(`${esc(c.name)} <span class="muted">${esc(c.project)} · ${esc(c.objective_label)} · رمز التتبع <span class="num">${esc(c.utm)}</span></span>`, `<div style="padding:14px">
+    ${KP([['عملاء منسوبون', N(c.metrics.leads), 'عبر رمز التتبع'], ['عروض أسعار', N(c.metrics.quotes)], ['حجوزات', N(c.metrics.bookings), OMR(c.metrics.value)], ['كلفة العميل', c.metrics.cpl !== null ? OMR(c.metrics.cpl) : '—', 'الميزانية ' + OMR(c.budget)]])}
+    <div class="muted">العرض: ${esc(c.offer_text || '—')} · الرسالة: ${esc(c.message || '—')} · ${esc(c.start_date || '')} ← ${esc(c.end_date || '')}</div>
+    <div class="ai" style="margin-top:10px"><b class="k">الجمهور (${esc(c.audience_label)}):</b> ${N(a.count)} مستلمًا · ${N(a.with_phone)} بهاتف · ${N(a.with_email)} ببريد</div>
+    ${c.creatives.length ? `<div class="muted">إعلانات مرتبطة: ${c.creatives.map(x => `<a href="/api/documents/${x.document_id}" target="_blank" rel="noopener">${esc(x.headline || x.template)}</a>`).join(' · ')}</div>` : ''}
+    ${can('leads') ? `<div class="toolbar" style="margin-top:10px"><select id="mkCr"><option value="">بلا إعلان مرفق</option>${c.creatives.map(x => `<option value="${x.id}">${esc(x.headline || x.template)} (${esc(x.size)})</option>`).join('')}</select><input id="mkMsg" placeholder="نص الرسالة (اختياري — يُستعمل نص الحملة)" style="min-width:260px">
+      <button class="btn p" data-call="EXT.mkSend" data-args="${J([c.id, 'whatsapp'])}">إرسال واتساب</button><button class="btn" data-call="EXT.mkSend" data-args="${J([c.id, 'email'])}">إرسال بريد</button>
+      ${c.status !== 'done' ? `<button class="btn" data-call="EXT.mkStatus" data-args="${J([c.id, c.status === 'active' ? 'paused' : 'active'])}">${c.status === 'active' ? 'إيقاف مؤقت' : 'تفعيل'}</button><button class="btn" data-call="EXT.mkStatus" data-args="${J([c.id, 'done'])}">إنهاء</button>` : ''}</div>` : ''}
+    <div id="mkSendOut"></div>
+    <details style="margin-top:10px"><summary class="muted">قائمة المستلمين</summary>${T(['الاسم', 'الهاتف', 'البريد', 'النوع'], a.recipients.slice(0, 200).map(r => `<tr><td>${esc(r.name)}</td><td><span class="num">${esc(r.phone || '—')}</span></td><td><span class="num">${esc(r.email || '—')}</span></td><td>${esc(r.kind)}</td></tr>`))}</details></div>`);
+  D.scrollIntoView({behavior: 'smooth'});
+};
+EXT.mkStatus = async (id, st) => { await tryDo(() => api(`/campaigns/${id}/status`, {method: 'POST', body: {status: st}}), 'حُدّثت الحالة'); EXT.mkCampaigns($('#mkB'), id); };
+EXT.mkSend = async (id, channel) => {
+  if (!confirm(channel === 'whatsapp' ? 'إنشاء روابط واتساب لكل مستلم (حتى 200)؟ تُفتح واحدًا واحدًا من جهازك.' : 'إرسال بريد لكل مستلم له بريد؟')) return;
+  const r = await tryDo(() => api(`/campaigns/${id}/send`, {method: 'POST', body: {channel, creative_id: +$('#mkCr').value || null, message: $('#mkMsg').value.trim() || null, limit: 200}}));
+  if (!r) return;
+  $('#mkSendOut').innerHTML = `<div class="ai">${channel === 'email' ? `أُرسل ${N(r.sent)} بريدًا · تخطّي ${N(r.skipped)} بلا بريد` : `${N(r.sent)} رابط مراسلة جاهز · تخطّي ${N(r.skipped)} بلا هاتف<br><span class="muted">${esc(r.note)}</span>`}</div>`
+    + (channel === 'whatsapp' ? `<div class="wal">${r.items.map(it => `<a class="btn" href="${it.wa_url}" target="_blank" rel="noopener">${esc(it.name)} · <span class="num">${esc(it.phone)}</span></a>`).join('')}</div>` : '');
+};
+EXT.mkNewCampaign = (pid = null, status = null) => {
+  const m = MK.meta; const projs = (MK.board?.projects || REP.cat?.projects || S.projects).map(p => ({id: p.project_id || p.id, name: p.project || p.name}));
+  const objDefault = {launch: 'launch', near_complete: 'near_complete', slow: 'slow', completed: 'near_complete'}[status] || 'awareness';
+  modal(`<h3>حملة تسويقية جديدة</h3><label>المشروع</label><select id="cmP">${projs.map(p => `<option value="${p.id}" ${p.id === pid ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select><label>اسم الحملة</label><input id="cmN">
+   <label>الهدف</label><select id="cmO">${Object.entries(m.objectives).map(([k, v]) => `<option value="${k}" ${k === objDefault ? 'selected' : ''}>${v}</option>`).join('')}</select>
+   <label>القنوات</label><div>${Object.entries(m.channels).map(([k, v]) => `<label class="chk"><input type="checkbox" class="cmCh" value="${k}" ${['whatsapp', 'instagram'].includes(k) ? 'checked' : ''}> ${v}</label>`).join(' ')}</div>
+   <label>الجمهور</label><select id="cmA">${Object.entries(m.segments).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select>
+   <div class="grid2"><div><label>الميزانية (ر.ع)</label><input id="cmB" type="number" value="0" dir="ltr"></div><div><label>من</label><input id="cmS" type="date"></div><div><label>إلى</label><input id="cmE" type="date"></div></div>
+   <label>العرض/الحافز (هيكلي، بلا فائدة)</label><input id="cmOf" placeholder="مثال: تأجيل الدفعة الثانية 3 أشهر · إعفاء من رسوم نقل الملكية"><label>نص الرسالة للمستلمين</label><textarea id="cmM" rows="3"></textarea>
+   <div class="err" id="cmErr"></div><div class="btns" style="margin-top:12px"><button class="btn p" id="cmGo">إنشاء</button><button class="btn" data-call="closeModal">إلغاء</button></div>`);
+  $('#cmGo').onclick = async () => { try { const c = await api('/campaigns', {method: 'POST', body: {project_id: +$('#cmP').value, name: $('#cmN').value.trim(), objective: $('#cmO').value, channels: $$('.cmCh:checked').map(x => x.value), audience: $('#cmA').value, budget: +$('#cmB').value || 0, start_date: $('#cmS').value || null, end_date: $('#cmE').value || null, offer_text: $('#cmOf').value.trim() || null, message: $('#cmM').value.trim() || null}}); closeModal(); toast(`أُنشئت الحملة · رمز التتبع ${c.utm}`); EXT.cur.mk = 'camp'; EXT.l_mk().then(() => EXT.mkOpen(c.id)); } catch (e) { $('#cmErr').textContent = e.message; } };
+};
+EXT.mkStudioFor = (pid, status) => { EXT.cur.mk = 'studio'; MK.studioPid = pid; MK.studioTpl = {launch: 'launch', near_complete: 'ready', slow: 'offer', completed: 'ready', sold_out: 'progress'}[status] || 'teaser'; EXT.l_mk(); };
+EXT.mkStudio = async (B) => {
+  const m = MK.meta; const projs = S.projects;
+  const [C, L] = await Promise.all([api('/creatives'), api('/campaigns')]);
+  B.innerHTML = BOX('تصميم إعلان', `<div style="padding:14px"><div class="grid2">
+    <div><label>المشروع</label><select id="adP">${projs.map(p => `<option value="${p.id}" ${p.id === MK.studioPid ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></div>
+    <div><label>القالب</label><select id="adT">${Object.entries(m.templates).map(([k, v]) => `<option value="${k}" ${k === MK.studioTpl ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
+    <div><label>المقاس</label><select id="adS">${Object.entries(m.sizes).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
+    <div><label>الألوان</label><select id="adC">${m.palettes.map(p => `<option value="${p}">${{gold: 'ذهبي داكن', green: 'أخضر', blue: 'أزرق', sand: 'رملي فاتح'}[p] || p}</option>`).join('')}</select></div>
+    <div><label>العنوان (اختياري — يُولَّد من القالب)</label><input id="adH"></div><div><label>السطر الثاني</label><input id="adSub"></div>
+    <div><label>نص العرض (لقالب العرض)</label><input id="adOf" placeholder="إعفاء من رسوم نقل الملكية"></div><div><label>العرض ساري حتى</label><input id="adU" type="date"></div>
+    <div><label>زر الدعوة</label><input id="adCta" placeholder="احجز معاينتك"></div><div><label>خطة السداد المعروضة</label><select id="adPl"><option value="">—</option><option value="6040">60/40</option><option value="milestone">مرتبطة بمراحل الإنجاز</option><option value="murabaha">مرابحة بنكية</option></select></div>
+    <div><label>صورة خلفية (اختياري — PNG/JPEG، مثل التصور النهائي)</label><input type="file" id="adBg" accept=".png,.jpg,.jpeg"></div><div><label>ربط بحملة</label><select id="adCamp"><option value="">—</option>${L.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select></div></div>
+    <div class="btns" style="margin-top:12px"><button class="btn p" id="adGo">توليد الإعلان</button></div><div class="muted" style="margin-top:6px">النص يُركَّب برمجيًا بخط المنصة؛ لا صور أشخاص ولا نصوص مولَّدة بالصور. العروض الربوية مرفوضة.</div></div>`)
+    + BOX('الإعلانات المولَّدة', `<div class="gal adgal">${C.map(c => `<figure><img src="${c.png_url || c.pdf_url}" alt="" loading="lazy"><figcaption><b>${esc(c.template_label)}</b> · ${esc(c.project)} · ${esc(c.size)}<div class="btns" style="margin-top:4px"><a class="btn" href="${c.png_url}" download>PNG</a><a class="btn" href="${c.pdf_url}" target="_blank" rel="noopener">PDF</a><button class="btn" data-call="EXT.adSend" data-args="${J([c.id, 'whatsapp'])}">واتساب</button><button class="btn" data-call="EXT.adSend" data-args="${J([c.id, 'email'])}">بريد</button></div></figcaption></figure>`).join('') || '<div class="muted">لم يُولَّد إعلان بعد.</div>'}</div>`);
+  $('#adGo').onclick = async () => {
+    let bg = null; const f = $('#adBg').files[0];
+    try {
+      if (f) { const fd = new FormData(); fd.append('ref_type', 'campaign'); fd.append('ref_id', $('#adP').value); fd.append('title', 'خلفية إعلان'); fd.append('category', 'إعلان'); fd.append('file', f);
+        const r = await fetch('/api/documents', {method: 'POST', headers: {'X-CSRF-Token': csrf()}, body: fd}); const j = await r.json(); if (!r.ok) throw new Error(j.detail || 'تعذّر رفع الصورة'); bg = j.id; }
+      const cr = await api('/creatives', {method: 'POST', body: {project_id: +$('#adP').value, campaign_id: +$('#adCamp').value || null, template: $('#adT').value, size: $('#adS').value, palette: $('#adC').value, headline: $('#adH').value.trim() || null, subline: $('#adSub').value.trim() || null, cta: $('#adCta').value.trim() || null, offer: $('#adOf').value.trim() || null, until: $('#adU').value || null, bg_document_id: bg, plan: $('#adPl').value || null}});
+      modal(`<h3>✓ الإعلان جاهز</h3><img src="${cr.png_url}" alt="" style="max-width:100%;border-radius:10px"><div class="btns" style="margin-top:10px"><a class="btn p" href="${cr.png_url}" download>تنزيل PNG</a><a class="btn" href="${cr.pdf_url}" target="_blank" rel="noopener">PDF للطباعة</a><button class="btn" data-call="EXT.adSend" data-args="${J([cr.id, 'whatsapp'])}">واتساب</button><button class="btn" data-call="EXT.adSend" data-args="${J([cr.id, 'email'])}">بريد</button><button class="btn" data-call="closeModal">إغلاق</button></div>`);
+      EXT.l_mk();
+    } catch (e) { toast(e.message, 1); }
+  };
+};
+EXT.adSend = async (id, channel) => {
+  const to = prompt(channel === 'whatsapp' ? 'رقم واتساب المستلم' : 'بريد المستلم', ''); if (!to) return;
+  const r = await tryDo(() => api(`/creatives/${id}/send`, {method: 'POST', body: {channel, to: to.trim()}}));
+  if (r && channel === 'whatsapp') window.open(r.wa_url, '_blank', 'noopener'); else if (r) toast(r.delivered ? 'أُرسل' : 'سُجّل في صندوق الصادر (البريد غير مهيّأ)');
+};
+EXT.mkAlerts = async (B) => {
+  const A_ = await api('/marketing/alerts');
+  const sev = {high: ['عالٍ', 'p-b'], medium: ['متوسط', 'p-w'], low: ['منخفض', 'p-bl']};
+  B.innerHTML = `<div class="toolbar">${can('notify') ? '<button class="btn p" id="mkRun">تسجيل التنبيهات في الإشعارات الآن</button>' : ''}<span class="muted">تُحسب حيًّا من حركة السوق: الوتيرة، الطلب النسبي، تدفق العملاء، أعمار المخزون، العروض، الحملات — ويُسجَّلها النظام يوميًا في الإشعارات.</span></div>`
+    + BOX(`التنبيهات التسويقية <span class="muted">${N(A_.length)}</span>`, T(['الخطورة', 'المشروع', 'التنبيه', 'التفاصيل', 'الإجراء المقترح'], A_.map(a => `<tr><td>${pill(...sev[a.severity])}</td><td>${esc(a.project)}</td><td><b>${esc(a.title)}</b></td><td>${esc(a.detail)}</td><td>${esc(a.action)}</td></tr>`), 'لا تنبيهات الآن — حركة المشاريع ضمن المخطط.'));
+  if ($('#mkRun')) $('#mkRun').onclick = async () => { const r = await tryDo(() => api('/marketing/alerts/run', {method: 'POST'})); toast(`سُجّل ${N(r.created)} تنبيهًا جديدًا`); };
 };

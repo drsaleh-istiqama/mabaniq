@@ -176,3 +176,15 @@ td .muted{display:inline-block}
 .plan .mk.r{background:#D4A64A;color:#1A1405}.plan .mk.s{background:#6B7280}.plan .mk.hl{outline:3px solid #fff;box-shadow:0 0 0 5px var(--pri),0 2px 8px rgba(0,0,0,.5);z-index:2;transform:translate(-50%,-50%) scale(1.25)}
 .docb{display:inline-flex;gap:4px}.docb .btn{padding:4px 8px;font-size:12px}
 .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0 14px}.grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px}
+
+/* الوحدة 7: التقارير والتسويق */
+.rcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;padding:14px}
+.rcard{text-align:start;background:var(--pane2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;cursor:pointer;color:var(--ink);font:inherit;display:flex;flex-direction:column;gap:4px}.rcard:hover{border-color:var(--pri)}.rcard span{color:var(--muted);font-size:12px;line-height:1.6}
+.chgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px;margin-bottom:16px}.chbox{padding:10px 12px}.chart .ch-t{font-weight:600;margin-bottom:6px}.ch{width:100%;height:auto;display:block}
+.ch .grid{stroke:var(--line);stroke-width:1}.ch .ax{fill:var(--muted);font-size:11px;font-family:'Tajawal',sans-serif}.ch .ax.big{fill:var(--ink);font-size:16px;font-weight:700}
+.ch-l{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--muted);margin-top:4px}.ch-l i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-inline-end:5px;vertical-align:-1px}
+.mkgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:16px}.mkcard{padding:0 14px 12px}.mkcard .hd{margin:0 -14px 10px;}
+.mkk{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:8px}.mkk>div{background:var(--pane2);border-radius:10px;padding:8px}.mkk small{display:block;color:var(--muted);font-size:11px}.mkk b{display:block;font-size:18px}
+.acts{margin:6px 0 0;padding-inline-start:18px}.acts li{margin-bottom:6px}.wal{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.adgal{padding:14px;grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}.adgal img{width:100%;border-radius:10px;border:1px solid var(--line)}.gal{display:grid;gap:12px}.gal figure{margin:0}
+textarea{width:100%;font:inherit;background:var(--pane2);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:10px}

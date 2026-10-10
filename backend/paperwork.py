@@ -342,8 +342,13 @@ def shared_doc(tenant: str, token: str, request: Request):
     row = c.execute("SELECT * FROM share_links WHERE token_hash=? AND expires>?", (hashlib.sha256(token.encode()).hexdigest(), time.time())).fetchone()
     if not row:
         raise HTTPException(404, "الرابط غير صالح أو منتهٍ — اطلب من المطوّر إرساله مجددًا")
-    pdf, name, d = render(c, request, row["kind"], row["ref_id"], "رابط مشاركة")
     c.execute("UPDATE share_links SET opened=COALESCE(opened,0)+1, last_open=? WHERE token_hash=?", (now_s(), row["token_hash"]))
+    if row["kind"] == "file":  # Unit 7: a stored creative (PNG/PDF) shared through the same signed-link mechanism
+        from .modules2 import _send_doc
+        d = one(c, "SELECT * FROM documents WHERE id=?", (row["ref_id"],))
+        c.commit()
+        return _send_doc(d)
+    pdf, name, d = render(c, request, row["kind"], row["ref_id"], "رابط مشاركة")
     c.commit()
     return _pdf_response(pdf, name)
 

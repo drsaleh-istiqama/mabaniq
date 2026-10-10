@@ -892,11 +892,15 @@ from .modules2 import router as modules2_router  # noqa: E402
 app.include_router(modules_router)
 app.include_router(modules2_router)
 from .identity import router as identity_router  # noqa: E402
+from .marketing import router as marketing_router  # noqa: E402
 from .paperwork import router as paperwork_router  # noqa: E402
 from .plans import router as plans_router  # noqa: E402
+from .reports import router as reports_router  # noqa: E402
 
 app.include_router(identity_router)
 app.include_router(paperwork_router)
 app.include_router(plans_router)
+app.include_router(reports_router)
+app.include_router(marketing_router)
 app.mount("/static", StaticFiles(directory=FRONT), name="static")
 app.add_middleware(O.ObservabilityMiddleware)  # الأبعد خارجيًا: معرّف الطلب وسجل الوصول وتحويل الأعطال إلى JSON 500

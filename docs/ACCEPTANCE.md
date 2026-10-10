@@ -40,6 +40,10 @@
 | 18ب | مستندات PDF عربية (عرض/عقد/فاتورة/إيصال) بترويسة المطوّر وختمه وتوقيعه، هجري أولًا، أرقام غربية، رمز تحقق وQR، صفحة تحقق عامة بلا بيانات شخصية تتبع توقيع العقد | `::test_quote_lifecycle_pdf_and_conversion`, `::test_contract_invoice_receipt_pdfs_and_portal_access`, `::test_brand_letterhead_*` · عيّنات `tools/render_samples.py` | ✅ |
 | 18ج | التسليم: طباعة/تنزيل (موظف أو عميل لمستنداته فقط)، بريد بمرفق PDF، رابط واتساب موقَّع ينتهي بعد 30 يومًا | `::test_send_by_email_attachment_and_whatsapp_share_link` | ✅ (WhatsApp عبر `wa.me` من جهاز الموظف — لا واجهة Business) |
 | 18د | المخططات: رفع بأنواع، علامات مواقع الوحدات على مخطط الطابق، العميل يرى طابقه وعلامته ونموذج وحدته والتصورات ولا يرى الإنشائي | `::test_plans_upload_markers_and_customer_visibility` | ✅ |
+| 19 | عشرة تقارير جاهزة تُعرض بمعاملات، منشئ تقارير على مجموعات مُدرجة بيضاء يرفض الأعمدة والدوال غير المعروفة ويحترم صلاحية المجموعة، تصدير CSV/PDF، حفظ وجدولة بالبريد تُنفَّذ بالنبضة | `tests/test_unit7.py::test_catalog_*`, `::test_custom_builder_*`, `::test_export_*` | ✅ |
+| 19ب | لوحة تسويق تصنّف كل مشروع بإشارات وإجراءات؛ حملات بعرض غير ربوي ورمز تتبع يُنسب به العميل وتُقاس نتائجه؛ إرسال بريد/واتساب مسجَّل | `::test_marketing_board_*`, `::test_campaign_lifecycle_*` | ✅ (واتساب روابط يدوية — لا Business API) |
+| 19ج | استوديو إعلانات: ستة قوالب × ثلاثة مقاسات PNG+PDF من بيانات المشروع وترويسته، خلفية اختيارية، مشاركة برابط موقَّع | `::test_creatives_*` | ✅ |
+| 19د | تنبيهات تسويقية من حركة السوق تُحسب حيًّا وتُسجَّل يوميًا في الإشعارات بلا تكرار | `::test_marketing_alerts_*` | ✅ |
 | 16ج | أرقام غربية في كل الواجهة (قرار المالك ب) — ثابت واحد `WD()` في طبقة التنسيق يطبّع نصوص الخادم أيضًا؛ لا رقم هندي في المصادر | `scripts/check-web.mjs` · `e2e` يفحص شريط المؤشرات | ✅ |
 
 ## حالة الوحدات
@@ -50,6 +54,7 @@
 | و1 PostgreSQL + RLS | ✅ | `backend/dbx.py`, `db/migrations/0001_initial.sql` (676 سطرًا، مولَّد بـ`db/gen_pg_schema.py`), `db/tests/01_rls_isolation.sql`, `db/run_pgtap.py`؛ 512 استدعاء SQL تعمل على المحركين بلا تفريع في منطق الأعمال |
 | و2 الهوية | ✅ | `backend/auth.py`, `db/migrations/0002_unit2_identity.sql`, `tests/test_unit2.py` |
 | و3 الواجهة | ✅ (TypeScript مؤجَّل — انظر PROGRESS) | `web/` (المصادر) ⟵ `vite.config.js` ⟵ `frontend/dist` (المخرجات، غير مُتتبَّعة) · `web/i18n.js` + `web/locales/{ar,en}.json` · `web/fonts/` · `scripts/check-web.mjs` · `scripts/size-check.mjs` · `playwright.config.js` · `e2e/critical-path.spec.js` · `deploy/Dockerfile` مرحلتان |
+| و7 التقارير والتسويق | ✅ | `backend/reports.py`, `backend/pdfcharts.py`, `backend/marketing.py`, `backend/adgen.py`, `backend/jobs.py`, `db/migrations/0006_reports_marketing.sql`, `web/charts.js`, `tests/test_unit7.py` |
 | و6 المستندات والمخططات | ✅ | `backend/paperwork.py`, `backend/pdfgen.py`, `backend/plans.py`, `db/migrations/0005_paperwork_plans.sql`, `backend/assets/fonts/`, `tests/test_unit6.py` |
 | و5 الهوية الخارجية | ✅ (التفعيل الحي بيد المالك) | `backend/identity.py`, `backend/mail.py`, `db/migrations/0004_identity_external.sql`, `web/login.{html,js}`, `tests/test_identity.py`, `e2e/recovery.spec.js` |
 | و4 التشغيل | ✅ (النسخ اليومي المجدول وDSN Sentry وحجم 5×500 بيد المالك/بيئته) | `backend/dbx.py` (مجمّع)، `backend/db.py` (`OPEN`)، `db/migrations/0003_unit4_integrity.sql`، `db/tests/02_unit4_integrity.sql`، `backend/retention.py`، `backend/cache.py`، `backend/observability.py` (`/metrics`، Sentry)، `scripts/backup/{dump,drill}.py`، `load-tests/`، `tests/test_unit4.py` |

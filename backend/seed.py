@@ -36,7 +36,7 @@ def schedule(plan: str, price: float, start: dt.date, handover: dt.date):
     return [(lb, d, round(price * p, 0)) for lb, d, p in rows]
 
 
-ALL_TABLES = ["plans", "quotes", "doc_sends", "share_links", "doc_issues", "charity_dues", "resale_settlements", "oa_votes", "oa_motions", "oa_charges", "oa_budget", "rent_dues", "leases", "tenants_l", "work_orders", "fm_assets",
+ALL_TABLES = ["campaign_sends", "creatives", "campaigns", "plans", "quotes", "doc_sends", "share_links", "doc_issues", "charity_dues", "resale_settlements", "oa_votes", "oa_motions", "oa_charges", "oa_budget", "rent_dues", "leases", "tenants_l", "work_orders", "fm_assets",
               "titles", "handovers", "snags", "distributions", "bank_lines", "pay_intents", "refunds", "invoices", "wa_messages",
               "viewings", "resale_offers", "watchlist", "commissions", "brokers", "discount_requests", "sale_contracts", "budgets",
               "ncrs", "site_reports", "change_orders", "schedule_tasks", "contracts_c", "permits", "feasibility", "lands",

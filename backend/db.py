@@ -227,6 +227,14 @@ CREATE TABLE IF NOT EXISTS share_links(token_hash TEXT PRIMARY KEY, kind TEXT, r
 CREATE TABLE IF NOT EXISTS plans(
   id INTEGER PRIMARY KEY, project_id INTEGER REFERENCES projects(id), building TEXT, floor INTEGER, unit_type TEXT, kind TEXT NOT NULL, title TEXT,
   document_id INTEGER REFERENCES documents(id), markers TEXT DEFAULT '[]', public INTEGER DEFAULT 1, created TEXT, created_by TEXT);
+CREATE TABLE IF NOT EXISTS report_defs(id INTEGER PRIMARY KEY, name TEXT NOT NULL, kind TEXT NOT NULL, ref TEXT, spec TEXT, params TEXT, owner TEXT, shared INTEGER DEFAULT 1, created TEXT);
+CREATE TABLE IF NOT EXISTS report_schedules(id INTEGER PRIMARY KEY, report_id INTEGER REFERENCES report_defs(id), cadence TEXT, hour INTEGER, recipients TEXT, format TEXT, active INTEGER DEFAULT 1,
+  next_run TEXT, last_run TEXT, last_error TEXT, created_by TEXT, created TEXT);
+CREATE TABLE IF NOT EXISTS campaigns(id INTEGER PRIMARY KEY, project_id INTEGER REFERENCES projects(id), name TEXT NOT NULL, objective TEXT, channels TEXT, audience TEXT, budget REAL DEFAULT 0,
+  start_date TEXT, end_date TEXT, offer_text TEXT, message TEXT, status TEXT DEFAULT 'draft', utm TEXT UNIQUE, created_by TEXT, created TEXT, notes TEXT);
+CREATE TABLE IF NOT EXISTS creatives(id INTEGER PRIMARY KEY, project_id INTEGER REFERENCES projects(id), campaign_id INTEGER, template TEXT, size TEXT, headline TEXT, subline TEXT, cta TEXT, offer TEXT,
+  bg_document_id INTEGER, document_id INTEGER, pdf_document_id INTEGER, created_by TEXT, created TEXT);
+CREATE TABLE IF NOT EXISTS campaign_sends(id INTEGER PRIMARY KEY, campaign_id INTEGER, channel TEXT, recipient TEXT, lead_id INTEGER, creative_id INTEGER, status TEXT, at TEXT, by_user TEXT);
 CREATE TABLE IF NOT EXISTS privacy_requests(
   id INTEGER PRIMARY KEY, customer_id INTEGER, kind TEXT, status TEXT, created TEXT, note TEXT, decided_at TEXT, decided_by TEXT, decision_note TEXT);
 
@@ -258,7 +266,7 @@ MIGRATIONS = {
     "customers": ["id_type TEXT", "id_number TEXT", "nationality TEXT", "id_expiry TEXT", "dob TEXT", "pep INTEGER DEFAULT 0",
                   "source_of_funds TEXT", "kyc_status TEXT DEFAULT 'pending'", "kyc_risk TEXT", "kyc_note TEXT", "kyc_at TEXT",
                   "consent_at TEXT", "email TEXT"],
-    "leads": ["broker_id INTEGER", "bedrooms INTEGER"],
+    "leads": ["broker_id INTEGER", "bedrooms INTEGER", "campaign_id INTEGER", "email TEXT"],
     "bookings": ["broker_id INTEGER", "list_price REAL", "handed_over TEXT"],
     "installments": ["penalty_waived INTEGER DEFAULT 0"],
     "contractors": ["cr_number TEXT"],

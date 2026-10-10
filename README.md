@@ -15,10 +15,12 @@
 - `backend/db.py`: SQLite في هذا الإصدار، وPostgreSQL في الإنتاج
 - `web/`: مصادر الواجهة (HTML/CSS/JS بلا إطار، ESM) تُبنى بـVite إلى `frontend/dist` (غير مُتتبَّع؛ `npm ci && npm run build`) — ترجمة `web/locales/`، خط Tajawal ذاتي الاستضافة
 - `e2e/`: Playwright للمسار الحرج ولمسار استرجاع كلمة المرور (`npm run e2e`)
+- `backend/reports.py` + `backend/pdfcharts.py` + `web/charts.js`: تقارير جاهزة ومنشئ تقارير وتصدير CSV/PDF وجدولة بالبريد
+- `backend/marketing.py` + `backend/adgen.py`: لوحة تسويق المشاريع، الحملات وقياسها، استوديو الإعلانات، التنبيهات التسويقية
 - `backend/paperwork.py` + `backend/pdfgen.py` + `backend/plans.py`: عروض الأسعار، مستندات PDF (عرض/عقد/فاتورة/إيصال) بختم وتوقيع ورمز تحقق، الإرسال بالبريد/واتساب، المخططات ومواقع الوحدات
 - `backend/identity.py`: الدخول بالبريد، رابط دخول بريدي، استرجاع كلمة المرور، Google (OIDC) — تظهر بحسب المتغيرات المعيَّنة
 - `scripts/backup/`: نسخ `pg_dump` وتمرين استرجاع كامل (`drill.py`) · `load-tests/`: k6 لـ300 مستخدم (`run.sh`) · `db/migrations/`: ترحيلات PostgreSQL مُرقّمة · `db/tests/`: pgTAP
-- `tests/`: 84 اختبارًا على SQLite و86 على PostgreSQL (`.venv/bin/python -m pytest -q tests`)
+- `tests/`: 110 اختبارًا على SQLite و113 على PostgreSQL (`.venv/bin/python -m pytest -q tests`)
 
 ## ما يعمل فعليًا
 - صندوق قرارات يولّده النظام من البيانات، والاعتماد يغيّر البيانات ويُسجَّل

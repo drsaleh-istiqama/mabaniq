@@ -364,7 +364,7 @@ def rent_pay(did: int, _=Depends(act_as("leasing"))):
 # ======================================================================= المستندات (رفع آمن)
 ALLOWED = {"application/pdf": (b"%PDF", ".pdf"), "image/png": (b"\x89PNG", ".png"), "image/jpeg": (b"\xff\xd8\xff", ".jpg")}
 MAX_DOC = 5 * 1024 * 1024
-REF_TYPES = "^(booking|customer|project|permit|ipc|lease|land|brand|plan)$"
+REF_TYPES = "^(booking|customer|project|permit|ipc|lease|land|brand|plan|campaign|creative)$"
 
 
 def _docs_dir() -> Path:

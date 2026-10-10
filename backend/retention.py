@@ -109,7 +109,8 @@ async def scheduler(stop: asyncio.Event) -> None:
         pass
     while not stop.is_set():
         try:
-            await asyncio.to_thread(run_all_due)
+            from . import jobs
+            await asyncio.to_thread(jobs.tick)  # Unit 7: retention + scheduled reports + marketing alerts
         except Exception:  # noqa: BLE001
             log.exception("retention scheduler", extra={"event": "retention_error"})
         try:
