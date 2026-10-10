@@ -140,6 +140,8 @@ def quote_row(c, qid: int) -> dict:
     d["plan_label"] = PLAN_LABEL.get(d["plan"], d["plan"])
     if d["status"] == "issued" and d["valid_until"] < today().isoformat():
         d["status"] = "expired"
+    iss = c.execute("SELECT verify_code, issued FROM doc_issues WHERE kind='quote' AND ref_id=?", (qid,)).fetchone()
+    d["verify_code"] = iss["verify_code"] if iss else None  # set once the PDF was issued; shown in the UI and usable on /verify
     return d
 
 

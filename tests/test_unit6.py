@@ -93,6 +93,7 @@ def test_quote_lifecycle_pdf_and_conversion(cl):
     db = connect()
     iss = db.execute("SELECT * FROM doc_issues WHERE kind='quote' AND ref_id=?", (q["id"],)).fetchone()
     assert iss and len(iss["verify_code"]) >= 10
+    assert cl.get(f"/api/quotes/{q['id']}").json()["verify_code"] == iss["verify_code"]
     # public verification page (no login), RTL, no personal data
     v = TestClient(app).get(f"/verify/jadwa/{iss['verify_code']}")
     assert v.status_code == 200 and 'dir="rtl"' in v.text and q["number"] in v.text and "ساري" in v.text and "9111" not in v.text
