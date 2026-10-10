@@ -10,7 +10,7 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
-VERSION = "0.12.0"
+VERSION = "0.13.0"
 ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -28,6 +28,12 @@ def _rate(name: str, default: str) -> tuple[int, int]:
     except ValueError:
         n, s = default.split("/")
         return int(n), int(s)
+
+
+def tenants_extra() -> str:
+    """0.13.0 — `MABANIQ_TENANTS="code:الاسم;code2:الاسم"`: developer organisations added by configuration (read at call time so a
+    hosted demo can gain a tenant without a rebuild; `backend/tenant_profiles.py` turns a known code into a full profile)."""
+    return os.environ.get("MABANIQ_TENANTS", "")
 
 
 # Unit 4 — retention policy in days (backend/retention.py documents what each rule does)

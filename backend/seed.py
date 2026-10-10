@@ -4,6 +4,7 @@ import random
 
 from .db import TENANT, connect, init, wipe_for_reseed
 from .pii import enc as _enc
+from .tenant_profiles import apply_brand, ensure_assets, profile, profile_units
 
 FIRST = ["خالد", "مريم", "سالم", "نورة", "يوسف", "سعيد", "فاطمة", "أحمد", "هلال", "ناصر", "عائشة", "محمد",
          "زينب", "علي", "منى", "حمد", "سلطان", "شيخة", "بدر", "ريم", "إبراهيم", "خلفان", "موزة", "طلال"]
@@ -99,9 +100,13 @@ def _seed(force: bool, tenant: str) -> None:
 def _seed_body(c, force: bool, tenant: str) -> None:
     init(c)
     if c.execute("SELECT COUNT(*) FROM projects").fetchone()[0] and not force:
-        from .auth import apply_demo_password
-        apply_demo_password(c)  # Unit 4: a persistent database keeps its data, but the declared demo password always applies
-        return
+        if c.has_table("users") and c.execute("SELECT 1 FROM users WHERE username='admin'").fetchone():
+            from .auth import apply_demo_password
+            apply_demo_password(c)  # Unit 4: a persistent database keeps its data, but the declared demo password always applies
+            ensure_assets(c, tenant)  # 0.13.0: bundled sample images are re-materialised after a redeploy (ephemeral storage)
+            return
+        # 0.13.0: projects without any account = a seed interrupted before `ensure_users` (nobody could have logged in yet) → rebuild
+        force = True
     wipe_for_reseed(c, ALL_TABLES)
     # حسابات العملاء/الوسطاء المنشأة أثناء الاستخدام تشير إلى معرّفات عملاء ستُعاد؛ تُحذف مع إعادة البذر (حسابات العرض تُعاد ربطها في ensure_users)
     if c.has_table("users"):
@@ -113,47 +118,62 @@ def _seed_body(c, force: bool, tenant: str) -> None:
     rnd = random.Random(42 if tenant == "jadwa" else 7)
     today = dt.date.today()
 
-    projects = [(a, b, cc, d, e, f, add_months(today, g)) for a, b, cc, d, e, f, g in TENANT_PROJECTS.get(tenant, TENANT_PROJECTS["jadwa"])]
+    # 0.13.0: a profile (backend/tenant_profiles.py) maps the seed's internal slots RAY/SEB/KHD to a real developer's projects and
+    # drives the unit mix; `pid` is keyed by both the slot and the real code so every later stage keeps working.
+    pf = profile(tenant)
+    if pf:
+        projects = [(code, name, loc, kind, b, pl, add_months(today, g)) for _s, code, name, loc, kind, b, pl, g, _e in pf["projects"]]
+        slot_of = {code: slot for slot, code, *_r in pf["projects"]}
+        escrow = {slot: e for slot, _c, _n, _l, _k, _b, _p, _g, e in pf["projects"]}
+    else:
+        projects = [(a, b, cc, d, e, f, add_months(today, g)) for a, b, cc, d, e, f, g in TENANT_PROJECTS.get(tenant, TENANT_PROJECTS["jadwa"])]
+        slot_of = {"RAY": "RAY", "SEB": "SEB", "KHD": "KHD"}
+        escrow = {"RAY": "260000", "SEB": "180000", "KHD": "90000"}
     pid = {}
     for code, name, loc, kind, b, pl, ho in projects:
         cur = c.execute("INSERT INTO projects(code,name,location,kind,build_pct,planned_monthly_sales,handover) "
                         "VALUES(?,?,?,?,?,?,?)", (code, name, loc, kind, b, pl, ho.isoformat()))
-        pid[code] = (cur.lastrowid, ho)
-        c.execute("INSERT INTO settings VALUES(?,?)", (f"escrow:{cur.lastrowid}", {"RAY": "260000", "SEB": "180000", "KHD": "90000"}[code]))
+        pid[code] = pid[slot_of[code]] = (cur.lastrowid, ho)
+        c.execute("INSERT INTO settings VALUES(?,?)", (f"escrow:{cur.lastrowid}", escrow.get(slot_of[code], "120000")))
 
-    units = []
-    # أبراج الريحان: برج A (14 طابقًا) وبرج B (10 طوابق) × 6 وحدات
-    spec6 = [("غرفتان وصالة", 118, "بحري", 640), ("غرفتان وصالة", 118, "بحري", 640),
-             ("3 غرف وصالة", 156, "حديقة", 560), ("3 غرف وصالة", 156, "حديقة", 560),
-             ("غرفة وصالة", 78, "شارع", 520), ("غرفة وصالة", 78, "شارع", 520)]
-    sold_p = {"بحري": .86, "حديقة": .62, "شارع": .45}
-    for bld, floors in (("A", 14), ("B", 10)):
-        for f in range(1, floors + 1):
-            for p, (tp, ar, vw, ppm) in enumerate(spec6, 1):
-                units.append(("RAY", f"RAY-{bld}-{f}{p:02d}", bld, f, p, tp, ar, vw, ppm * ar * (1 + f * .012), sold_p[vw]))
-    # واجهة السيب: 8 طوابق × 12
-    for f in range(1, 9):
-        for p in range(1, 13):
-            vw = "بحري" if p <= 4 else "حديقة" if p <= 8 else "شارع"
-            tp, ar = [("غرفتان وصالة", 120), ("3 غرف وصالة", 160), ("غرفة وصالة", 80)][(p - 1) % 3]
-            ppm = {"بحري": 660, "حديقة": 570, "شارع": 530}[vw]
-            units.append(("SEB", f"SEB-S-{f}{p:02d}", "S", f, p, tp, ar, vw, ppm * ar * (1 + f * .01),
-                          {"بحري": .6, "حديقة": .38, "شارع": .42}[vw]))
-    # ضاحية الخوض: 120 فيلا
-    for i in range(1, 121):
-        corner = i % 5 in (1, 0)
-        park = 41 <= i <= 80
-        vw = "زاوية" if corner else "قرب الحديقة" if park else "داخلية"
-        units.append(("KHD", f"KHD-V-{i:03d}", "V", 0, i, "فيلا 5 غرف" if i % 3 == 0 else "فيلا 4 غرف",
-                      380 if i % 3 == 0 else 340, vw, (96000 if i % 3 == 0 else 84000) * (1.06 if corner else 1.03 if park else 1),
-                      {"زاوية": .8, "قرب الحديقة": .7, "داخلية": .52}[vw]))
+    units, use_of = [], {}
+    if pf:
+        for u in profile_units(pf):
+            units.append(u[:10])
+            use_of[u[1]] = u[10]
+    else:
+        # أبراج الريحان: برج A (14 طابقًا) وبرج B (10 طوابق) × 6 وحدات
+        spec6 = [("غرفتان وصالة", 118, "بحري", 640), ("غرفتان وصالة", 118, "بحري", 640),
+                 ("3 غرف وصالة", 156, "حديقة", 560), ("3 غرف وصالة", 156, "حديقة", 560),
+                 ("غرفة وصالة", 78, "شارع", 520), ("غرفة وصالة", 78, "شارع", 520)]
+        sold_p = {"بحري": .86, "حديقة": .62, "شارع": .45}
+        for bld, floors in (("A", 14), ("B", 10)):
+            for f in range(1, floors + 1):
+                for p, (tp, ar, vw, ppm) in enumerate(spec6, 1):
+                    units.append(("RAY", f"RAY-{bld}-{f}{p:02d}", bld, f, p, tp, ar, vw, ppm * ar * (1 + f * .012), sold_p[vw]))
+        # واجهة السيب: 8 طوابق × 12
+        for f in range(1, 9):
+            for p in range(1, 13):
+                vw = "بحري" if p <= 4 else "حديقة" if p <= 8 else "شارع"
+                tp, ar = [("غرفتان وصالة", 120), ("3 غرف وصالة", 160), ("غرفة وصالة", 80)][(p - 1) % 3]
+                ppm = {"بحري": 660, "حديقة": 570, "شارع": 530}[vw]
+                units.append(("SEB", f"SEB-S-{f}{p:02d}", "S", f, p, tp, ar, vw, ppm * ar * (1 + f * .01),
+                              {"بحري": .6, "حديقة": .38, "شارع": .42}[vw]))
+        # ضاحية الخوض: 120 فيلا
+        for i in range(1, 121):
+            corner = i % 5 in (1, 0)
+            park = 41 <= i <= 80
+            vw = "زاوية" if corner else "قرب الحديقة" if park else "داخلية"
+            units.append(("KHD", f"KHD-V-{i:03d}", "V", 0, i, "فيلا 5 غرف" if i % 3 == 0 else "فيلا 4 غرف",
+                          380 if i % 3 == 0 else 340, vw, (96000 if i % 3 == 0 else 84000) * (1.06 if corner else 1.03 if park else 1),
+                          {"زاوية": .8, "قرب الحديقة": .7, "داخلية": .52}[vw]))
 
     for proj, code, bld, f, p, tp, ar, vw, price, ps in units:
         x = rnd.random()
         st = "s" if x < ps else "r" if x < ps + .04 else "a"
-        cur = c.execute("INSERT INTO units(project_id,code,building,floor,pos,type,area,view,price,status) "
-                        "VALUES(?,?,?,?,?,?,?,?,?,?)",
-                        (pid[proj][0], code, bld, f, p, tp, ar, vw, round(price / 100) * 100, st))
+        cur = c.execute("INSERT INTO units(project_id,code,building,floor,pos,type,area,view,price,status,use) "
+                        "VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                        (pid[proj][0], code, bld, f, p, tp, ar, vw, round(price / 100) * 100, st, use_of.get(code, "residential")))
         if st == "a":
             continue
         uid = cur.lastrowid
@@ -204,11 +224,11 @@ def _seed_body(c, force: bool, tenant: str) -> None:
 
     # العملاء المحتملون
     channels = ["واتساب", "إنستغرام", "الموقع", "وسيط", "معرض عقاري", "إعلان"]
-    interests = {"RAY": ["غرفتان بحري", "3 غرف حديقة", "طابق مرتفع", "استثمار للإيجار"],
-                 "SEB": ["إطلالة بحرية", "غرفتان وصالة", "وحدات استثمارية"],
-                 "KHD": ["فيلا زاوية", "فيلا قرب الحديقة", "فيلا 5 غرف"]}
+    interests = pf["interests"] if pf else {"RAY": ["غرفتان بحري", "3 غرف حديقة", "طابق مرتفع", "استثمار للإيجار"],
+                                                 "SEB": ["إطلالة بحرية", "غرفتان وصالة", "وحدات استثمارية"],
+                                                 "KHD": ["فيلا زاوية", "فيلا قرب الحديقة", "فيلا 5 غرف"]}
     for i in range(36):
-        proj = rnd.choice(["RAY", "RAY", "SEB", "KHD"])
+        proj = rnd.choice(pf["lead_mix"] if pf else ["RAY", "RAY", "SEB", "KHD"])
         created = today - dt.timedelta(days=rnd.randint(1, 60))
         last = today - dt.timedelta(days=rnd.randint(0, min(30, (today - created).days)))
         c.execute("INSERT INTO leads(name,phone,interest,project_id,channel,stage,interactions,budget,created,last_contact,score) "
@@ -241,18 +261,19 @@ def _seed_body(c, force: bool, tenant: str) -> None:
     # جدول المصروفات المتوقعة: تكلفة متبقية = 72٪ من قيمة المشروع × (1 − نسبة الإنجاز)، موزعة حتى التسليم
     for code, name, loc, kind, b, pl, ho in projects:
         pj = pid[code][0]
+        slot = slot_of[code]
         value = c.execute("SELECT SUM(price) FROM units WHERE project_id=?", (pj,)).fetchone()[0]
         remaining = value * .72 * (1 - b / 100)
         span = max(1, min(12, (ho.year - today.year) * 12 + ho.month - today.month))
-        spike = 740000 if code == "SEB" else 0
-        fac = {"RAY": .55, "SEB": .80, "KHD": 0}[code] * (remaining - spike) / span
+        spike = 740000 if slot == "SEB" else 0
+        fac = {"RAY": .55, "SEB": .80, "KHD": 0}.get(slot, .5) * (remaining - spike) / span
         c.execute("INSERT INTO settings VALUES(?,?)", (f"facility:{pj}", str(round(fac, -3))))
         c.execute("INSERT INTO settings VALUES(?,?)", (f"facility_months:{pj}", str(span)))
         for m in range(1, 13):
             month = add_months(today.replace(day=1), m).strftime("%Y-%m")
-            amt = (remaining - spike * (code == "SEB")) / span if m <= span else 25000
+            amt = (remaining - spike * (slot == "SEB")) / span if m <= span else 25000
             label = "مستخلصات وتشغيل" if m <= span else "صيانة الضمان"
-            if code == "SEB" and m == 4:
+            if slot == "SEB" and m == 4:
                 amt += spike
                 label = "مستخلص الهيكل الخرساني"
             c.execute("INSERT INTO cost_schedule(project_id,month,amount,label) VALUES(?,?,?,?)",
@@ -269,6 +290,8 @@ def _seed_body(c, force: bool, tenant: str) -> None:
     from .seed_cycle import seed_cycle
     from .seed_ext import seed_ext
     brokers = seed_ext(c, rnd, today, pid, projects, tenant)
+    if pf:
+        apply_brand(c, pf)  # 0.13.0: letterhead + display name of the profiled developer
     seed_cycle(c, rnd, today, pid, tenant, schedule)
     backfill_payments(c, today)
     from .pii import encrypt_existing
@@ -290,6 +313,7 @@ def _seed_body(c, force: bool, tenant: str) -> None:
     from .engines import rescore_leads
     rescore_leads(c)
     c.commit()
+    ensure_assets(c, tenant, pf)  # 0.13.0: bundled renders / plans / logo of a profiled developer
     c.close()
 
 

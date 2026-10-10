@@ -36,7 +36,10 @@ def tenants() -> dict:
     if not f.exists():
         f.write_text(json.dumps({"jadwa": "جدوى للتطوير (بيانات تجريبية)",
                                  "nahda": "النهضة للتطوير العقاري (مطوّر تجريبي ثانٍ)"}, ensure_ascii=False, indent=1))
-    return json.loads(f.read_text())
+    out = json.loads(f.read_text())
+    from .tenant_profiles import tenants_from_env
+    out.update(tenants_from_env())  # 0.13.0: MABANIQ_TENANTS adds organisations without touching the (ephemeral) data dir
+    return out
 
 
 def valid_tenant(code: str) -> bool:

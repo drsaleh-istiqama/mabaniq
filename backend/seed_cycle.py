@@ -71,7 +71,8 @@ def _contract(c, bid, price, signed):
 
 
 def seed_cycle(c, rnd, today: dt.date, pid: dict, tenant: str, schedule) -> None:
-    names = NAMES.get(tenant, NAMES["jadwa"])
+    from .tenant_profiles import profile
+    names = NAMES.get(tenant) or (profile(tenant) or {}).get("cycle_names") or NAMES["jadwa"]
     inv = _Inv(c, today)
     contractor = lambda nm: c.execute("INSERT INTO contractors(name,cr_number) VALUES(?,?)", (nm, str(rnd.randint(1_000_000, 1_999_999)))).lastrowid
     stages = [("التصاريح والتجهيز", .05), ("الحفر والأساسات", .12), ("الهيكل الخرساني", .30), ("البلوك والتمديدات", .18),
@@ -324,9 +325,9 @@ def seed_cycle(c, rnd, today: dt.date, pid: dict, tenant: str, schedule) -> None
     # السوق الثانوي: إعلانات بعروض، وطلب معلّق، وصفقة مكتملة
     def eligible(code, n):
         return c.execute("""SELECT b.id, b.price FROM bookings b JOIN units u ON u.id=b.unit_id JOIN projects p ON p.id=u.project_id
-                            WHERE p.code=? AND b.status='confirmed' AND (SELECT SUM(paid_amount) FROM installments WHERE booking_id=b.id) >= .3*b.price
+                            WHERE p.id=? AND b.status='confirmed' AND (SELECT SUM(paid_amount) FROM installments WHERE booking_id=b.id) >= .3*b.price
                             AND b.id NOT IN (SELECT booking_id FROM resale) ORDER BY b.id DESC LIMIT ?""", (code, n)).fetchall()
-    for j, b in enumerate(eligible("RAY", 3)):
+    for j, b in enumerate(eligible(pid["RAY"][0], 3)):
         ask = round(b["price"] * (1.08 + j * .03), -2)
         st = "pending" if j == 2 else "listed"
         rid = c.execute("INSERT INTO resale(booking_id,ask_price,fee,status,created) VALUES(?,?,?,?,?)",
@@ -335,7 +336,7 @@ def seed_cycle(c, rnd, today: dt.date, pid: dict, tenant: str, schedule) -> None
             for q in range(2 - j):
                 c.execute("INSERT INTO resale_offers(resale_id,buyer_name,buyer_phone,price,status,created) VALUES(?,?,?,?,?,?)",
                           (rid, f"{rnd.choice(FIRST)} {rnd.choice(LAST)}", f"+968 9{rnd.randint(1000000, 9999999)}", round(ask * (.96 + q * .02), -2), "open", today.isoformat()))
-    for b in eligible("QRM", 1):
+    for b in eligible(qrm, 1):
         ask = round(b["price"] * 1.14, -2)
         rid = c.execute("INSERT INTO resale(booking_id,ask_price,fee,status,created) VALUES(?,?,?,?,?)", (b["id"], ask, round(ask * .02), "sold", _iso(today - dt.timedelta(days=50)))).lastrowid
         c.execute("INSERT INTO resale_offers(resale_id,buyer_name,buyer_phone,price,status,created) VALUES(?,?,?,?,?,?)",
@@ -345,8 +346,8 @@ def seed_cycle(c, rnd, today: dt.date, pid: dict, tenant: str, schedule) -> None
                 "رسوم تنازل في السوق الثانوي (على البائع)", customer_id=seller["customer_id"])
 
     # خصومات بمستويات اعتماد مختلفة
-    for b, pct, why, st, by in zip(c.execute("SELECT b.id FROM bookings b JOIN units u ON u.id=b.unit_id JOIN projects p ON p.id=u.project_id WHERE p.code='SEB' AND b.status='pending' LIMIT 2").fetchall()
-                                   + c.execute("SELECT b.id FROM bookings b JOIN units u ON u.id=b.unit_id JOIN projects p ON p.id=u.project_id WHERE p.code='RAY' AND b.status='pending' LIMIT 1").fetchall(),
+    for b, pct, why, st, by in zip(c.execute("SELECT b.id FROM bookings b JOIN units u ON u.id=b.unit_id JOIN projects p ON p.id=u.project_id WHERE p.id=? AND b.status='pending' LIMIT 2", (pid["SEB"][0],)).fetchall()
+                                   + c.execute("SELECT b.id FROM bookings b JOIN units u ON u.id=b.unit_id JOIN projects p ON p.id=u.project_id WHERE p.id=? AND b.status='pending' LIMIT 1", (pid["RAY"][0],)).fetchall(),
                                    (.015, .045, .03), ("مطابقة عرض منافس", "عميل مؤسسي (3 وحدات)", "تمديد خطة السداد بدل الخصم"),
                                    ("approved", "pending", "rejected"), ("موظف المبيعات", "المالية", "موظف المبيعات")):
         c.execute("INSERT INTO discount_requests(booking_id,pct,reason,status,requested_by,decided_by,created) VALUES(?,?,?,?,?,?,?)",
