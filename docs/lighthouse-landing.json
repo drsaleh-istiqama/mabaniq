@@ -1,0 +1,135 @@
+{
+ "ar": {
+  "url": "http://127.0.0.1:8800/",
+  "formFactor": "mobile",
+  "lighthouseVersion": "13.5.0",
+  "fetchTime": "2026-10-11T18:00:20.640Z",
+  "scores": {
+   "performance": 97,
+   "accessibility": 100,
+   "best-practices": 100,
+   "seo": 100
+  },
+  "metrics": {
+   "first-contentful-paint": "1.6 s",
+   "largest-contentful-paint": "2.4 s",
+   "total-blocking-time": "0 ms",
+   "cumulative-layout-shift": "0.051",
+   "speed-index": "1.6 s"
+  },
+  "audits_below_100": [
+   {
+    "id": "first-contentful-paint",
+    "score": 0.95,
+    "title": "First Contentful Paint",
+    "display": "1.6 s"
+   },
+   {
+    "id": "largest-contentful-paint",
+    "score": 0.91,
+    "title": "Largest Contentful Paint",
+    "display": "2.4 s"
+   },
+   {
+    "id": "cumulative-layout-shift",
+    "score": 0.99,
+    "title": "Cumulative Layout Shift",
+    "display": "0.051"
+   },
+   {
+    "id": "interactive",
+    "score": 0.98,
+    "title": "Time to Interactive",
+    "display": "2.4 s"
+   },
+   {
+    "id": "document-latency-insight",
+    "score": 0.5,
+    "title": "Document request latency",
+    "display": "Est savings of 22 KiB"
+   },
+   {
+    "id": "image-delivery-insight",
+    "score": 0,
+    "title": "Improve image delivery",
+    "display": "Est savings of 111 KiB"
+   },
+   {
+    "id": "network-dependency-tree-insight",
+    "score": 0,
+    "title": "Network dependency tree",
+    "display": ""
+   },
+   {
+    "id": "render-blocking-insight",
+    "score": 0,
+    "title": "Render-blocking requests",
+    "display": "Est savings of 340 ms"
+   }
+  ]
+ },
+ "en": {
+  "url": "http://127.0.0.1:8800/en",
+  "formFactor": "mobile",
+  "lighthouseVersion": "13.5.0",
+  "fetchTime": "2026-10-11T18:00:38.949Z",
+  "scores": {
+   "performance": 98,
+   "accessibility": 100,
+   "best-practices": 100,
+   "seo": 100
+  },
+  "metrics": {
+   "first-contentful-paint": "1.6 s",
+   "largest-contentful-paint": "2.3 s",
+   "total-blocking-time": "0 ms",
+   "cumulative-layout-shift": "0.029",
+   "speed-index": "1.6 s"
+  },
+  "audits_below_100": [
+   {
+    "id": "first-contentful-paint",
+    "score": 0.95,
+    "title": "First Contentful Paint",
+    "display": "1.6 s"
+   },
+   {
+    "id": "largest-contentful-paint",
+    "score": 0.93,
+    "title": "Largest Contentful Paint",
+    "display": "2.3 s"
+   },
+   {
+    "id": "interactive",
+    "score": 0.99,
+    "title": "Time to Interactive",
+    "display": "2.3 s"
+   },
+   {
+    "id": "document-latency-insight",
+    "score": 0.5,
+    "title": "Document request latency",
+    "display": "Est savings of 18 KiB"
+   },
+   {
+    "id": "image-delivery-insight",
+    "score": 0,
+    "title": "Improve image delivery",
+    "display": "Est savings of 111 KiB"
+   },
+   {
+    "id": "network-dependency-tree-insight",
+    "score": 0,
+    "title": "Network dependency tree",
+    "display": ""
+   },
+   {
+    "id": "render-blocking-insight",
+    "score": 0,
+    "title": "Render-blocking requests",
+    "display": "Est savings of 460 ms"
+   }
+  ]
+ },
+ "_note": "Summary of two Lighthouse 13 runs (mobile emulation, simulated throttling, local Chrome headless) against a local build identical to the deployed one; full reports are large and kept out of the repository. Regenerate: see docs/LANDING.md section 6."
+}

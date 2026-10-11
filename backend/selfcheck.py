@@ -44,6 +44,10 @@ def main() -> int:
             results.append((hdr in page.headers, f"header: {hdr}"))
         results.append((not re.search(r"<script(?![^>]*\bsrc=)[^>]*>\s*\S", page.text), "html: no inline scripts on /login"))
         results.append(("x-request-id" in page.headers, "observability: X-Request-ID on responses"))
+        land = c.get("/")  # 0.14.0: the public landing page for a visitor, index-able; everything else stays noindex
+        results.append((land.status_code == 200 and 'dir="rtl"' in land.text and land.headers.get("x-robots-tag") == "index, follow", "landing: / serves the Arabic landing page (index, follow)"))
+        results.append((c.get("/en").status_code == 200 and c.get("/robots.txt").status_code == 200 and c.get("/sitemap.xml").status_code == 200, "landing: /en, robots.txt, sitemap.xml"))
+        results.append((page.headers.get("x-robots-tag") == "noindex, nofollow", "landing: /login stays noindex"))
         anon = c.post("/api/notifications/run")
         results.append((anon.status_code == 401, f"authz: anonymous write → {anon.status_code}"))
 

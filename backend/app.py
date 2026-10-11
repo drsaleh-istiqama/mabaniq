@@ -789,7 +789,8 @@ CSRF_EXEMPT = {"/api/auth/login", "/api/auth/logout", "/api/pay/webhook", "/api/
 def index(request: Request):
     u = A.session_user(request)
     if not u:
-        return RedirectResponse("/login", 303)
+        from .landing import page  # 0.14.0: a visitor gets the public landing page (Arabic); /en is its English twin
+        return page(request, "ar")
     if u["role"] == "customer":
         return RedirectResponse("/app", 303)
     if u["role"] == "broker":
@@ -881,7 +882,8 @@ async def _inner(request: Request, call_next):
     r.headers["X-Frame-Options"] = "DENY"
     r.headers["X-Content-Type-Options"] = "nosniff"
     r.headers["Referrer-Policy"] = "same-origin"
-    r.headers["X-Robots-Tag"] = "noindex, nofollow"
+    if "x-robots-tag" not in r.headers:  # 0.14.0: the public landing pages mark themselves index-able (backend/landing.py); everything else stays out
+        r.headers["X-Robots-Tag"] = "noindex, nofollow"
     return r
 
 
@@ -892,11 +894,13 @@ from .modules2 import router as modules2_router  # noqa: E402
 app.include_router(modules_router)
 app.include_router(modules2_router)
 from .identity import router as identity_router  # noqa: E402
+from .landing import router as landing_router  # noqa: E402
 from .marketing import router as marketing_router  # noqa: E402
 from .paperwork import router as paperwork_router  # noqa: E402
 from .plans import router as plans_router  # noqa: E402
 from .reports import router as reports_router  # noqa: E402
 
+app.include_router(landing_router)  # 0.14.0: /en, /privacy, robots, sitemap, OG image, demo-request
 app.include_router(identity_router)
 app.include_router(paperwork_router)
 app.include_router(plans_router)

@@ -11,6 +11,7 @@ Rule set (days are settings, see `.env.example`):
   notifications                    older than NOTIFICATIONS_DAYS           → deleted   (reminders already delivered)
   pay_intents still 'pending'      older than PAY_INTENT_DAYS              → status 'expired' (kept — financial trail)
   wa_messages                      older than MESSAGES_DAYS                → phone masked to the last 4 digits (content kept for audit)
+  demo_requests (0.14.0, global)   older than DEMO_REQUESTS_DAYS           → deleted   (landing-page leads; run once, on the operator tenant)
 """
 from __future__ import annotations
 
@@ -19,7 +20,7 @@ import datetime as dt
 import time
 
 from .config import settings
-from .db import TENANT, audit_insert, connect, tenants
+from .db import DEFAULT_TENANT, TENANT, audit_insert, connect, tenants
 from .observability import log
 
 LAST_RUN_KEY = "retention:last_run"
@@ -29,7 +30,7 @@ def policy() -> dict:
     r = settings.retention
     return {"enabled": settings.retention_enabled, "every_hours": settings.retention_hours,
             "login_telemetry_days": r["login"], "expired_sessions_days": r["sessions"], "notifications_days": r["notifications"],
-            "pending_pay_intents_days": r["pay_intents"], "messages_phone_mask_days": r["messages"],
+            "pending_pay_intents_days": r["pay_intents"], "messages_phone_mask_days": r["messages"], "demo_requests_days": r["demo_requests"],
             "never": ["audit", "payments", "installments", "invoices", "refunds", "charity_dues", "sale_contracts", "customers (via privacy_requests only)"]}
 
 
@@ -59,6 +60,8 @@ def run(c, now: float | None = None, actor: str = "النظام") -> dict:
     for m in old_msgs:
         c.execute("UPDATE wa_messages SET phone=? WHERE id=?", (_mask_phone(m["phone"]), m["id"]))
     counts["wa_messages_masked"] = len(old_msgs)
+    if TENANT.get() == DEFAULT_TENANT:  # 0.14.0: the landing page's demo-request inbox is global (no org_id) — one tenant pass owns it
+        counts["demo_requests"] = c.execute("DELETE FROM demo_requests WHERE created < ?", (iso(r["demo_requests"]),)).rowcount
 
     total = sum(counts.values())
     summary = " · ".join(f"{k}={v}" for k, v in counts.items())

@@ -118,6 +118,8 @@ def rate_limit(request: Request):
         checks.append(("login", ip, *settings.rate_login))
     if p == "/api/pay/webhook":
         checks.append(("webhook", ip, *settings.rate_webhook))
+    if p == "/api/public/demo-request" and request.method == "POST":
+        checks.append(("demo", ip, *settings.rate_demo))  # 0.14.0: the landing-page form has its own, much smaller bucket
     for bucket, key, limit, per in checks:
         ok, retry = limiter.allow(bucket, key, limit, per)
         if not ok:

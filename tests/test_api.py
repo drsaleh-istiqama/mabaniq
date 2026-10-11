@@ -143,8 +143,9 @@ def test_frontend_served(cl):
 def test_requires_login():
     with TestClient(app) as c:
         assert c.get("/api/projects").status_code == 401
-        r = c.get("/", follow_redirects=False)
-        assert r.status_code == 303 and r.headers["location"] == "/login"
+        r = c.get("/", follow_redirects=False)  # 0.14.0: a visitor gets the public landing page, never the dashboard
+        assert r.status_code == 200 and "من الحجز إلى التسليم" in r.text and 'id="side"' not in r.text
+        assert c.get("/app", follow_redirects=False).headers["location"] == "/login"
         assert c.get("/login").status_code == 200
 
 

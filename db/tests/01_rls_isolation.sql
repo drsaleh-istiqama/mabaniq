@@ -1,23 +1,36 @@
 -- pgTAP: row-level security per developer organisation (Unit 1, acceptance criterion 3).
 -- Runs inside one transaction (the runner rolls back). Needs: migrations applied, extension pgtap, role mabaniq_app.
+-- The ONE documented exception (0.14.0, migration 0007): `demo_requests` — the public landing page's inbox — has no org_id and
+-- no RLS by design (a visitor is not a tenant). It is excluded from the per-table checks below and gets its own, narrower checks.
 BEGIN;
 SELECT plan(
-  (SELECT count(*)::int FROM pg_tables WHERE schemaname='public' AND tablename <> 'schema_migrations') * 4  -- enabled, forced, policy, org_id column
+  (SELECT count(*)::int FROM pg_tables WHERE schemaname='public' AND tablename NOT IN ('schema_migrations','demo_requests')) * 4  -- enabled, forced, policy, org_id column
   + 10
+  + 6   -- demo_requests: explicit exception checks
 );
 
 -- 1) every application table: RLS enabled + forced + one org policy + org_id column
 SELECT is(c.relrowsecurity, true, format('RLS enabled on %s', c.relname))
   FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
- WHERE n.nspname='public' AND c.relkind='r' AND c.relname <> 'schema_migrations';
+ WHERE n.nspname='public' AND c.relkind='r' AND c.relname NOT IN ('schema_migrations','demo_requests');
 SELECT is(c.relforcerowsecurity, true, format('RLS forced on %s (owner is not exempt)', c.relname))
   FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
- WHERE n.nspname='public' AND c.relkind='r' AND c.relname <> 'schema_migrations';
+ WHERE n.nspname='public' AND c.relkind='r' AND c.relname NOT IN ('schema_migrations','demo_requests');
 SELECT is((SELECT count(*) FROM pg_policies p WHERE p.schemaname='public' AND p.tablename=t.tablename), 1::bigint,
           format('exactly one org policy on %s', t.tablename))
-  FROM pg_tables t WHERE t.schemaname='public' AND t.tablename <> 'schema_migrations';
+  FROM pg_tables t WHERE t.schemaname='public' AND t.tablename NOT IN ('schema_migrations','demo_requests');
 SELECT has_column('public', t.tablename, 'org_id', format('%s.org_id exists', t.tablename))
-  FROM pg_tables t WHERE t.schemaname='public' AND t.tablename <> 'schema_migrations';
+  FROM pg_tables t WHERE t.schemaname='public' AND t.tablename NOT IN ('schema_migrations','demo_requests');
+
+-- 1b) demo_requests (0.14.0): the documented public table — no tenant column, no RLS, append-only for the app role
+SELECT has_table('public', 'demo_requests', 'demo_requests exists (migration 0007)');
+SELECT hasnt_column('public', 'demo_requests', 'org_id', 'demo_requests has no org_id (public landing-page inbox, by design)');
+SELECT is((SELECT c.relrowsecurity FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relname='demo_requests'),
+          false, 'demo_requests has no RLS — the one documented exception');
+SELECT ok(has_table_privilege('mabaniq_app', 'demo_requests', 'INSERT'), 'mabaniq_app may INSERT into demo_requests');
+SELECT ok(NOT has_table_privilege('mabaniq_app', 'demo_requests', 'UPDATE'), 'mabaniq_app has no table-level UPDATE on demo_requests (append-only inbox)');
+SELECT ok(has_column_privilege('mabaniq_app', 'demo_requests', 'mailed', 'UPDATE') AND NOT has_column_privilege('mabaniq_app', 'demo_requests', 'email', 'UPDATE'),
+          'mabaniq_app may only flip the delivery flag');
 
 -- 2) the app role cannot bypass RLS and has no UPDATE/DELETE on audit
 SELECT is((SELECT rolbypassrls FROM pg_roles WHERE rolname='mabaniq_app'), false, 'mabaniq_app cannot bypass RLS');

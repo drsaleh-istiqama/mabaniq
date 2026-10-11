@@ -17,8 +17,12 @@ for (const f of readdirSync(web).filter(f => f.endsWith('.js'))) {
 for (const f of readdirSync(web).filter(f => f.endsWith('.html'))) {
   const s = readFileSync(join(web, f), 'utf8');
   if (/\son[a-z]+="/i.test(s)) fail(`${f}: inline event handler`);
-  if (/<script(?![^>]*\bsrc=)[^>]*>\s*\S/.test(s)) fail(`${f}: inline <script> body`);
-  if (!/<html[^>]*\bdir="rtl"/.test(s) || !/<html[^>]*\blang="ar"/.test(s)) fail(`${f}: <html> must declare dir="rtl" lang="ar"`);
+  // JSON-LD data blocks (type="application/ld+json") are not executable and are outside CSP script-src; every other inline body is refused
+  if (/<script(?![^>]*\bsrc=)(?![^>]*\btype="application\/ld\+json")[^>]*>\s*\S/.test(s)) fail(`${f}: inline <script> body`);
+  // 0.14.0: the English landing twin (*-en.html) is the one LTR document; everything else is Arabic RTL at the root
+  const en = /-en\.html$/.test(f);
+  const okDir = en ? (/<html[^>]*\bdir="ltr"/.test(s) && /<html[^>]*\blang="en"/.test(s)) : (/<html[^>]*\bdir="rtl"/.test(s) && /<html[^>]*\blang="ar"/.test(s));
+  if (!okDir) fail(`${f}: <html> must declare ${en ? 'dir="ltr" lang="en"' : 'dir="rtl" lang="ar"'}`);
   console.log('✓ html     ' + f);
 }
 const digitFiles = [...readdirSync(web).filter(f => /\.(js|html)$/.test(f)).map(f => join(web, f)),

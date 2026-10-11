@@ -37,15 +37,19 @@ object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
 | `Permissions-Policy` | `camera=(), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=()` | لا حاجة لأي منها في الواجهة الحالية. |
 | `Cross-Origin-Opener-Policy` | `same-origin` | لا نوافذ منبثقة لتسجيل الدخول. |
 | `Cross-Origin-Resource-Policy` | `same-origin` | |
-| `X-Robots-Tag` | `noindex, nofollow` | منصة داخلية. |
+| `X-Robots-Tag` | `noindex, nofollow` افتراضيًا؛ **`index, follow` على الصفحات العامة فقط** (`/`, `/en`, `/privacy`, `/en/privacy`, `robots.txt`, `sitemap.xml`, `og*.png`) | 0.14.0: الوسيط يضيف `noindex` ما لم يضعه المسار بنفسه (`backend/landing.py`). |
 | `Cache-Control` | `/api/*` و`/`, `/login`, `/app`, `/broker`: `no-store` · `/static/assets/*`: `public, max-age=31536000, immutable` · بقية `/static/*`: `public, max-age=3600, must-revalidate` | أسماء ملفات Vite تحمل بصمة المحتوى (`index-BVWribFC.js`)، فالصفحة (no-store) تشير دائمًا إلى النسخة الصحيحة والمتصفح لا يعيد تنزيل ما لم يتغير. |
 | `X-Request-ID` | معرّف الطلب (يُحترم إن أرسله الوكيل بصيغة آمنة ≤ 64 حرفًا) | يظهر في كل سطر سجل وفي رسائل 500. |
 | المستندات المرفوعة (`/api/documents/{id}`) | `Content-Security-Policy: sandbox` + `nosniff` + `no-store` | عرض PDF/صور العملاء معزولًا. |
 
-## مسارات عامة بلا جلسة (0.11.0)
+## مسارات عامة بلا جلسة (0.11.0 · 0.14.0)
 
 | المسار | ما يكشفه | الحماية |
 | --- | --- | --- |
+| `/`, `/en`, `/privacy`, `/en/privacy` (0.14.0) | صفحة الهبوط وسياسة الخصوصية — محتوى تسويقي ثابت | CSP نفسها بلا تغيير؛ كتل JSON-LD (`type="application/ld+json"`) بيانات لا تُنفَّذ فليست ضمن `script-src` (يستثنيها `check-web.mjs` و`test_landing.py` وحدها)؛ لا كوكي؛ `no-store` |
+| `/robots.txt`, `/sitemap.xml`, `/og.png`, `/og-en.png` | ملفات SEO وصورة مولَّدة برمجيًا | تُشتق من `MABANIQ_PUBLIC_URL`؛ `public, max-age` |
+| `/google<token>.html`, `/BingSiteAuth.xml` | سطر تحقق Search Console | 404 ما لم يُضبط `MABANIQ_GSC_TOKEN`/`MABANIQ_BING_TOKEN`؛ مقارنة ثابتة الزمن |
+| `POST /api/public/demo-request` | يكتب طلب عرض حي (الكتابة العامة الوحيدة) | Pydantic بحدود · honeypot · دلو مستقل `MABANIQ_RATE_DEMO` (5/ساعة لكل IP) · فحص الأصل ونوع المحتوى والحجم كبقية `/api` · لا حساب · سطر تدقيق بلا بيانات شخصية |
 | `/verify/<المطوّر>/<الرمز>` | نوع المستند ورقمه وتاريخ إصداره وبصمة محتواه المختصرة وحالته — **لا أسماء ولا مبالغ ولا هواتف** | الرمز 12 خانة عشوائية؛ صفحة HTML بلا سكربت وبسمات `style` فقط (CSP كما هو) |
 | `/d/<المطوّر>/<رمز المشاركة>` | ملف PDF واحد بعينه | رمز 32 بايت عشوائي مُجزَّأ في القاعدة، صلاحية 30 يومًا، يُحصى فتحه؛ يُنشأ فقط عند إرسال واتساب من موظف مخوَّل ويُسجَّل في التدقيق |
 | `/api/docs/*.pdf` | مستندات الموظفين | صلاحية بحسب النوع (حجز/مالية/فواتير/KYC) · `/api/portal/docs/*.pdf` للعميل على مستنداته هو فقط |
@@ -61,7 +65,7 @@ object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
 
 ## حدود المعدل (الوحدة 0)
 
-دلو رموز لكل عنوان IP (الوكيل الموثوق على loopback فقط): الدخول `10/60s` (ويشمل منذ 0.10.0 طلبات استعادة كلمة المرور ورابط الدخول وتعيين كلمة المرور)، إشعار الدفع `60/60s`، كل `/api/*` `600/60s` — قابلة للضبط من البيئة. الرد 429 مع `Retry-After` و`X-RateLimit-Bucket`. الحالة في الذاكرة لكل عملية (الوحدة 1 تنقلها إلى القاعدة لتشاركها النسخ).
+دلو رموز لكل عنوان IP (الوكيل الموثوق على loopback فقط): الدخول `10/60s` (ويشمل منذ 0.10.0 طلبات استعادة كلمة المرور ورابط الدخول وتعيين كلمة المرور)، إشعار الدفع `60/60s`، كل `/api/*` `600/60s`، وطلب العرض الحي `5/3600s` (0.14.0) — قابلة للضبط من البيئة. الرد 429 مع `Retry-After` و`X-RateLimit-Bucket`. الحالة في الذاكرة لكل عملية (الوحدة 1 تنقلها إلى القاعدة لتشاركها النسخ).
 
 ## ما بقي
 

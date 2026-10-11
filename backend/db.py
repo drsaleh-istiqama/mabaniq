@@ -251,6 +251,11 @@ CREATE TABLE IF NOT EXISTS resale_settlements(
   id INTEGER PRIMARY KEY, resale_id INTEGER UNIQUE, booking_id INTEGER, seller_customer_id INTEGER, buyer_customer_id INTEGER,
   price REAL, seller_paid REAL, unpaid_installments REAL, equity_due_to_seller REAL, fee REAL,
   status TEXT CHECK(status IN ('open','settled')) DEFAULT 'open', created TEXT, settled_at TEXT, reference TEXT, settled_by TEXT);
+-- 0.14.0 — طلبات العرض الحي من صفحة الهبوط العامة (backend/landing.py). جدول عام بلا org_id: يعيش في قاعدة المشغّل (jadwa)
+-- على SQLite وبلا RLS على PostgreSQL (الترحيل 0007 يوثّق الاستثناء). الاحتفاظ: MABANIQ_RETENTION_DEMO_REQUESTS_DAYS.
+CREATE TABLE IF NOT EXISTS demo_requests(
+  id INTEGER PRIMARY KEY, created TEXT NOT NULL, name TEXT NOT NULL, company TEXT NOT NULL, email TEXT NOT NULL, phone TEXT NOT NULL,
+  projects INTEGER DEFAULT 0, message TEXT, lang TEXT DEFAULT 'ar', ip_hash TEXT, user_agent TEXT, mailed INTEGER DEFAULT 0);
 
 CREATE INDEX IF NOT EXISTS ix_units_project ON units(project_id);
 CREATE INDEX IF NOT EXISTS ix_inst_booking ON installments(booking_id);

@@ -123,3 +123,4 @@ c.columns(table); c.has_table(table); c.in_transaction; c.maintenance()/end_main
 | D5 | Erasure = pseudonymisation with legal-hold blockers, financial records kept | Oman commercial/tax retention duties |
 | D6 | In-memory rate limiter per process in Unit 0 | No shared store yet; documented limit, moved to the DB in Unit 1 |
 | D7 | Arabic-Indic digits kept in the UI (unlike map D18) until the owner decides | Existing users of the demo; owner question ب |
+| D8 | The public landing page is served by the API process itself (0.14.0), and `demo_requests` is the one table without `org_id`/RLS | Same security headers and deploy as the product, no second site to secure; a visitor is not a tenant, so the inbox is a documented exception (migration 0007 header + pgTAP) rather than a fake tenant |

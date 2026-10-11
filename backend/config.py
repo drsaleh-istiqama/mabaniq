@@ -10,7 +10,7 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
-VERSION = "0.13.1"
+VERSION = "0.14.0"
 ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -37,7 +37,8 @@ def tenants_extra() -> str:
 
 
 # Unit 4 — retention policy in days (backend/retention.py documents what each rule does)
-DEFAULT_RETENTION = {"login": 30, "sessions": 7, "notifications": 180, "pay_intents": 90, "messages": 730}
+DEFAULT_RETENTION = {"login": 30, "sessions": 7, "notifications": 180, "pay_intents": 90, "messages": 730,
+                     "demo_requests": 365}  # 0.14.0: live-demo requests from the public landing page (backend/landing.py)
 
 
 @dataclass(frozen=True)
@@ -58,6 +59,7 @@ class Settings:
     rate_login: tuple[int, int] = (10, 60)       # per IP
     rate_api: tuple[int, int] = (600, 60)        # per IP, all /api/*
     rate_webhook: tuple[int, int] = (60, 60)
+    rate_demo: tuple[int, int] = (5, 3600)       # per IP, POST /api/public/demo-request (0.14.0 landing page) — its own bucket
     pii_key_set: bool = False
     pay_secret_set: bool = False
     sentry_dsn: str = ""
@@ -75,6 +77,10 @@ class Settings:
     google_client_secret: str = ""
     smtp: dict = field(default_factory=dict)
     mail_echo: bool = False                      # demo only: return the e-mailed link in the API response when no SMTP is configured
+    # 0.14.0 — public landing page (backend/landing.py)
+    sales_email: str = ""                        # where live-demo requests are mailed (empty = SMTP sender, else the outbox in demo)
+    gsc_token: str = ""                          # Google Search Console HTML-file verification: serves /google<token>.html
+    bing_token: str = ""                         # Bing Webmaster Tools: serves /BingSiteAuth.xml
     extra: dict = field(default_factory=dict)
 
     @property
@@ -100,6 +106,7 @@ class Settings:
             rate_login=_rate("MABANIQ_RATE_LOGIN", "10/60"),
             rate_api=_rate("MABANIQ_RATE_API", "600/60"),
             rate_webhook=_rate("MABANIQ_RATE_WEBHOOK", "60/60"),
+            rate_demo=_rate("MABANIQ_RATE_DEMO", "5/3600"),
             pii_key_set=bool(os.environ.get("MABANIQ_PII_KEY")),
             pay_secret_set=bool(os.environ.get("MABANIQ_PAY_SECRET")),
             sentry_dsn=os.environ.get("MABANIQ_SENTRY_DSN", ""),
@@ -118,6 +125,9 @@ class Settings:
                   "from_addr": os.environ.get("MABANIQ_SMTP_FROM", "").strip(), "from_name": os.environ.get("MABANIQ_SMTP_FROM_NAME", "مبانيك"),
                   "tls": os.environ.get("MABANIQ_SMTP_TLS", "starttls").lower()},
             mail_echo=_bool("MABANIQ_MAIL_ECHO", False) and os.environ.get("MABANIQ_ENV", "demo") != "prod",
+            sales_email=os.environ.get("MABANIQ_SALES_EMAIL", "").strip(),
+            gsc_token=os.environ.get("MABANIQ_GSC_TOKEN", "").strip(),
+            bing_token=os.environ.get("MABANIQ_BING_TOKEN", "").strip(),
         )
 
     def validate(self) -> list[str]:

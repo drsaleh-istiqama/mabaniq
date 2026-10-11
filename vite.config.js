@@ -18,6 +18,8 @@ export default defineConfig({
         login: resolve(__dirname, 'web/login.html'),
         client: resolve(__dirname, 'web/client.html'),
         broker: resolve(__dirname, 'web/broker.html'),
+        landing: resolve(__dirname, 'web/landing.html'),        // 0.14.0: public landing page (Arabic, served on /)
+        'landing-en': resolve(__dirname, 'web/landing-en.html'),  // 0.14.0: English twin (served on /en)
       },
     },
   },
