@@ -1,7 +1,7 @@
 /* مبانيك — الواجهة B: مساحة عمل احترافية (كحلي وذهبي، وضع داكن/فاتح) */
-:root{--bg:#0F1724;--pane:#162133;--pane2:#1C2A40;--ink:#E8EDF5;--muted:#AEB8CA;--line:#26354E;--pri:#D4A64A;--pri2:rgba(212,166,74,.15);--on-pri:#1A1405;
+:root{--bg:#0F1724;--pane:#162133;--pane2:#1C2A40;--ink:#E8EDF5;--muted:#AEB8CA;--line:#26354E;--pri:#67BDA0;--pri2:rgba(103,189,160,.16);--on-pri:#0B2E26;
  --blue:#6AA6F5;--blue2:rgba(106,166,245,.15);--ok:#4CC38A;--ok2:rgba(76,195,138,.15);--bad:#F27A73;--bad2:rgba(242,122,115,.15);--sold:#2E5487;--sold-ink:#DCE8FF}
-body.light{--bg:#EEF1F6;--pane:#fff;--pane2:#F5F7FA;--ink:#152033;--muted:#5D6981;--line:#DCE2EB;--pri:#9C6E14;--pri2:#F6ECD7;--on-pri:#fff;
+body.light{--bg:#EEF1F6;--pane:#fff;--pane2:#F5F7FA;--ink:#152033;--muted:#5D6981;--line:#DCE2EB;--pri:#1A6F5A;--pri2:#E3F2EB;--on-pri:#fff;
  --blue:#2F6FC4;--blue2:#E5EFFB;--ok:#1E8A5A;--ok2:#E2F4EA;--bad:#C24137;--bad2:#FBE6E4;--sold:#2E5487;--sold-ink:#fff}
 *{box-sizing:border-box}
 html,body{margin:0;direction:rtl;font-family:'Tajawal',system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:14px;height:100%}
@@ -173,7 +173,7 @@ td .muted{display:inline-block}
 .plan img{display:block;max-width:100%;height:auto}
 .plan.edit{cursor:crosshair}
 .plan .mk{position:absolute;transform:translate(-50%,-50%);min-width:22px;height:22px;padding:0 5px;border-radius:11px;background:#1E8A5A;color:#fff;font:700 11px/22px 'Tajawal',sans-serif;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.4);direction:ltr}
-.plan .mk.r{background:#D4A64A;color:#1A1405}.plan .mk.s{background:#6B7280}.plan .mk.hl{outline:3px solid #fff;box-shadow:0 0 0 5px var(--pri),0 2px 8px rgba(0,0,0,.5);z-index:2;transform:translate(-50%,-50%) scale(1.25)}
+.plan .mk.r{background:#67BDA0;color:#0B2E26}.plan .mk.s{background:#6B7280}.plan .mk.hl{outline:3px solid #fff;box-shadow:0 0 0 5px var(--pri),0 2px 8px rgba(0,0,0,.5);z-index:2;transform:translate(-50%,-50%) scale(1.25)}
 .docb{display:inline-flex;gap:4px}.docb .btn{padding:4px 8px;font-size:12px}
 .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0 14px}.grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px}
 

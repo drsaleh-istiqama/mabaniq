@@ -9,7 +9,7 @@ from fpdf.enums import XPos, YPos
 
 from .pdfgen import GOLD, INK, LINE, MUTED, Doc, hijri, money
 
-PALETTE = [(212, 166, 74), (106, 166, 245), (76, 195, 138), (242, 122, 115), (46, 84, 135), (160, 120, 200), (120, 120, 120)]
+PALETTE = [(26, 111, 90), (106, 166, 245), (103, 189, 160), (242, 122, 115), (46, 84, 135), (160, 120, 200), (120, 120, 120)]
 
 
 def fmt(v, kind: str = "num") -> str:

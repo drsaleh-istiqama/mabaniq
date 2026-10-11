@@ -10,7 +10,7 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
-VERSION = "0.14.0"
+VERSION = "0.14.1"
 ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -46,7 +46,7 @@ class Settings:
     env: str = "demo"
     version: str = VERSION
     git_sha: str = ""
-    app_name: str = "مبانيك | Mabaniq"
+    app_name: str = "مبانيك | Mabaneek"
     app_domain: str = "mabaniq.example.org"
     database_url: str = ""                       # postgresql://… (Unit 1); empty = SQLite files under data/
     sqlite_path: str = str(ROOT / "data" / "mabaniq.db")
@@ -93,7 +93,7 @@ class Settings:
             env=os.environ.get("MABANIQ_ENV", "demo"),
             version=os.environ.get("MABANIQ_VERSION", VERSION),
             git_sha=os.environ.get("MABANIQ_GIT_SHA", ""),
-            app_name=os.environ.get("MABANIQ_APP_NAME", "مبانيك | Mabaniq"),
+            app_name=os.environ.get("MABANIQ_APP_NAME", "مبانيك | Mabaneek"),
             app_domain=os.environ.get("MABANIQ_APP_DOMAIN", "mabaniq.example.org"),
             database_url=os.environ.get("MABANIQ_DATABASE_URL", ""),
             sqlite_path=os.environ.get("MABANIQ_DB", str(ROOT / "data" / "mabaniq.db")),

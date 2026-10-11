@@ -327,7 +327,7 @@ class CreativeIn(BaseModel):
     campaign_id: int | None = None
     template: str = Field(pattern="^(teaser|launch|offer|last_units|progress|ready)$")
     size: str = Field(default="square", pattern="^(square|story|wide)$")
-    palette: str = Field(default="gold", pattern="^(gold|green|blue|sand)$")
+    palette: str = Field(default="green", pattern="^(gold|green|blue|sand)$")
     headline: str | None = Field(default=None, max_length=120)
     subline: str | None = Field(default=None, max_length=160)
     cta: str | None = Field(default=None, max_length=80)

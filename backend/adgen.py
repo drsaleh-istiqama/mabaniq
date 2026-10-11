@@ -25,7 +25,7 @@ TEMPLATES = {
     "progress": {"label": "تقدم البناء", "badge": "إنجاز {build_pct}٪", "headline": "{project} يقترب من التسليم", "sub": "التسليم المتوقع {handover}", "cta": "اشترِ على الخارطة بثقة"},
     "ready": {"label": "جاهزة للسكن", "badge": "جاهزة للتسليم الفوري", "headline": "استلم مفتاحك في {project}", "sub": "{types} · {location}", "cta": "احجز موعد معاينة"},
 }
-PALETTES = {"gold": ((15, 23, 36), (212, 166, 74), (255, 255, 255)), "green": ((12, 38, 32), (76, 195, 138), (255, 255, 255)),
+PALETTES = {"gold": ((15, 23, 36), (212, 166, 74), (255, 255, 255)), "green": ((14, 59, 50), (103, 189, 160), (255, 255, 255)),
             "blue": ((14, 27, 51), (106, 166, 245), (255, 255, 255)), "sand": ((245, 240, 230), (156, 110, 20), (26, 20, 5))}
 
 
@@ -53,11 +53,11 @@ class Ad(FPDF):
 
 
 def compose(project: dict, brand: dict, template: str, size: str, headline: str | None = None, subline: str | None = None, cta: str | None = None,
-            offer: str | None = None, until: str | None = None, bg_path: str | None = None, palette: str = "gold") -> tuple[bytes, bytes | None]:
+            offer: str | None = None, until: str | None = None, bg_path: str | None = None, palette: str = "green") -> tuple[bytes, bytes | None]:
     """→ (pdf bytes, png bytes or None when PyMuPDF is unavailable)."""
     t = TEMPLATES[template]
     w, h, _ = SIZES[size]
-    dark, accent, ink = PALETTES.get(palette, PALETTES["gold"])
+    dark, accent, ink = PALETTES.get(palette, PALETTES["green"])
     light_bg = sum(dark) > 500
     ctx = {"project": project.get("name"), "location": project.get("location"), "types": project.get("types") or "", "price_from": money(project.get("price_from"), 0) if project.get("price_from") else "—",
            "available": project.get("available"), "build_pct": int(project.get("build_pct") or 0), "handover": hijri(project.get("handover")) if project.get("handover") else "—",

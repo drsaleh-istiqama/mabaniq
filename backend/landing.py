@@ -84,6 +84,15 @@ def _css_links() -> str:
     return "".join(f'<link rel="stylesheet" href="{h}">' for h in re.findall(r'<link rel="stylesheet"[^>]*href="([^"]+\.css)"', src))
 
 
+def _logo_mark() -> str:
+    """The hashed URL of the approved logo mark (web/img/logo-mark.svg) as Vite published it with the landing page."""
+    try:
+        m = re.search(r'src="(/static/assets/logo-mark-[^"]+\.svg)"', (FRONT / PAGES["ar"]).read_text(encoding="utf-8"))
+        return m.group(1) if m else ""
+    except OSError:
+        return ""
+
+
 def _ul(items) -> str:
     return "<ul>" + "".join(f"<li>{html.escape(str(i))}</li>" for i in items) + "</ul>"
 
@@ -170,8 +179,8 @@ def privacy_html(request: Request, lang: str) -> str:
             f'<meta name="description" content="{e(t["intro"][:150])}"><link rel="canonical" href="{base}{"/privacy" if rtl else "/en/privacy"}">'
             f'<link rel="alternate" hreflang="ar" href="{base}/privacy"><link rel="alternate" hreflang="en" href="{base}/en/privacy">'
             f'<link rel="alternate" hreflang="x-default" href="{base}/privacy">{_css_links()}</head>'
-            f'<body class="lp lp-doc"><header class="nav"><div class="wrap nav-in"><a class="brand" href="{home}"><span class="mk">{"م" if rtl else "M"}</span>'
-            f'<span>{"مبانيك" if rtl else "Mabaniq"}</span></a><nav class="nav-links"><a href="{e(t["other_href"])}">{e(t["other"])}</a>'
+            f'<body class="lp lp-doc"><header class="nav"><div class="wrap nav-in"><a class="brand" href="{home}"><img src="{_logo_mark()}" alt="" width="40" height="40">'
+            f'<span>{"مبانيك" if rtl else "Mabaneek"}</span></a><nav class="nav-links"><a href="{e(t["other_href"])}">{e(t["other"])}</a>'
             f'<a class="btn btn-ghost" href="/login">{e(t["login"])}</a></nav></div></header>'
             f'<main class="wrap doc"><h1>{e(t["h1"])}</h1><p class="lead">{e(t["intro"])}</p>{sec1}{sec2}{sec3}'
             f'<p><a class="btn" href="{home}">{e(t["back"])}</a></p></main>'
@@ -264,32 +273,33 @@ def og_png(lang: str) -> bytes:
     p.set_auto_page_break(False)
     p.set_margins(0, 0, 0)
     p.add_page()
-    dark, accent, ink, muted = (15, 23, 36), (212, 166, 74), (255, 255, 255), (174, 184, 202)
+    # 0.14.1: the approved Mabaneek identity — white card, logo PNG (backend/assets/brand), greens #124E42 / #1A6F5A / #67BDA0
+    dark, accent, ink, muted = (14, 59, 50), (103, 189, 160), (255, 255, 255), (185, 211, 200)
     p.set_fill_color(*dark)
     p.rect(0, 0, w, h, style="F")
     p.set_fill_color(*accent)
     p.rect(0, 0, w, 12, style="F")
     pad, align = 80, ("R" if rtl else "L")
-    # brand mark + name
-    mx = (w - pad - 64) if rtl else pad
-    p.rect(mx, pad, 64, 64, style="F", round_corners=True, corner_radius=16)
-    p.set_text_color(*dark)
-    p.set_font("Tajawal", "B", 36)
-    p.set_xy(mx, pad + 6)
-    p.cell(64, 52, "م" if rtl else "M", align="C")
+    # logo on a white tile (top, start side)
+    logo = Path(__file__).resolve().parent / "assets" / "brand" / "logo-full.png"
+    tile_w, tile_h, top = 270, 262, 150
+    lx = (w - pad - tile_w) if rtl else pad
+    p.set_fill_color(255, 255, 255)
+    p.rect(lx, top, tile_w, tile_h, style="F", round_corners=True, corner_radius=24)
+    if logo.exists():
+        p.image(str(logo), x=lx + 20, y=top + 10, w=tile_w - 40)
+    # headline beside the logo
     p.set_text_color(*ink)
-    p.set_font("Tajawal", "B", 34)
-    p.set_xy(pad, pad + 10)
-    p.cell(w - 2 * pad - 80, 44, brand, align=align, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-    # headline
-    p.set_font("Tajawal", "B", 58)
-    p.set_xy(pad, 215)
-    p.multi_cell(w - 2 * pad, 72, head, align=align, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    p.set_font("Tajawal", "B", 54)
+    tx = pad if rtl else pad + tile_w + 40
+    p.set_xy(tx, top + 30)
+    p.multi_cell(w - 2 * pad - tile_w - 40, 68, head, align=align, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    p.set_x(tx)
     # subline
     p.set_text_color(*accent)
     p.set_font("Tajawal", "", 34)
-    p.set_x(pad)
-    p.multi_cell(w - 2 * pad, 46, sub, align=align, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    p.set_x(tx)
+    p.multi_cell(w - 2 * pad - tile_w - 40, 46, sub, align=align, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     # footer
     p.set_text_color(*muted)
     p.set_font("Tajawal", "", 20)

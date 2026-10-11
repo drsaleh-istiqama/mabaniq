@@ -124,7 +124,7 @@ def test_security_headers_and_no_executable_inline_script(cl):
     assert len(imgs) >= 10
     for tag in imgs:
         assert 'alt="' in tag and 'width="' in tag and 'height="' in tag, tag
-    assert sum('loading="lazy"' in t for t in imgs) >= len(imgs) - 1
+    assert sum('loading="lazy"' in t for t in imgs) >= len(imgs) - 3  # eager (above the fold): the nav mark, the hero logo and the hero screenshot
 
 
 # ---------------------------------------------------------------- robots / sitemap / og / verification
@@ -225,6 +225,8 @@ def test_demo_request_rate_limited_in_its_own_bucket(cl):
 
 
 def test_demo_requests_retention_rule(cl):
+    import time
+    fresh = f"new-{time.time_ns()}@example.com"  # unique per run: a shared PostgreSQL database keeps the future-dated row of earlier runs
     tok = TENANT.set(DEFAULT_TENANT)
     try:
         c = connect()
@@ -232,12 +234,12 @@ def test_demo_requests_retention_rule(cl):
             c.execute("INSERT INTO demo_requests(created,name,company,email,phone,projects,message,lang,ip_hash,user_agent,mailed) VALUES(?,?,?,?,?,?,?,?,?,?,1)",
                       ("2020-01-01T00:00:00", "قديم", "شركة قديمة", "old@example.com", "+968 90000001", 1, "", "ar", "x" * 16, ""))
             c.execute("INSERT INTO demo_requests(created,name,company,email,phone,projects,message,lang,ip_hash,user_agent,mailed) VALUES(?,?,?,?,?,?,?,?,?,?,1)",
-                      ("2999-01-01T00:00:00", "جديد", "شركة جديدة", "new@example.com", "+968 90000002", 1, "", "ar", "y" * 16, ""))
+                      ("2999-01-01T00:00:00", "جديد", "شركة جديدة", fresh, "+968 90000002", 1, "", "ar", "y" * 16, ""))
             c.commit()
             counts = R.run(c, actor="اختبار")["counts"]
             assert counts["demo_requests"] >= 1
             assert c.execute("SELECT COUNT(*) FROM demo_requests WHERE email='old@example.com'").fetchone()[0] == 0
-            assert c.execute("SELECT COUNT(*) FROM demo_requests WHERE email='new@example.com'").fetchone()[0] == 1
+            assert c.execute("SELECT COUNT(*) FROM demo_requests WHERE email=?", (fresh,)).fetchone()[0] == 1
             assert "demo_requests_days" in R.policy()
         finally:
             c.close()

@@ -12,6 +12,7 @@ export default defineConfig({
     sourcemap: false,
     target: 'es2022',
     modulePreload: {polyfill: false},
+    assetsInlineLimit: 0,  // 0.14.1: keep the logo SVGs as hashed files (the server-rendered /privacy page links the same logo asset)
     rollupOptions: {
       input: {
         index: resolve(__dirname, 'web/index.html'),

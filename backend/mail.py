@@ -44,7 +44,7 @@ def outbox_dir() -> Path:
 
 def _html(subject: str, text: str, link: str | None, label: str | None) -> str:
     body = "".join(f"<p>{html.escape(p)}</p>" for p in text.split("\n\n") if p.strip())
-    btn = (f'<p style="margin:24px 0"><a href="{html.escape(link)}" style="background:#D4A64A;color:#1A1405;padding:12px 22px;'
+    btn = (f'<p style="margin:24px 0"><a href="{html.escape(link)}" style="background:#1A6F5A;color:#ffffff;padding:12px 22px;'
            f'border-radius:10px;text-decoration:none;font-weight:700;display:inline-block">{html.escape(label or "فتح الرابط")}</a></p>'
            f'<p style="color:#6b7280;font-size:12px;direction:ltr;text-align:left;word-break:break-all">{html.escape(link)}</p>') if link else ""
     return (f'<!doctype html><html lang="ar" dir="rtl"><body style="margin:0;background:#f5f6f8;font-family:Tajawal,Segoe UI,Tahoma,sans-serif;color:#111827">'

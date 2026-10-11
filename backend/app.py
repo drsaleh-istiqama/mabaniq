@@ -464,7 +464,7 @@ def totp_setup(u=Depends(A.current)):
     sec = A.new_totp_secret()
     c.execute("UPDATE users SET totp_secret=? WHERE id=?", (sec, u["id"]))
     c.commit()
-    return {"secret": sec, "uri": f"otpauth://totp/Mabaniq:{u['username']}?secret={sec}&issuer=Mabaniq"}
+    return {"secret": sec, "uri": f"otpauth://totp/Mabaneek:{u['username']}?secret={sec}&issuer=Mabaneek"}
 
 
 class OtpIn(BaseModel):

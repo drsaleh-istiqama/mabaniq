@@ -1,6 +1,6 @@
 {
   "name": "mabaniq",
-  "version": "0.14.0",
+  "version": "0.14.1",
   "description": "مبانيك | Mabaniq — web sources (Vite) and e2e tests",
   "directories": {
     "doc": "docs",

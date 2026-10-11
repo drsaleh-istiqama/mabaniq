@@ -21,7 +21,7 @@ from hijridate import Gregorian
 logging.getLogger("fontTools").setLevel(logging.WARNING)  # the subsetter logs every glyph at INFO — dozens of lines per PDF
 
 FONTS = Path(__file__).resolve().parent / "assets" / "fonts"
-GOLD = (212, 166, 74)
+GOLD = (26, 111, 90)  # 0.14.1: the brand accent is the logo green (name kept for the importers)
 INK = (23, 32, 48)
 MUTED = (110, 120, 135)
 LINE = (210, 214, 222)
