@@ -414,6 +414,7 @@ class Guide(FPDF):
 
 def cover(p: Guide):
     p.cover = True
+    p.set_auto_page_break(auto=False)
     p.add_page()
     p.set_fill_color(*INK)
     p.rect(0, 0, p.w, p.h, style="F")
@@ -459,6 +460,7 @@ def cover(p: Guide):
     p.set_text_color(200, 205, 215)
     p.set_xy(16, 285)
     p.cell(p.cw, 6, "إعداد: جدوى للدراسات والتطوير — مسقط، سلطنة عُمان", align="R")
+    p.set_auto_page_break(auto=True, margin=18)
     p.cover = False
 
 
@@ -473,8 +475,11 @@ def page_text(p: Guide, sec, title, lead, bullets=None):
 
 
 def build_guide_pdf(out: Path):
+    from build_extra import infographic
     p = Guide()
+    p.live = LIVE
     cover(p)
+    infographic(p)
     # عن الدليل
     page_text(p, "مقدمة", INTRO["title"], INTRO["lead"], INTRO["bullets"])
     p.ln(4)
@@ -836,9 +841,11 @@ def build_html(out: Path):
                 + (f'<p class="lead">{esc(lead)}</p>' if lead else "") + (f"<ul>{b}</ul>" if b else "")
                 + (f'<div class="figs {"side" if side else ""}">{fg}</div>' if fg else "") + extra + "</section>")
 
-    toc = [("intro", INTRO["title"]), ("why", "لماذا الآن"), ("overview", OVERVIEW["title"])] + [(f"t{i}", s["title"]) for i, s in enumerate(TOUR)] \
+    toc = [("info", "في صفحة واحدة"), ("intro", INTRO["title"]), ("why", "لماذا الآن"), ("overview", OVERVIEW["title"])] + [(f"t{i}", s["title"]) for i, s in enumerate(TOUR)] \
         + [("needs", NEEDS["title"]), ("models", MODELS["title"]), ("limits", LIMITS["title"]), ("close", CLOSE["title"])]
     parts = []
+    parts.append(section("info", "لمدير مشغول", "مبانيك في صفحة واحدة", "دورة التطوير، رحلة العميل، الطبقات المشتركة، الأدوار، وأرقام شركتكم داخل المنصة — في صورة واحدة تغني عن قراءة الدليل كاملًا.",
+                         figs=[{"web": "web-assets/infographic.jpg", "caption": "إنفوجرافيك المنصة في صفحة واحدة (الصفحة الثانية من الدليل PDF)."}]))
     parts.append(section("intro", "مقدمة", INTRO["title"], INTRO["lead"], INTRO["bullets"]))
     cards = "".join(f'<div class="card"><h3>{i}. {esc(h)}</h3><p>{esc(t)}</p></div>' for i, (h, t) in enumerate(WHY["cards"], 1))
     parts.append(section("why", "لماذا الآن", WHY["title"], WHY["lead"], extra=f'<div class="cards">{cards}</div><p class="green">{esc(WHY["close"])}</p>'))
@@ -853,7 +860,7 @@ def build_html(out: Path):
     parts.append(section("needs", "الانطلاق", NEEDS["title"], NEEDS["lead"], extra=f'<ol class="needs">{needs}</ol>'))
     rows = "".join("<tr>" + "".join(f'<{"th" if ci == 0 else "td"}>{esc(c) if c else "<span class=blank></span>"}</{"th" if ci == 0 else "td"}>' for ci, c in enumerate(r)) + "</tr>" for r in MODELS["rows"])
     heads = "".join(f"<th>{esc(h)}</th>" for h in MODELS["heads"])
-    parts.append(section("models", "صيغتا التعاون", MODELS["title"], MODELS["lead"], extra=f'<table><thead><tr>{heads}</tr></thead><tbody>{rows}</tbody></table><p class="muted">الخانات الفارغة تُملأ في الاجتماع. في الحالتين: ترخيص واحد لمطوّر واحد، والبيانات ملك الشركة، ودليل التشغيل ودليل الأمان ضمن التسليم.</p>'))
+    parts.append(section("models", "صيغتا التعاون", MODELS["title"], MODELS["lead"], extra=f'<div class="tablewrap"><table><thead><tr>{heads}</tr></thead><tbody>{rows}</tbody></table></div><p class="muted">الخانات الفارغة تُملأ في الاجتماع. في الحالتين: ترخيص واحد لمطوّر واحد، والبيانات ملك الشركة، ودليل التشغيل ودليل الأمان ضمن التسليم.</p>'))
     parts.append(section("limits", "بصراحة", LIMITS["title"], None, LIMITS["items"], extra=f'<p class="green">{esc(LIMITS["close"])}</p>'))
     parts.append(section("close", "الخطوة التالية", CLOSE["title"], CLOSE["lead"], CLOSE["bullets"], [{"web": "web-assets/maab-render-03.jpg", "caption": "مشروع مآب — المدخل والمحلات (من كتيّب الشركة)."}]))
     nav = "".join(f'<a href="#{i}">{esc(t)}</a>' for i, t in toc)
@@ -870,7 +877,7 @@ def build_html(out: Path):
 :root{{--ink:#172030;--gold:#d4a64a;--muted:#6e7887;--line:#d6dae2;--pale:#f7f8fa;--bg:#ffffff;--card:#ffffff;--green:#247854}}
 @media (prefers-color-scheme: dark){{:root:not([data-theme="light"]){{--ink:#e8ebf0;--muted:#a3abb8;--line:#2d3545;--pale:#1b2230;--bg:#0f1521;--card:#161d2b;--green:#6fd3a0}}}}
 :root[data-theme="dark"]{{--ink:#e8ebf0;--muted:#a3abb8;--line:#2d3545;--pale:#1b2230;--bg:#0f1521;--card:#161d2b;--green:#6fd3a0}}
-*{{box-sizing:border-box}}html{{direction:rtl}}
+*{{box-sizing:border-box;min-width:0}}html{{direction:rtl;overflow-x:hidden}}p,li,h1,h2,h3,td,th,figcaption{{overflow-wrap:anywhere}}.tablewrap{{overflow-x:auto}}
 body{{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Kufi Arabic","Tajawal",system-ui,sans-serif;line-height:1.85;direction:rtl;text-align:start}}
 .wrap{{max-width:1080px;margin:0 auto;padding:0 16px 60px}}
 header.hero{{background:#172030;color:#fff;padding:48px 16px 40px;border-block-end:6px solid var(--gold)}}
@@ -886,12 +893,12 @@ nav.toc a{{display:inline-block;margin-inline-end:14px;color:var(--muted);text-d
 section{{padding:36px 0 8px;border-block-end:1px solid var(--line)}}
 .kicker{{color:var(--gold);font-weight:700;font-size:13px;letter-spacing:.02em}}h2{{font-size:clamp(21px,3vw,28px);margin:4px 0 10px;line-height:1.5}}
 .lead{{font-size:17px;margin:0 0 12px}}ul{{padding-inline-start:22px;margin:0 0 16px}}li{{margin:6px 0}}li::marker{{color:var(--gold)}}
-.figs{{display:grid;gap:18px;margin:14px 0 24px}}.figs.side{{grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}}
+.figs{{display:grid;gap:18px;margin:14px 0 24px}}.figs.side{{grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr))}}.figs>*,.cards>*,.cols>*{{min-width:0}}
 figure{{margin:0;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px}}figure img{{width:100%;height:auto;display:block;border-radius:6px}}
 figcaption{{color:var(--muted);font-size:13px;margin-block-start:8px}}
-.cards{{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin:12px 0}}
+.cards{{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr));gap:14px;margin:12px 0}}
 .card{{background:var(--pale);border-inline-start:4px solid var(--gold);border-radius:8px;padding:12px 16px}}.card h3{{margin:0 0 6px;font-size:17px}}.card p{{margin:0;color:var(--muted)}}
-.cols{{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin:10px 0 18px}}.col{{background:var(--pale);border-block-start:4px solid var(--gold);border-radius:8px;padding:10px 14px}}
+.cols{{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr));gap:12px;margin:10px 0 18px}}.col{{background:var(--pale);border-block-start:4px solid var(--gold);border-radius:8px;padding:10px 14px}}
 .col h3{{margin:0 0 6px;font-size:15px}}.col ul{{margin:0;padding-inline-start:18px;font-size:14px}}
 .green{{color:var(--green);font-weight:700;font-size:16px}}.muted{{color:var(--muted);font-size:14px}}
 ol.needs{{padding-inline-start:24px}}ol.needs li{{margin:10px 0}}ol.needs b{{display:block;font-size:16px}}ol.needs span{{color:var(--muted)}}
@@ -917,6 +924,16 @@ code,.ltr{{direction:ltr;unicode-bidi:isolate;display:inline-block}}
 if __name__ == "__main__":
     import shutil
     shutil.copy(SAMPLES / "maab-render-03.jpg", PKG / "web-assets" / "maab-render-03.jpg")
+    sys.path.insert(0, str(HERE))
     build_guide_pdf(PKG / "mabaniq-almukhatat-guide.pdf")
+    import pymupdf
+    _d = pymupdf.open(str(PKG / "mabaniq-almukhatat-guide.pdf"))
+    _pix = _d[1].get_pixmap(dpi=200)
+    _im = Image.frombytes("RGB", (_pix.width, _pix.height), _pix.samples)
+    _im = _im.resize((1600, int(_im.height * 1600 / _im.width)))
+    _im.save(PKG / "web-assets" / "infographic.jpg", quality=88)
+    _im.save(PKG / "infographic.png")
+    from build_extra import build_brief_pdf
+    build_brief_pdf(Guide, crop, PKG / "mabaniq-almukhatat-brief.pdf", TITLE, DATE_LINE, LIVE, SAMPLES)
     build_slides_pdf(PKG / "mabaniq-almukhatat-slides.pdf")
     build_html(PKG / "index.html")
