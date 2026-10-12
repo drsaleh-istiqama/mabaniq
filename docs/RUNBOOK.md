@@ -147,7 +147,7 @@ curl -s http://127.0.0.1:8800/version          # الإصدار، البيئة،
 
 الصفحة حية على `/` و`/en` مع كل نشر (`docs/LANDING.md`). ما يلزم بعد النشر، بالترتيب:
 
-1. **النطاق النهائي (قرار المالك 4):** في Railway ⟵ الخدمة `mabaniq-api` ⟵ Settings ⟵ Networking ⟵ Custom Domain، ثم سجل CNAME عند مسجّل النطاق
+1. **النطاق النهائي (قرار المالك 4 و11، 2026-10-12):** يُحجز `mabaneek.com` عبر Cloudflare Registrar في **حساب باسم جدوى** (بريد `jadwa.om` + مصادقة ثنائية)، وسجلات DNS في Cloudflare: CNAME للجذر `@` و`www` بقيمة Railway، بحالة DNS only أولًا (وإن فُعِّل الوكيل لاحقًا فـSSL/TLS = Full strict)؛ وبريد `sales@mabaneek.com` عبر Cloudflare Email Routing إلى الصندوق الحالي، وSMTP الإرسال من مزوّد معاملات (Brevo أو مثله) بسجلَي SPF/DKIM. ثم في Railway ⟵ الخدمة `mabaniq-api` ⟵ Settings ⟵ Networking ⟵ Custom Domain، ثم سجل CNAME عند مسجّل النطاق
    كما يعرضه Railway. بعد نجاح الشهادة: اضبط `MABANIQ_PUBLIC_URL=https://<النطاق>` (و`MABANIQ_APP_DOMAIN` للإنتاج) — كل روابط canonical/hreflang/OG/sitemap
    تتغيّر تلقائيًا بلا إعادة بناء. تحقّق: `curl -s https://<النطاق>/sitemap.xml | head -3` يُظهر النطاق الجديد.
 2. **Google Search Console:** أضف الموقع (URL prefix = `MABANIQ_PUBLIC_URL`) ⟵ اختر التحقق بملف HTML ⟵ انسخ اسم الملف `google<token>.html` إلى
