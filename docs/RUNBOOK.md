@@ -82,6 +82,8 @@ curl -s http://127.0.0.1:8800/version          # الإصدار، البيئة،
 | الدخول عبر Google | `MABANIQ_GOOGLE_CLIENT_ID` + `MABANIQ_GOOGLE_CLIENT_SECRET` + `MABANIQ_PUBLIC_URL` | في Google Cloud Console: مشروع ⟵ OAuth consent screen (خارجي، نطاق الشركة) ⟵ Credentials ⟵ OAuth client (Web) ⟵ Authorized redirect URI = `<PUBLIC_URL>/auth/google/callback`. كما في محافل (مشروع `mahafil-platform`): السر بيد د. صالح ولا يُكتب إلا في متغيرات Railway. |
 | سر `state` | `MABANIQ_AUTH_SECRET` | مطلوب في الإنتاج؛ العرض يولّده في `data/secrets/auth.key`. تغييره يُبطل محاولات Google الجارية فقط. |
 
+**تشخيص SMTP بلا كشف كلمة المرور:** من تبويب Console في خدمة Railway (أو محليًا) `python -m backend.mailcheck` يطبع المضيف والمنفذ والمستخدم مقنَّعًا وطول كلمة المرور ويحاول تسجيل الدخول ويطبع ردّ الخادم؛ `--send` يرسل رسالة اختبار إلى `MABANIQ_SALES_EMAIL`. Gmail يغلق الاتصال أثناء AUTH حين يكون المستخدم أو كلمة مرور التطبيق غير صحيحين أو حين تكون كلمة مرور التطبيق لحساب Google آخر غير `MABANIQ_SMTP_USER` (0.14.1).
+
 **من يستطيع الدخول عبر Google أو الرابط؟** حساب قائم ومفعّل فقط: Google يطابق بالمعرّف المربوط أو ببريد Google موثَّق يساوي بريد الحساب (ثم يُربط).
 لا يُنشأ حساب تلقائيًا — مدير المنصة يضيف البريد إلى حساب المستخدم من جدول المستخدمين (أو يضعه المستخدم في «أماني»)، وحسابات العملاء ترث بريد
 ملف العميل. الحسابات المحمية بالتحقق الثنائي تدخل بكلمة المرور والرمز فقط. كل محاولة (طلب رابط، تعيين، دخول، ربط، هوية غير معروفة) في سجل التدقيق.
