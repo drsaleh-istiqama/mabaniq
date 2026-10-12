@@ -8,7 +8,7 @@
 
 > **2026-10-12 — 0.14.2 حسابات تجربة «المخطط العقارية»:** `tenant_profiles.ensure_pilot_accounts` + `pilot_accounts` في ملف الشركة؛ تُنشأ عند الإقلاع بكلمة مؤقتة من `MABANIQ_PILOT_PASSWORD` (يُلزَم تغييرها، لا يُعاد تعيين حساب موجود)؛ اختباران جديدان (129 اختبارًا تمرّ). الدليل والرسالة في `deliverables/promo-almukhatat/` (`mabaniq-almukhatat-trial-guide.pdf`).
 >
-> **2026-10-12 — النطاق الرسمي حي:** `https://mabaneek.com` مربوط بخدمة Railway (Cloudflare Registrar في حساب جدوى، قرار المالك 11)؛ `MABANIQ_PUBLIC_URL` و`MABANIQ_APP_NAME` مضبوطان؛ sitemap وcanonical وOG بالنطاق الجديد. بقي: `www`، بريد المبيعات وSMTP، Search Console/Bing (RUNBOOK §7).
+> **2026-10-12 — النطاق الرسمي حي:** `https://mabaneek.com` مربوط بخدمة Railway (Cloudflare Registrar في حساب جدوى، قرار المالك 11)؛ `MABANIQ_PUBLIC_URL` و`MABANIQ_APP_NAME` مضبوطان؛ sitemap وcanonical وOG بالنطاق الجديد. ثم في اليوم نفسه: `www.mabaneek.com` مربوط، و`sales@mabaneek.com` عبر Cloudflare Email Routing إلى `info@jadwa.om`، وSMTP عبر Google Workspace (`info@jadwa.om` بكلمة مرور تطبيق) — **طلب عرض تجريبي من الصفحة الحية وصل بالبريد (سجل `mail sent`)**. أداة التشخيص `python -m backend.mailcheck`. بقي: Search Console/Bing (RUNBOOK §7).
 >
 > **آخر عمل (0.14.1، 2026-10-11 مساءً):** اعتماد الشعار الرسمي (المالك) في كافة الأعمال: `web/img/logo-*`، الألوان الخضراء بدل الذهبي في كل الواجهات وPDF والإعلانات، الاسم اللاتيني
 > **Mabaneek**؛ وإعادة تصميم صفحة الهبوط بصريًا بعد ملاحظة المالك (نص طويل): أيقونات، رحلة العميل بست خطوات، رقائق بدل الفقرات، شعار في الهيرو، OG بالشعار. Lighthouse هاتف ar 95/100/100/100 · en 94/100/100/100 (CLS 0 بعد preload الخطوط). `CHANGELOG-0.14.1.md`.
