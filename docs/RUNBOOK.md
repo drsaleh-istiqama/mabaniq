@@ -9,6 +9,7 @@
 | --- | --- | --- | --- |
 | `local` | SQLite تحت `data/` (قاعدة لكل مطوّر) — أو PostgreSQL عبر `docker compose` من الوحدة 1 | `uvicorn backend.app:app --port 8800` | المطوّر |
 | **Railway «mabaniq» / production** (بيئة **عرض** حاليًا، 2026-10-09) | قالب PostgreSQL على Railway (`Postgres`) — `MABANIQ_DATABASE_URL=${{Postgres.DATABASE_URL}}`؛ `MABANIQ_ENV=demo` + بيانات تجريبية + `MABANIQ_DEMO_PASSWORD` | خدمة `mabaniq-api` من GitHub `drsaleh-istiqama/mabaniq` فرع `main` (Dockerfile: `deploy/Dockerfile` في إعدادات الخدمة، فحص `/health`)؛ النطاق `mabaniq-api-production.up.railway.app` | كل دفعة إلى `main` |
+| **النطاق الرسمي (2026-10-12):** `https://mabaneek.com` ⟵ الخدمة نفسها (Cloudflare DNS، حساب جدوى؛ CNAME الجذر ⟵ `7watla92.up.railway.app`، DNS only؛ TXT `_railway-verify`)؛ نطاق Railway المولَّد يبقى يعمل وcanonical يشير إلى `mabaneek.com` | — | — | — |
 | `production` الفعلي (لاحقًا) | القاعدة نفسها أو مشروع منفصل، **بلا بيانات تجريبية**، نسخ يومية خارج الموقع | الحاوية نفسها + `MABANIQ_ENV=prod` (يشترط المفاتيح والنطاق النهائي) | وسم `v*` + موافقة |
 
 **ملاحظات Railway:** يرفض البنّاء تعليمة `VOLUME` في Dockerfile، و`railway.json` (Config as Code) مهجور — الإعدادات في الخدمة نفسها (`dockerfilePath`, `healthcheckPath`) أو في `.railway/railway.ts` لاحقًا. مجلد `data/` داخل الحاوية مؤقت: الحالة الدائمة في PostgreSQL ومتغيرات البيئة فقط (مفتاح التشفير وسر الدفع وكلمة العرض). `uvicorn --proxy-headers --forwarded-allow-ips='*'` خلف وكيل Railway فقط.
