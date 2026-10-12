@@ -76,7 +76,10 @@ def send(to: str, subject: str, text: str, link: str | None = None, label: str |
             if s["tls"] == "starttls":
                 server.starttls(context=ctx)
             if s["user"]:
-                server.login(s["user"], s["password"])
+                pw = s["password"]
+                if s["host"].endswith(("gmail.com", "google.com")):
+                    pw = pw.replace(" ", "")  # 0.14.1: Google shows app passwords in 4-letter groups; pasted spaces are not part of the secret
+                server.login(s["user"], pw)
             server.send_message(msg)
         log.info("mail sent", extra={"event": "mail", "path": kind})
         return {"delivered": True}
