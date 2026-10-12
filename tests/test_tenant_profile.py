@@ -160,3 +160,60 @@ def test_login_portal_and_creative_with_real_render(cl):
     assert r.status_code == 200, r.text
     cr = r.json()
     assert cr.get("document_id") or cr.get("pdf_document_id")
+
+
+def test_pilot_accounts_created_once_with_temp_password_and_never_reset(cl, monkeypatch):
+    """0.14.0 — the company's own trial accounts: only with MABANIQ_PILOT_PASSWORD (>= 12 chars), forced password change, an account
+    already created (and its changed password) is never touched again, and the client account is linked to a real booking."""
+    tok = TENANT.set(T)
+    try:
+        d = connect()
+        d.execute("DELETE FROM users WHERE username IN ('dawood','mk-sales','mk-finance','mk-engineer','mk-client')")
+        d.commit()
+        monkeypatch.delenv("MABANIQ_PILOT_PASSWORD", raising=False)
+        assert TP.ensure_pilot_accounts(d, T) == 0  # no variable ⟵ nothing
+        monkeypatch.setenv("MABANIQ_PILOT_PASSWORD", "short")
+        assert TP.ensure_pilot_accounts(d, T) == 0  # too short ⟵ nothing
+        monkeypatch.setenv("MABANIQ_PILOT_PASSWORD", "Pilot-Temp-2026-xyz")
+        assert TP.ensure_pilot_accounts(d, "jadwa") == 0  # a tenant without a profile gets none
+        assert TP.ensure_pilot_accounts(d, T) == 5
+        rows = {r["username"]: r for r in d.execute("SELECT * FROM users WHERE username IN ('dawood','mk-sales','mk-finance','mk-engineer','mk-client')").fetchall()}
+        assert {u: r["role"] for u, r in rows.items()} == {"dawood": "admin", "mk-sales": "sales", "mk-finance": "finance", "mk-engineer": "engineer", "mk-client": "customer"}
+        assert all(r["must_change"] == 1 for r in rows.values())
+        assert rows["mk-client"]["customer_id"] == d.execute("SELECT customer_id FROM users WHERE username='client1'").fetchone()["customer_id"]
+        assert A.check_pw("Pilot-Temp-2026-xyz", rows["dawood"]["pw"])
+        # the person changed the password; a later start-up (even with another temp password) leaves it alone
+        d.execute("UPDATE users SET pw=?, must_change=0 WHERE username='dawood'", (A.hash_pw("Changed-By-Dawood-9"),))
+        d.commit()
+        monkeypatch.setenv("MABANIQ_PILOT_PASSWORD", "Another-Temp-2026-abc")
+        assert TP.ensure_pilot_accounts(d, T) == 0
+        r = d.execute("SELECT pw, must_change FROM users WHERE username='dawood'").fetchone()
+        assert A.check_pw("Changed-By-Dawood-9", r["pw"]) and r["must_change"] == 0
+        d.close()
+    finally:
+        TENANT.reset(tok)
+
+
+def test_pilot_staff_login_sees_the_company_and_client_sees_the_unit(cl, monkeypatch):
+    from backend import observability as O
+    O.limiter.reset()
+    tok = TENANT.set(T)
+    try:
+        d = connect()
+        d.execute("DELETE FROM users WHERE username IN ('dawood','mk-client')")
+        d.commit()
+        monkeypatch.setenv("MABANIQ_PILOT_PASSWORD", "Pilot-Temp-2026-xyz")
+        TP.ensure_pilot_accounts(d, T)
+        d.close()
+    finally:
+        TENANT.reset(tok)
+    with TestClient(app, base_url="https://testserver") as c:
+        r = c.post("/api/auth/login", json={"username": "dawood", "password": "Pilot-Temp-2026-xyz", "tenant": T})
+        assert r.status_code == 200 and r.json()["must_change"] is True and r.json()["role"] == "admin"
+        # the shared demo password is NOT what opens these accounts, and the temp password does not open another tenant
+        O.limiter.reset()
+        r = c.post("/api/auth/login", json={"username": "dawood", "password": "Pilot-Temp-2026-xyz", "tenant": "jadwa"})
+        assert r.status_code == 401
+        O.limiter.reset()
+        r = c.post("/api/auth/login", json={"username": "mk-client", "password": "Pilot-Temp-2026-xyz", "tenant": T})
+        assert r.status_code == 200 and r.json()["role"] == "customer"

@@ -4,7 +4,7 @@ import random
 
 from .db import TENANT, connect, init, wipe_for_reseed
 from .pii import enc as _enc
-from .tenant_profiles import apply_brand, ensure_assets, profile, profile_units
+from .tenant_profiles import apply_brand, ensure_assets, ensure_pilot_accounts, profile, profile_units
 
 FIRST = ["خالد", "مريم", "سالم", "نورة", "يوسف", "سعيد", "فاطمة", "أحمد", "هلال", "ناصر", "عائشة", "محمد",
          "زينب", "علي", "منى", "حمد", "سلطان", "شيخة", "بدر", "ريم", "إبراهيم", "خلفان", "موزة", "طلال"]
@@ -121,6 +121,7 @@ def _seed_body(c, force: bool, tenant: str) -> None:
             from .auth import apply_demo_password
             apply_demo_password(c)  # Unit 4: a persistent database keeps its data, but the declared demo password always applies
             ensure_assets(c, tenant)  # 0.13.0: bundled sample images are re-materialised after a redeploy (ephemeral storage)
+            ensure_pilot_accounts(c, tenant)  # 0.14.0
             return
         # 0.13.0: projects without any account = a seed interrupted before `ensure_users` (nobody could have logged in yet) → rebuild
         force = True
@@ -331,6 +332,7 @@ def _seed_body(c, force: bool, tenant: str) -> None:
     rescore_leads(c)
     c.commit()
     ensure_assets(c, tenant, pf)  # 0.13.0: bundled renders / plans / logo of a profiled developer
+    ensure_pilot_accounts(c, tenant)  # 0.14.0: trial accounts of the profiled company (only with MABANIQ_PILOT_PASSWORD)
 
 
 if __name__ == "__main__":

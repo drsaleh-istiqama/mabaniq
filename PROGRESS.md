@@ -6,6 +6,8 @@
 
 ## ▶️ نقطة الاستئناف (آخر تحديث 2026-10-11 — الوحدات 0–9 منجزة والإصدار 0.14.0 مدفوع إلى `main`؛ ما بقي قرارات المالك وما يحتاج بيئته)
 
+> **2026-10-12 — 0.14.2 حسابات تجربة «المخطط العقارية»:** `tenant_profiles.ensure_pilot_accounts` + `pilot_accounts` في ملف الشركة؛ تُنشأ عند الإقلاع بكلمة مؤقتة من `MABANIQ_PILOT_PASSWORD` (يُلزَم تغييرها، لا يُعاد تعيين حساب موجود)؛ اختباران جديدان (129 اختبارًا تمرّ). الدليل والرسالة في `deliverables/promo-almukhatat/` (`mabaniq-almukhatat-trial-guide.pdf`).
+>
 > **2026-10-12 — النطاق الرسمي حي:** `https://mabaneek.com` مربوط بخدمة Railway (Cloudflare Registrar في حساب جدوى، قرار المالك 11)؛ `MABANIQ_PUBLIC_URL` و`MABANIQ_APP_NAME` مضبوطان؛ sitemap وcanonical وOG بالنطاق الجديد. بقي: `www`، بريد المبيعات وSMTP، Search Console/Bing (RUNBOOK §7).
 >
 > **آخر عمل (0.14.1، 2026-10-11 مساءً):** اعتماد الشعار الرسمي (المالك) في كافة الأعمال: `web/img/logo-*`، الألوان الخضراء بدل الذهبي في كل الواجهات وPDF والإعلانات، الاسم اللاتيني

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from pathlib import Path
 
 from .config import tenants_extra
@@ -108,6 +109,15 @@ PROFILES: dict[str, dict] = {
             ("almukhatat/maab-amenities.jpg", "RAY", "render", "الخدمات: صالة رياضية، بركة سباحة، صالة ألعاب أطفال", None, None, 1),
             ("almukhatat/malath-render-banner.jpg", "MLZ", "render", "مشروع ملاذ — استثمار في سكن المستقبل", None, None, 1),
             ("almukhatat/malath-interior-bedroom.jpg", "MLZ", "render", "تصور داخلي — غرفة النوم", None, None, 1),
+        ],
+        # 0.14.0 — trial accounts for the company's own people: (username, display name, role, customer link). Created at start-up
+        # ONLY when MABANIQ_PILOT_PASSWORD is set (a temporary password, forced to change at first sign-in); never overwritten afterwards.
+        "pilot_accounts": [
+            ("dawood", "د. داود الهنائي", "admin", None),
+            ("mk-sales", "فريق المبيعات", "sales", None),
+            ("mk-finance", "المالية والتحصيل", "finance", None),
+            ("mk-engineer", "الهندسة والإنشاء", "engineer", None),
+            ("mk-client", "عميل تجريبي — محل في مآب", "customer", "client1"),
         ],
         # markers on the typical floor plan (percent of the image, approximate — illustrative placement of floor-1 units)
         "markers": {"almukhatat/maab-plan-typical-floor.jpg": [("MAB-A-101", 64, 48), ("MAB-A-102", 62, 18), ("MAB-A-103", 24, 78),
@@ -207,3 +217,29 @@ def ensure_assets(c, tenant: str, p: dict | None = None) -> int:
 
 
 __all__ = ["PROFILES", "ASSETS", "profile", "profile_units", "apply_brand", "ensure_assets", "tenants_from_env"]
+
+
+def ensure_pilot_accounts(c, tenant: str) -> int:
+    """0.14.0 — creates the profile's trial accounts (see `pilot_accounts`) with the temporary password from
+    `MABANIQ_PILOT_PASSWORD`. Missing variable (or one shorter than 12 characters) ⟵ nothing is created. An existing account is left
+    untouched, so a password the person has already changed is never reset. Returns the number of accounts created."""
+    p = profile(tenant)
+    pw = os.environ.get("MABANIQ_PILOT_PASSWORD", "")
+    if not p or not p.get("pilot_accounts") or len(pw) < 12:
+        return 0
+    from .auth import hash_pw
+    n = 0
+    for un, name, role, link in p["pilot_accounts"]:
+        if c.execute("SELECT 1 FROM users WHERE username=?", (un,)).fetchone():
+            continue
+        cust = None
+        if link:
+            r = c.execute("SELECT customer_id FROM users WHERE username=?", (link,)).fetchone()
+            if not r or not r["customer_id"]:
+                continue  # the linked demo customer does not exist (yet): try again at the next start-up
+            cust = r["customer_id"]
+        c.execute("INSERT INTO users(username,name,role,pw,customer_id,must_change) VALUES(?,?,?,?,?,1)", (un, name, role, hash_pw(pw), cust))
+        n += 1
+    if n:
+        c.commit()
+    return n
