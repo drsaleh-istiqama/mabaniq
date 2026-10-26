@@ -165,8 +165,12 @@ def seed_ext(c, rnd, today: dt.date, pid: dict, projects: list, tenant: str) -> 
     c.execute("INSERT INTO oa_motions(project_id,title,opened,closes,status) VALUES(?,?,?,?,?)",
               (khd, "تركيب كاميرات مراقبة إضافية عند البوابة الشرقية", today.isoformat(), (today + dt.timedelta(days=14)).isoformat(), "open"))
 
-    # ------------------------------------------------ وحدات محتفظ بها للتأجير (أبراج الريحان)
-    ray_units = c.execute("SELECT id FROM units WHERE project_id=? AND status='a' ORDER BY floor LIMIT 4", (P["RAY"],)).fetchall()
+    # ------------------------------------------------ وحدات محتفظ بها للتأجير (أبراج الريحان) — أو عقود ملف التعريف (0.15.0)
+    from .tenant_profiles import profile, seed_leases
+    pf = profile(tenant)
+    ray_units = [] if pf and pf.get("leases") else c.execute("SELECT id FROM units WHERE project_id=? AND status='a' ORDER BY floor LIMIT 4", (P["RAY"],)).fetchall()
+    if pf and pf.get("leases"):
+        seed_leases(c, pf, rnd, today)
     for i, u in enumerate(ray_units):
         c.execute("UPDATE units SET retained=1 WHERE id=?", (u["id"],))
         if i < 3:

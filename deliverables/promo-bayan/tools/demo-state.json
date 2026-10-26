@@ -1,0 +1,151 @@
+{
+ "projects": {
+  "MSK": {
+   "id": 1,
+   "name": "مساحات الخوض"
+  },
+  "ALA": {
+   "id": 2,
+   "name": "آلاء بيزنس أفنيو"
+  },
+  "MQR": {
+   "id": 3,
+   "name": "إم كيو ريزيدنسز (MQ Residences)"
+  },
+  "SHB": {
+   "id": 4,
+   "name": "مركز الشباب للأعمال"
+  },
+  "QRM": {
+   "id": 5,
+   "name": "ساحة الخوير (Al Khuwair Square)"
+  },
+  "AMR": {
+   "id": 6,
+   "name": "بوابة المعبيلة (Mabelah Gateway)"
+  }
+ },
+ "quote": {
+  "id": 1,
+  "number": "QT-2026-00001",
+  "unit_id": 35,
+  "customer_name": "شركة الواحة للاستشارات الإدارية",
+  "phone": "+968 99000000",
+  "email": "customer@example.com",
+  "plan": "murabaha",
+  "list_price": 43800.0,
+  "discount_pct": 0.02,
+  "price": 42924.0,
+  "valid_until": "2026-11-09",
+  "status": "issued",
+  "schedule": [
+   {
+    "label": "عربون الحجز",
+    "due": "2026-10-26",
+    "amount": 4292.0
+   },
+   {
+    "label": "دفعة أولى",
+    "due": "2026-11-26",
+    "amount": 4292.0
+   },
+   {
+    "label": "تمويل البنك عند التسليم",
+    "due": "2027-06-26",
+    "amount": 34339.0
+   }
+  ],
+  "notes": "عرض افتراضي لأغراض الدليل الترويجي — التمويل بالمرابحة عبر بنك إسلامي، بلا فوائد",
+  "created": "2026-10-26",
+  "created_by": "موظف المبيعات",
+  "booking_id": null,
+  "lead_id": null,
+  "code": "MSK-M-203",
+  "type": "مكتب بشرفة 81.1 م²",
+  "area": 81.1,
+  "view": "شرفة خارجية",
+  "building": "M",
+  "floor": 2,
+  "project": "مساحات الخوض",
+  "location": "الخوض — شارع السلام",
+  "handover": "2027-06-26",
+  "plan_label": "تمويل مرابحة بنكي",
+  "verify_code": "TIZCPRGCU5BW"
+ },
+ "campaign": {
+  "id": 1,
+  "project_id": 2,
+  "name": "آلاء — مكاتب 70–120 م² في مدينة السلطان قابوس",
+  "objective": "slow",
+  "channels": [
+   "whatsapp",
+   "email",
+   "instagram",
+   "brokers"
+  ],
+  "audience": "leads_warm",
+  "budget": 1800.0,
+  "start_date": null,
+  "end_date": null,
+  "offer_text": "تقسيط مباشر من المطوّر حتى التسليم بلا أي زيادة على السعر + سنة إعفاء من رسوم الخدمات لمن يحجز قبل نهاية الشهر",
+  "message": "آلاء بيزنس أفنيو على شارع دوحة الأدب: مكاتب من 70 إلى 120 م² بحديقة سماوية ومطبخ لكل مكتب ومواقف مغطاة. تقسيط مباشر من المطوّر حتى التسليم بلا زيادة على السعر. احجز معاينتك.",
+  "status": "draft",
+  "utm": "MKC6209E",
+  "created_by": "مدير المنصة",
+  "created": "2026-10-26T16:52:27",
+  "notes": "حملة افتراضية للدليل الترويجي",
+  "project": "آلاء بيزنس أفنيو",
+  "channel_labels": [
+   "واتساب",
+   "بريد",
+   "إنستغرام",
+   "الوسطاء"
+  ],
+  "objective_label": "تنشيط مشروع ضعيف البيع",
+  "audience_label": "عملاء في المعاينة/التفاوض",
+  "metrics": {
+   "leads": 0,
+   "quotes": 0,
+   "bookings": 0,
+   "value": 0,
+   "sends": 0,
+   "recipients": 0,
+   "cpl": null,
+   "conversion": null
+  },
+  "creatives": []
+ },
+ "creatives": [
+  {
+   "id": 2,
+   "template": "last_units",
+   "size": "square",
+   "headline": null,
+   "document_id": 34
+  },
+  {
+   "id": 1,
+   "template": "launch",
+   "size": "square",
+   "headline": null,
+   "document_id": 32
+  }
+ ],
+ "docs": {
+  "quote": "QT-2026-00001",
+  "contract": "SPA-00001",
+  "invoice": "INV-2026-000107",
+  "receipt": "MBQ-H-000001",
+  "customer": "إبراهيم الحارثي"
+ },
+ "facts": {
+  "projects": 6,
+  "units": 317,
+  "plans": 29,
+  "leases": 8,
+  "retained": 10,
+  "occupancy": 80,
+  "annual_rent": 58100.0,
+  "arrears": 3400
+ }
+}

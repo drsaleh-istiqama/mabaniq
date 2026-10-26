@@ -54,7 +54,105 @@ _MLZ_FLOOR = [("نموذج 1 — 3 غرف وصالة", 113.80, "الحديقة",
               ("نموذج 3 — غرفة وصالة", 58.0, "شارع النزهة", 680, "residential"), ("نموذج 4 — غرفة وصالة", 58.70, "داخلي", 650, "residential"),
               ("نموذج 5 — غرفة وصالة", 60.0, "الحديقة", 665, "residential"), ("نموذج 6 — غرفة وصالة", 59.10, "داخلي", 650, "residential")]
 
+# 0.15.0 — بيان عمان (Bayan Oman): a mostly commercial portfolio (offices + shops, sold *and* leased). Areas come from the three public
+# brochures (Masahat Al Khoudh, Al Shabab Business Centre, Alaa Business Avenue); prices and rents are illustrative — the company publishes
+# neither (offices ~450–600 OMR/m² sale or 6–9 OMR/m²/month rent, shops higher). MQ Residences has no public unit data: its mix is illustrative.
+_MSK_SHOPS = [("محل تجاري — واجهة شارع السلام", a, "شارع السلام", 1000, "commercial")
+              for a in (46.8, 46.8, 46.8, 46.8, 58.4, 58.4, 58.4, 58.4, 41.4, 41.4, 45.0, 45.0, 58.4, 58.4, 46.8, 45.6, 45.6, 46.8, 58.4, 61.3)]
+_MSK_F1 = [(f"مكتب {a:g} م²", a, "شارع السلام" if i % 2 == 0 else "داخلي", 520, "commercial")
+           for i, a in enumerate((84.3, 78.1, 75.4, 75.4, 80.5, 80.7, 92.77, 75.4, 75.4, 75.4, 58.0, 50.8))]
+_MSK_F2 = [(f"مكتب بشرفة {a:g} م²", a, "شرفة خارجية", 530, "commercial") for a in (63.7, 52.4, 81.1, 67.4, 55.3, 64.2, 51.6, 51.6, 51.6, 92.4, 60.1)]
+_ALA_TYPICAL = [(f"مكتب {a:g} م²", a, "شارع دوحة الأدب" if i < 8 else "داخلي", 580, "commercial")
+                for i, a in enumerate((116.7, 76.1, 76.1, 86.0, 85.5, 85.5, 85.8, 116.7, 117.2, 74.0, 74.0, 85.8, 85.5, 85.5, 86.0, 117.2))]
+_ALA_PENTHOUSE = [(f"مكتب علوي {a:g} م²", a, "الحديقة السماوية", 620, "commercial")
+                  for a in (116.7, 76.1, 76.1, 86.0, 111.4, 85.8, 116.7, 117.1, 74.1, 74.1, 85.8, 111.4, 86.0, 122.9)]
+_SHB_SHOPS = [("محل تجاري — شارع الشباب", a, "شارع الشباب", 950, "commercial") for a in (71.90, 45.78, 48.64, 63.95, 35.60, 71.30, 44.07, 54.88, 56.75, 33.97)]
+_SHB_OFF = [(f"مكتب {L} — {a:g} م²", a, "شارع الشباب" if L in "ABC" else "داخلي", 480, "commercial")
+            for L, a in zip("ABCDEFGH", (99.27, 96.94, 99.03, 53.90, 59.08, 66.63, 72.39, 69.75))]
+_MQR_FLOOR = [("شقة غرفة وصالة — 68 م²", 68.0, "داخلي", 590, "residential"), ("شقة غرفتان وصالة — 95 م²", 95.0, "الشارع", 600, "residential"),
+              ("شقة غرفتان وصالة — 102 م²", 102.0, "الشارع", 600, "residential"), ("شقة 3 غرف وصالة — 128 م²", 128.0, "الحديقة", 620, "residential"),
+              ("شقة غرفتان وصالة — 98 م²", 98.0, "الحديقة", 610, "residential"), ("شقة غرفة وصالة — 72 م²", 72.0, "داخلي", 590, "residential")]
+
 PROFILES: dict[str, dict] = {
+    "bayan": {
+        "display": "بيان عمان",
+        "seed": 2015,
+        "brand": {"name": "بيان عمان للتطوير العقاري (Bayan Oman)", "address": "العذيبة، محافظة مسقط، سلطنة عُمان — ص.ب 236، ر.ب 130", "phone": "72228000",
+                  "email": "contact@bayanoman.com", "signatory": "", "signatory_title": "المؤسس والرئيس التنفيذي"},
+        # slot, code, name, location, kind, build %, planned monthly sales, handover (months from today), escrow balance (illustrative)
+        "projects": [
+            ("RAY", "MSK", "مساحات الخوض", "الخوض — شارع السلام", "tower", 64, 4, 8, "180000"),
+            ("SEB", "ALA", "آلاء بيزنس أفنيو", "مدينة السلطان قابوس — شارع دوحة الأدب", "tower", 36, 3, 16, "220000"),
+            ("KHD", "MQR", "إم كيو ريزيدنسز (MQ Residences)", "مسقط", "tower", 92, 3, 3, "90000"),
+            ("SHB", "SHB", "مركز الشباب للأعمال", "الخوض — شارع الشباب", "tower", 22, 3, 20, "140000"),
+        ],
+        "buildings": [
+            ("RAY", "M", (0, 0), _MSK_SHOPS, 0, {"شارع السلام": .55}),
+            ("RAY", "M", (1, 1), _MSK_F1, .01, {"شارع السلام": .5, "داخلي": .4}),
+            ("RAY", "M", (2, 2), _MSK_F2, .01, {"شرفة خارجية": .45}),
+            ("SEB", "A", (1, 5), _ALA_TYPICAL, .008, {"شارع دوحة الأدب": .22, "داخلي": .16}),
+            ("SEB", "A", (6, 6), _ALA_PENTHOUSE, .008, {"الحديقة السماوية": .2}),
+            ("KHD", "R", (1, 5), _MQR_FLOOR, .01, {"الشارع": .88, "الحديقة": .9, "داخلي": .82}),
+            ("SHB", "S", (0, 0), _SHB_SHOPS, 0, {"شارع الشباب": .3}),
+            ("SHB", "S", (1, 4), _SHB_OFF, .01, {"شارع الشباب": .28, "داخلي": .2}),
+        ],
+        "interests": {"RAY": ["محل بواجهة على شارع السلام", "مكتب 75 م² بالطابق الأول", "مكتب بشرفة بالطابق الثاني", "إيجار مكتب سنوي", "عائد إيجاري على محل"],
+                      "SEB": ["مكتب 85 م² على دوحة الأدب", "مكتب زاوية 117 م²", "مكتب علوي مع الحديقة السماوية", "إيجار مكتب لشركة"],
+                      "KHD": ["شقة غرفتان وصالة", "شقة 3 غرف للعائلة", "تمويل من بنك نزوى"],
+                      "SHB": ["مكتب A 99 م²", "محل على شارع الشباب", "مكتب صغير 54 م²", "حجز مبكر بسعر الإطلاق"]},
+        "lead_mix": ["RAY", "RAY", "SEB", "SHB", "KHD", "RAY"],
+        "cycle_names": {"AMR": ("بوابة المعبيلة (Mabelah Gateway)", "المعبيلة"), "QRM": ("ساحة الخوير (Al Khuwair Square)", "الخوير")},
+        # 0.15.0 — units the developer keeps for leasing (Bayan is a lessor as well as a seller): (unit code, lessee or None = vacant retained
+        # unit, annual rent OMR, dues per year, lease start in months from today, arrears flag). Rents are illustrative.
+        "leases": [("MSK-M-001", "شركة الأفق للتقنية الحديثة", 6800, 4, -8, 0),
+                   ("MSK-M-005", "صيدلية الخوض الحديثة", 8400, 4, -14, 1),
+                   ("MSK-M-103", "مكتب الريادة للاستشارات الهندسية", 6500, 4, -5, 0),
+                   ("MSK-M-108", "شركة ذكاء لحلول الأعمال", 6300, 12, -11, 0),
+                   ("MSK-M-205", "مؤسسة النخبة للمحاماة", 5500, 4, -3, 0),
+                   ("MSK-M-012", None, 0, 0, 0, 0)],
+        "assets": [
+            ("bayan/bayan-logo.png", "brand", "logo", None, None, None, 0),
+            ("bayan/masahat-site-map.jpg", "RAY", "site", "موقع المشروع — الخوض، شارع السلام (قرب مدرسة إلسمير ومسجد الرحمن الرحيم)", None, None, 1),
+            ("bayan/masahat-plan-gf-shops.jpg", "RAY", "floor", "مخطط الطابق الأرضي — 20 محلًا تجاريًا", "M", 0, 1),
+            ("bayan/masahat-plan-f1-offices.jpg", "RAY", "floor", "مخطط الطابق الأول — 12 مكتبًا وقاعتا اجتماعات", "M", 1, 1),
+            ("bayan/masahat-plan-f2-offices.jpg", "RAY", "floor", "مخطط الطابق الثاني — 11 مكتبًا بشرفة خارجية", "M", 2, 1),
+            ("bayan/masahat-render-front.jpg", "RAY", "render", "التصور النهائي — الواجهة على شارع السلام", None, None, 1),
+            ("bayan/masahat-render-02.jpg", "RAY", "render", "التصور النهائي — المحلات والمكاتب", None, None, 1),
+            ("bayan/masahat-render-street.jpg", "RAY", "render", "التصور النهائي — من الشارع", None, None, 1),
+            ("bayan/masahat-render-entrance.jpg", "RAY", "render", "التصور النهائي — المدخل الرئيسي", None, None, 1),
+            ("bayan/masahat-interior-office.jpg", "RAY", "render", "تصور داخلي — مكتب", None, None, 1),
+            ("bayan/masahat-meeting-room.jpg", "RAY", "render", "قاعات الاجتماعات المشتركة", None, None, 1),
+            ("bayan/masahat-lobby.jpg", "RAY", "render", "اللوبي", None, None, 1),
+            ("bayan/masahat-parking.jpg", "RAY", "render", "70 موقفًا للسيارات", None, None, 1),
+            ("bayan/alaa-location-map.jpg", "SEB", "site", "موقع المشروع — مدينة السلطان قابوس، شارع دوحة الأدب", None, None, 1),
+            ("bayan/alaa-plan-typical.jpg", "SEB", "floor", "مخطط الطابق المتكرر (1–5) — 16 مكتبًا", "A", 1, 1),
+            ("bayan/alaa-plan-penthouse.jpg", "SEB", "floor", "مخطط الطابق العلوي — 14 مكتبًا", "A", 6, 1),
+            ("bayan/alaa-render-tower.jpg", "SEB", "render", "التصور النهائي — الطوابق العلوية", None, None, 1),
+            ("bayan/alaa-aerial.jpg", "SEB", "render", "الموقع من الجو — مدينة السلطان قابوس", None, None, 1),
+            ("bayan/alaa-roof-garden.jpg", "SEB", "render", "الحديقة السماوية", None, None, 1),
+            ("bayan/alaa-interior-office.jpg", "SEB", "render", "تصور داخلي — مكتب 70–120 م²", None, None, 1),
+            ("bayan/shabab-location-aerial.jpg", "SHB", "site", "الموقع — شارع الشباب، الخوض", None, None, 1),
+            ("bayan/shabab-plan-gf-shops.jpg", "SHB", "floor", "مخطط الطابق الأرضي — 10 محلات", "S", 0, 1),
+            ("bayan/shabab-plan-offices.jpg", "SHB", "unit", "مخطط الطابق المتكرر للمكاتب — المكتب A مظلَّل", "S", None, "مكتب A — 99.27 م²", 1),
+            ("bayan/shabab-render-upper.jpg", "SHB", "render", "التصور النهائي — الطوابق العلوية", None, None, 1),
+            ("bayan/shabab-stats.jpg", "SHB", "render", "32 وحدة مكتبية · 10 وحدات تجارية · 42 موقفًا", None, None, 1),
+            ("bayan/shabab-features.jpg", "SHB", "render", "مميزات المركز", None, None, 1),
+            ("bayan/shabab-interior-office.jpg", "SHB", "render", "تصور داخلي — مكتب", None, None, 1),
+            ("bayan/shabab-interior-reception.jpg", "SHB", "render", "تصور داخلي — الاستقبال", None, None, 1),
+            ("bayan/mq-residences-facade.jpg", "KHD", "render", "واجهة المبنى", None, None, 1),
+            ("bayan/khuwair-square-photo.jpg", "QRM", "render", "المبنى بعد التشغيل", None, None, 1),
+        ],
+        "pilot_accounts": [
+            ("bayan-ceo", "الرئيس التنفيذي — بيان عمان", "admin", None),
+            ("bayan-sales", "فريق المبيعات والتأجير", "sales", None),
+            ("bayan-finance", "المالية والتحصيل", "finance", None),
+            ("bayan-engineer", "المشاريع والإنشاء", "engineer", None),
+            ("bayan-client", "عميل تجريبي — وحدة في مساحات الخوض", "customer", "client1"),
+        ],
+        # markers on the ground-floor plan of Masahat (percent of the image; the 20 shops sit in one row along Al Salam Street)
+        "markers": {"bayan/masahat-plan-gf-shops.jpg": [(f"MSK-M-0{i:02d}", x, 44) for i, x in enumerate(
+            (6.3, 10.5, 14.7, 18.9, 23.2, 27.4, 31.6, 35.8, 40.5, 45.3, 54.9, 60.0, 64.7, 68.9, 73.2, 77.4, 81.7, 85.9, 90.1, 94.5), 1)]},
+    },
     "almukhatat": {
         "display": "المخطط العقارية",
         "seed": 2010,
@@ -151,6 +249,45 @@ def profile_units(p: dict) -> list[tuple]:
     return units
 
 
+def lease_units(p: dict | None) -> set[str]:
+    """0.15.0 — unit codes a profile keeps for leasing: they are seeded *available* (never sold) and marked `retained`."""
+    return {u for u, *_ in (p or {}).get("leases", [])}
+
+
+def seed_leases(c, p: dict, rnd, today) -> int:
+    """0.15.0 — materialise the profile's retained units and their leases (lessee, annual rent, dues by frequency, arrears flag).
+    Returns the number of leases created. Mirrors the generic demo's shape so `/api/leasing` and the rent reports work unchanged."""
+    import datetime as dt
+
+    def _m(d, months):
+        y, mo = divmod(d.month - 1 + months, 12)
+        return dt.date(d.year + y, mo + 1, min(d.day, 28))
+    n = 0
+    for code, lessee, rent, freq, start_m, arrears in p.get("leases", []):
+        u = c.execute("SELECT id FROM units WHERE code=?", (code,)).fetchone()
+        if not u:
+            continue
+        c.execute("UPDATE units SET retained=1, status='a' WHERE id=?", (u["id"],))
+        if not lessee:
+            continue
+        tid = c.execute("INSERT INTO tenants_l(name,phone,id_number) VALUES(?,?,?)",
+                        (lessee, f"+968 9{rnd.randint(1000000, 9999999)}", str(rnd.randint(10000000, 99999999)))).lastrowid
+        start = _m(today, start_m)
+        end = _m(start, 12) - dt.timedelta(days=1)
+        lid = c.execute("INSERT INTO leases(unit_id,tenant_id,start,\"end\",annual_rent,frequency,deposit,status,municipality_ref) VALUES(?,?,?,?,?,?,?,?,?)",
+                        (u["id"], tid, start.isoformat(), end.isoformat(), rent, freq, rent / 12, "active", f"MCT-L-{rnd.randint(100000, 999999)}")).lastrowid
+        step = 12 // freq
+        past = [i for i in range(freq) if _m(start, i * step) <= today]
+        for q in range(freq):
+            due = _m(start, q * step)
+            unpaid = bool(arrears) and past and q == past[-1]  # the arrears flag leaves the latest due instalment unpaid
+            paid = rent / freq if due <= today and not unpaid else 0
+            c.execute("INSERT INTO rent_dues(lease_id,due,amount,paid,paid_date) VALUES(?,?,?,?,?)",
+                      (lid, due.isoformat(), rent / freq, paid, due.isoformat() if paid else None))
+        n += 1
+    return n
+
+
 def apply_brand(c, p: dict) -> None:
     for k, v in p.get("brand", {}).items():
         c.execute("INSERT OR REPLACE INTO settings VALUES(?,?)", (f"brand:{k}", v))
@@ -169,6 +306,8 @@ def ensure_assets(c, tenant: str, p: dict | None = None) -> int:
         c.execute("SELECT pg_advisory_xact_lock(7340128)")  # several uvicorn workers start together — one materialises, the rest find it
     proj = {r["code"]: r["id"] for r in c.execute("SELECT id, code FROM projects").fetchall()}
     code_of = {slot: code for slot, code, *_ in p["projects"]}
+    code_of.setdefault("AMR", "AMR")  # 0.15.0: the cycle seed's launch / completed projects may carry assets too
+    code_of.setdefault("QRM", "QRM")
     written = 0
     by_rel: dict[str, int] = {}
     for entry in p["assets"]:  # (file, slot|brand, kind, title, building, floor[, unit_type], public)
@@ -216,7 +355,7 @@ def ensure_assets(c, tenant: str, p: dict | None = None) -> int:
     return written
 
 
-__all__ = ["PROFILES", "ASSETS", "profile", "profile_units", "apply_brand", "ensure_assets", "tenants_from_env"]
+__all__ = ["PROFILES", "ASSETS", "profile", "profile_units", "apply_brand", "ensure_assets", "tenants_from_env", "lease_units", "seed_leases"]
 
 
 def ensure_pilot_accounts(c, tenant: str) -> int:

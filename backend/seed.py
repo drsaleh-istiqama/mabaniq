@@ -4,7 +4,7 @@ import random
 
 from .db import TENANT, connect, init, wipe_for_reseed
 from .pii import enc as _enc
-from .tenant_profiles import apply_brand, ensure_assets, ensure_pilot_accounts, profile, profile_units
+from .tenant_profiles import apply_brand, ensure_assets, ensure_pilot_accounts, lease_units, profile, profile_units
 
 FIRST = ["خالد", "مريم", "سالم", "نورة", "يوسف", "سعيد", "فاطمة", "أحمد", "هلال", "ناصر", "عائشة", "محمد",
          "زينب", "علي", "منى", "حمد", "سلطان", "شيخة", "بدر", "ريم", "إبراهيم", "خلفان", "موزة", "طلال"]
@@ -186,9 +186,10 @@ def _seed_body(c, force: bool, tenant: str) -> None:
                           380 if i % 3 == 0 else 340, vw, (96000 if i % 3 == 0 else 84000) * (1.06 if corner else 1.03 if park else 1),
                           {"زاوية": .8, "قرب الحديقة": .7, "داخلية": .52}[vw]))
 
+    keep = lease_units(pf)  # 0.15.0: units the profile keeps for leasing are never sold
     for proj, code, bld, f, p, tp, ar, vw, price, ps in units:
         x = rnd.random()
-        st = "s" if x < ps else "r" if x < ps + .04 else "a"
+        st = "a" if code in keep else "s" if x < ps else "r" if x < ps + .04 else "a"
         cur = c.execute("INSERT INTO units(project_id,code,building,floor,pos,type,area,view,price,status,use) "
                         "VALUES(?,?,?,?,?,?,?,?,?,?,?)",
                         (pid[proj][0], code, bld, f, p, tp, ar, vw, round(price / 100) * 100, st, use_of.get(code, "residential")))

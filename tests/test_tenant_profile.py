@@ -7,7 +7,7 @@ import tempfile
 
 os.environ.setdefault("MABANIQ_DB", os.path.join(tempfile.mkdtemp(), "tp.db"))
 os.environ["MABANIQ_FORCE_PW_CHANGE"] = "0"
-os.environ["MABANIQ_TENANTS"] = "almukhatat:المخطط العقارية"
+os.environ["MABANIQ_TENANTS"] = "almukhatat:المخطط العقارية;bayan:بيان عمان"
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
@@ -55,7 +55,8 @@ def test_env_adds_tenant_and_api_lists_it(cl):
     ts = tenants()
     assert ts[T] == "المخطط العقارية" and "jadwa" in ts
     assert any(t["code"] == T for t in cl.get("/api/tenants").json())
-    assert TP.tenants_from_env() == {T: "المخطط العقارية"}
+    assert TP.tenants_from_env() == {T: "المخطط العقارية", "bayan": "بيان عمان"}
+    assert ts["bayan"] == "بيان عمان"
 
 
 def test_profile_projects_units_and_brand(cl):
@@ -217,3 +218,79 @@ def test_pilot_staff_login_sees_the_company_and_client_sees_the_unit(cl, monkeyp
         O.limiter.reset()
         r = c.post("/api/auth/login", json={"username": "mk-client", "password": "Pilot-Temp-2026-xyz", "tenant": T})
         assert r.status_code == 200 and r.json()["role"] == "customer"
+
+
+# ───────────────────────────────────────────────────────────────── 0.15.0 — بيان عمان (second profile: commercial, sold + leased)
+B = "bayan"
+
+
+def test_every_profile_is_internally_consistent():
+    """Generic guard over PROFILES: real codes (no RAY/SEB/KHD leak), every asset file exists, markers point at seeded codes, lease units exist."""
+    for code, p in TP.PROFILES.items():
+        codes = {c for _s, c, *_ in p["projects"]}
+        assert not {"RAY", "SEB", "KHD"} & codes, code
+        units = {u[1] for u in TP.profile_units(p)}
+        assert units, code
+        for entry in p["assets"]:
+            assert (TP.ASSETS / entry[0]).exists(), entry[0]
+        for rel, marks in p.get("markers", {}).items():
+            assert any(a[0] == rel for a in p["assets"]), rel
+            assert all(u in units for u, _x, _y in marks), rel
+        assert TP.lease_units(p) <= units, code
+        assert sum((TP.ASSETS / e[0]).stat().st_size for e in p["assets"]) <= 3_200_000, code  # bundled samples stay small
+
+
+def test_bayan_projects_units_leases_and_brand(cl):
+    login_as(cl, "admin", B)
+    ps = {p["code"]: p for p in cl.get("/api/projects").json()}
+    for code in ("MSK", "ALA", "MQR", "SHB", "AMR", "QRM"):
+        assert code in ps, code
+    assert not {"RAY", "SEB", "KHD", "MAB"} & set(ps)
+    assert ps["MSK"]["name"] == "مساحات الخوض" and ps["AMR"]["name"].startswith("بوابة المعبيلة") and ps["QRM"]["name"].startswith("ساحة الخوير")
+    msk = cl.get("/api/units", params={"project_id": ps["MSK"]["id"]}).json()
+    assert len(msk) == 43 and sum("محل" in u["type"] for u in msk) == 20 and sum("مكتب" in u["type"] for u in msk) == 23
+    assert all(u["use"] == "commercial" for u in msk)
+    ala = cl.get("/api/units", params={"project_id": ps["ALA"]["id"]}).json()
+    assert len(ala) == 94 and all(u["code"].startswith("ALA-A-") for u in ala)
+    shb = cl.get("/api/units", params={"project_id": ps["SHB"]["id"]}).json()
+    assert sum("محل" in u["type"] for u in shb) == 10 and sum("مكتب" in u["type"] for u in shb) == 32
+    assert len(cl.get("/api/units", params={"project_id": ps["MQR"]["id"]}).json()) == 30
+    b = cl.get("/api/admin/brand").json()
+    assert b["name"].startswith("بيان عمان") and b["phone"] == "72228000" and b["logo_doc"]
+    # leasing portfolio from the profile: retained units are never sold, five leases, one in arrears, one renewing soon
+    L = cl.get("/api/leasing").json()
+    retained = {u["code"] for u in L["units"]}
+    assert TP.lease_units(TP.profile(B)) <= retained  # plus the completed project's own retained units (cycle seed)
+    by_unit = {x["unit"]: x for x in L["leases"]}
+    assert {"MSK-M-001", "MSK-M-005", "MSK-M-103", "MSK-M-108", "MSK-M-205"} <= set(by_unit) and "MSK-M-012" not in by_unit
+    assert by_unit["MSK-M-005"]["arrears"] > 0 and by_unit["MSK-M-001"]["arrears"] == 0
+    assert by_unit["MSK-M-108"]["renewal_alert"] and L["annual_rent"] >= 6800 + 8400 + 6500 + 6300 + 5500
+    assert by_unit["MSK-M-108"]["frequency"] == 12 and len(by_unit["MSK-M-108"]["dues"]) == 12
+    assert all(u["status"] == "a" for u in msk if u["code"] in retained)
+
+
+def test_bayan_assets_plans_markers_and_cycle_projects(cl):
+    login_as(cl, "admin", B)
+    ps = {p["code"]: p for p in cl.get("/api/projects").json()}
+    plans = cl.get("/api/plans", params={"project_id": ps["MSK"]["id"]}).json()
+    assert {"site", "floor", "render"} <= {p["kind"] for p in plans} and len(plans) >= 12
+    gf = next(p for p in plans if p["kind"] == "floor" and p["floor"] == 0)
+    assert {m["unit_code"] for m in gf["markers"]} == {f"MSK-M-0{i:02d}" for i in range(1, 21)}
+    assert cl.get(f"/api/documents/{gf['document_id']}").status_code == 200
+    assert len(cl.get("/api/plans", params={"project_id": ps["ALA"]["id"]}).json()) >= 7
+    assert any(p["kind"] == "unit" for p in cl.get("/api/plans", params={"project_id": ps["SHB"]["id"]}).json())
+    # the cycle seed's completed project carries the profile's photo too (0.15.0: AMR/QRM resolved in ensure_assets)
+    assert cl.get("/api/plans", params={"project_id": ps["QRM"]["id"]}).json()
+    tok = TENANT.set(B)
+    try:
+        c = connect()
+        gap = c.execute("SELECT COALESCE(SUM(paid_amount),0) - (SELECT COALESCE(SUM(amount),0) FROM payments) FROM installments").fetchone()[0]
+        assert abs(gap) < 0.01
+        assert TP.ensure_assets(c, B) == 0  # idempotent after the seed
+        c.close()
+    finally:
+        TENANT.reset(tok)
+    # the first profile is untouched by the second
+    login_as(cl, "admin", T)
+    codes = {p["code"] for p in cl.get("/api/projects").json()}
+    assert "MAB" in codes and "MSK" not in codes
