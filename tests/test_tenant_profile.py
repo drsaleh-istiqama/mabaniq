@@ -7,7 +7,7 @@ import tempfile
 
 os.environ.setdefault("MABANIQ_DB", os.path.join(tempfile.mkdtemp(), "tp.db"))
 os.environ["MABANIQ_FORCE_PW_CHANGE"] = "0"
-os.environ["MABANIQ_TENANTS"] = "almukhatat:المخطط العقارية;bayan:بيان عمان"
+os.environ["MABANIQ_TENANTS"] = "almukhatat:المخطط العقارية;bayan:بيان عمان;almaqsura:المقصورة العقارية"
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
@@ -55,8 +55,8 @@ def test_env_adds_tenant_and_api_lists_it(cl):
     ts = tenants()
     assert ts[T] == "المخطط العقارية" and "jadwa" in ts
     assert any(t["code"] == T for t in cl.get("/api/tenants").json())
-    assert TP.tenants_from_env() == {T: "المخطط العقارية", "bayan": "بيان عمان"}
-    assert ts["bayan"] == "بيان عمان"
+    assert TP.tenants_from_env() == {T: "المخطط العقارية", "bayan": "بيان عمان", "almaqsura": "المقصورة العقارية"}
+    assert ts["bayan"] == "بيان عمان" and ts["almaqsura"] == "المقصورة العقارية"
 
 
 def test_profile_projects_units_and_brand(cl):
@@ -294,3 +294,53 @@ def test_bayan_assets_plans_markers_and_cycle_projects(cl):
     login_as(cl, "admin", T)
     codes = {p["code"] for p in cl.get("/api/projects").json()}
     assert "MAB" in codes and "MSK" not in codes
+
+
+M = "almaqsura"
+
+
+def test_almaqsura_profile_projects_units_leases_brand_and_assets(cl):
+    """0.16.0 — third profiled developer (Almaqsura Real Estate): illustrative portfolio on its published renders, schematic plans
+    with computed markers, retained shops with leases, villas slot, pilot accounts; the two other profiles stay untouched."""
+    login_as(cl, "admin", M)
+    ps = {p["code"]: p for p in cl.get("/api/projects").json()}
+    for code in ("MQC", "RWQ", "DAR", "AMR", "QRM"):
+        assert code in ps, code
+    assert not {"RAY", "SEB", "KHD", "MAB", "MSK"} & set(ps)
+    assert ps["MQC"]["name"] == "مجمع المقصورة التجاري" and ps["DAR"]["kind"] == "villa"
+    mqc = cl.get("/api/units", params={"project_id": ps["MQC"]["id"]}).json()
+    assert len(mqc) == 52 and sum("محل" in u["type"] for u in mqc) == 16 and sum("مكتب" in u["type"] for u in mqc) == 24
+    assert sum(u["use"] == "commercial" for u in mqc) == 40 and sum(u["use"] == "residential" for u in mqc) == 12
+    rwq = cl.get("/api/units", params={"project_id": ps["RWQ"]["id"]}).json()
+    assert len(rwq) == 32 and all(u["code"].startswith("RWQ-R-") for u in rwq)
+    dar = cl.get("/api/units", params={"project_id": ps["DAR"]["id"]}).json()
+    assert len(dar) == 30 and all(u["code"].startswith("DAR-V-") for u in dar)
+    b = cl.get("/api/admin/brand").json()
+    assert b["name"].startswith("المقصورة العقارية") and "مركز داود" in b["address"] and b["logo_doc"]
+    L = cl.get("/api/leasing").json()
+    by_unit = {x["unit"]: x for x in L["leases"]}
+    assert {"MQC-C-001", "MQC-C-006", "MQC-C-010"} <= set(by_unit) and "MQC-C-013" not in by_unit
+    assert by_unit["MQC-C-010"]["arrears"] > 0 and by_unit["MQC-C-006"]["frequency"] == 12
+    retained = {u["code"] for u in L["units"]}
+    assert TP.lease_units(TP.profile(M)) <= retained and all(u["status"] == "a" for u in mqc if u["code"] in retained)
+    plans = cl.get("/api/plans", params={"project_id": ps["MQC"]["id"]}).json()
+    assert {"site", "floor", "render"} <= {p["kind"] for p in plans} and len(plans) >= 6
+    gf = next(p for p in plans if p["kind"] == "floor" and p["floor"] == 0)
+    assert {m["unit_code"] for m in gf["markers"]} == {f"MQC-C-{i:03d}" for i in range(1, 17)}
+    assert all(0 < m["x"] < 100 and 0 < m["y"] < 100 for m in gf["markers"])
+    assert cl.get(f"/api/documents/{gf['document_id']}").status_code == 200
+    assert cl.get("/api/plans", params={"project_id": ps["RWQ"]["id"]}).json()
+    tok = TENANT.set(M)
+    try:
+        c = connect()
+        gap = c.execute("SELECT COALESCE(SUM(paid_amount),0) - (SELECT COALESCE(SUM(amount),0) FROM payments) FROM installments").fetchone()[0]
+        assert abs(gap) < 0.01
+        assert TP.ensure_assets(c, M) == 0
+        c.close()
+    finally:
+        TENANT.reset(tok)
+    for other, must, mustnot in ((T, "MAB", "MQC"), (B, "MSK", "MQC")):
+        login_as(cl, "admin", other)
+        codes = {p["code"] for p in cl.get("/api/projects").json()}
+        assert must in codes and mustnot not in codes
+

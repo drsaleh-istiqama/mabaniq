@@ -73,6 +73,21 @@ _MQR_FLOOR = [("شقة غرفة وصالة — 68 م²", 68.0, "داخلي", 590
               ("شقة غرفتان وصالة — 102 م²", 102.0, "الشارع", 600, "residential"), ("شقة 3 غرف وصالة — 128 م²", 128.0, "الحديقة", 620, "residential"),
               ("شقة غرفتان وصالة — 98 م²", 98.0, "الحديقة", 610, "residential"), ("شقة غرفة وصالة — 72 م²", 72.0, "داخلي", 590, "residential")]
 
+
+# ---- المقصورة العقارية (Almaqsura Real Estate, Muscat, since 2005) — the company publishes designs but no project sheets or prices:
+# every project below is an illustrative portfolio built on its published renders (courtyard commercial complex, arcaded building);
+# names, areas, prices and sold ratios are stated as illustrative in the platform's documentation.
+_MQC_SHOPS = [(f"محل تجاري {a} م²", a, "الشارع" if i < 5 or 8 <= i < 13 else "الفناء", 1250, "commercial")
+              for i, a in enumerate((48, 42, 36, 36, 42, 48, 32, 28, 32, 48, 42, 36, 36, 42, 32, 28))]
+_MQC_OFF = [(f"مكتب {a} م²", a, "الشارع" if i % 2 == 0 else "الفناء", 540, "commercial") for i, a in enumerate((95, 75, 65, 75, 95, 55, 60, 95, 75, 65, 75, 60))]
+_MQC_RES = [("شقة غرفتان وصالة — 112 م²", 112, "الفناء", 600, "residential"), ("شقة 3 غرف وصالة — 148 م²", 148, "الشارع", 590, "residential"),
+            ("شقة غرفة وصالة — 76 م²", 76, "الفناء", 620, "residential"), ("شقة غرفتان وصالة — 118 م²", 118, "الشارع", 600, "residential"),
+            ("شقة 3 غرف وصالة — 152 م²", 152, "الفناء", 590, "residential"), ("شقة غرفة وصالة — 72 م²", 72, "الشارع", 620, "residential")]
+_RWQ_SHOPS = [(f"محل تجاري {a} م²", a, "الرواق", 1150, "commercial") for a in (34, 34, 40, 40, 46, 46, 52, 58)]
+_RWQ_RES = [("شقة غرفتان وصالة — 105 م²", 105, "الرواق", 560, "residential"), ("شقة غرفتان وصالة — 105 م²", 105, "داخلي", 540, "residential"),
+            ("شقة 3 غرف وصالة — 138 م²", 138, "الرواق", 560, "residential"), ("شقة 3 غرف وصالة — 138 م²", 138, "داخلي", 540, "residential"),
+            ("شقة غرفة وصالة — 68 م²", 68, "الرواق", 580, "residential"), ("شقة غرفة وصالة — 68 م²", 68, "داخلي", 560, "residential")]
+
 PROFILES: dict[str, dict] = {
     "bayan": {
         "display": "بيان عمان",
@@ -152,6 +167,57 @@ PROFILES: dict[str, dict] = {
         # markers on the ground-floor plan of Masahat (percent of the image; the 20 shops sit in one row along Al Salam Street)
         "markers": {"bayan/masahat-plan-gf-shops.jpg": [(f"MSK-M-0{i:02d}", x, 44) for i, x in enumerate(
             (6.3, 10.5, 14.7, 18.9, 23.2, 27.4, 31.6, 35.8, 40.5, 45.3, 54.9, 60.0, 64.7, 68.9, 73.2, 77.4, 81.7, 85.9, 90.1, 94.5), 1)]},
+    },
+    "almaqsura": {
+        "display": "المقصورة العقارية",
+        "seed": 2005,
+        "brand": {"name": "المقصورة العقارية (Almaqsura Real Estate)", "address": "مركز داود للأعمال، الخوض السابعة، ولاية السيب، محافظة مسقط",
+                  "phone": "", "email": "", "signatory": "", "signatory_title": "المدير العام"},
+        # slot, code, name, location, kind, build %, planned monthly sales, handover (months from today), escrow balance (illustrative)
+        "projects": [
+            ("RAY", "MQC", "مجمع المقصورة التجاري", "الخوض السابعة — السيب", "tower", 56, 4, 9, "170000"),
+            ("SEB", "RWQ", "أروقة الموالح", "الموالح الجنوبية — السيب", "tower", 30, 3, 18, "120000"),
+            ("KHD", "DAR", "دار المقصورة — فلل العامرات", "العامرات", "villa", 88, 3, 4, "70000"),
+        ],
+        "buildings": [
+            ("RAY", "C", (0, 0), _MQC_SHOPS, 0, {"الشارع": .55, "الفناء": .45}),
+            ("RAY", "C", (1, 2), _MQC_OFF, .01, {"الشارع": .42, "الفناء": .34}),
+            ("RAY", "C", (3, 4), _MQC_RES, .012, {"الشارع": .6, "الفناء": .55}),
+            ("SEB", "R", (0, 0), _RWQ_SHOPS, 0, {"الرواق": .4}),
+            ("SEB", "R", (1, 4), _RWQ_RES, .01, {"الرواق": .32, "داخلي": .25}),
+        ],
+        "villas": {"slot": "KHD", "building": "V", "count": 30,
+                   "types": [("فيلا 4 غرف — 320 م²", 320, 138000), ("فيلا 5 غرف — 380 م²", 380, 162000)],
+                   "views": {"زاوية": .85, "قرب الحديقة": .8, "داخلية": .66}},
+        "interests": {"RAY": ["محل بواجهة على الشارع", "مكتب 95 م² بالطابق الأول", "شقة غرفتان على الفناء", "إيجار محل لمعرض"],
+                      "SEB": ["شقة 3 غرف على الرواق", "محل 46 م²", "شقة غرفة وصالة للاستثمار"],
+                      "KHD": ["فيلا زاوية 5 غرف", "فيلا 4 غرف قرب الحديقة", "تمويل من بنك نزوى"]},
+        "lead_mix": ["RAY", "RAY", "SEB", "KHD", "RAY"],
+        "cycle_names": {"AMR": ("أرض بوشر — دراسة جدوى وتطوير", "بوشر"), "QRM": ("مبنى المقصورة الأول", "الخوير")},
+        # retained shops the company leases itself (brokerage/property management is one of its services)
+        "leases": [("MQC-C-001", "معرض الأثاث العصري", 7200, 4, -9, 0),
+                   ("MQC-C-006", "مقهى الفناء", 6600, 12, -6, 0),
+                   ("MQC-C-010", "صيدلية الخوض السابعة", 7800, 4, -13, 1),
+                   ("MQC-C-013", None, 0, 0, 0, 0)],
+        "assets": [
+            ("almaqsura/almaqsura-logo.png", "brand", "logo", None, None, None, 0),
+            ("almaqsura/mqc-plan-ground-shops.jpg", "RAY", "floor", "مخطط تخطيطي — الطابق الأرضي: 16 محلًا حول الفناء", "C", 0, 1),
+            ("almaqsura/mqc-plan-typical-offices.jpg", "RAY", "floor", "مخطط تخطيطي — الطابق المتكرر للمكاتب (1–2)", "C", 1, 1),
+            ("almaqsura/mqc-render-courtyard-day.jpg", "RAY", "render", "التصور النهائي — الفناء الداخلي والممرات", None, None, 1),
+            ("almaqsura/mqc-render-courtyard-02.jpg", "RAY", "render", "التصور النهائي — المدخل من الشارع", None, None, 1),
+            ("almaqsura/mqc-render-night-aerial.jpg", "RAY", "render", "التصور النهائي ليلًا — من الجو", None, None, 1),
+            ("almaqsura/mqc-render-aerial.jpg", "RAY", "site", "المجمع من الجو — الكتلة والفناء والمواقف", None, None, 1),
+            ("almaqsura/rwq-render-facade.jpg", "SEB", "render", "التصور النهائي — الواجهة والرواق", None, None, 1),
+        ],
+        "pilot_accounts": [
+            ("mq-ceo", "المدير العام — المقصورة العقارية", "admin", None),
+            ("mq-sales", "التسويق والوساطة العقارية", "sales", None),
+            ("mq-finance", "المالية والتحصيل", "finance", None),
+            ("mq-engineer", "الاستشارات الهندسية والإشراف", "engineer", None),
+            ("mq-client", "عميل تجريبي — محل في مجمع المقصورة", "customer", "client1"),
+        ],
+        # markers on the schematic ground-floor plan (computed from the drawing itself)
+        "markers": {"almaqsura/mqc-plan-ground-shops.jpg": [("MQC-C-001", 23.3, 25.0), ("MQC-C-002", 36.7, 25.0), ("MQC-C-003", 50.0, 25.0), ("MQC-C-004", 63.3, 25.0), ("MQC-C-005", 76.7, 25.0), ("MQC-C-006", 89.2, 40.1), ("MQC-C-007", 89.2, 53.6), ("MQC-C-008", 89.2, 67.1), ("MQC-C-009", 76.7, 82.1), ("MQC-C-010", 63.3, 82.1), ("MQC-C-011", 50.0, 82.1), ("MQC-C-012", 36.7, 82.1), ("MQC-C-013", 23.3, 82.1), ("MQC-C-014", 10.8, 67.1), ("MQC-C-015", 10.8, 53.6), ("MQC-C-016", 10.8, 40.1)]},
     },
     "almukhatat": {
         "display": "المخطط العقارية",
