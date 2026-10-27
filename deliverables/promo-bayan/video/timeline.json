@@ -1,226 +1,280 @@
 {
- "total": 180.979,
+ "total": 115.436,
  "scenes": [
   {
    "id": 1,
    "start": 0.0,
-   "dur": 13.302,
+   "dur": 9.22,
    "narr": "n1",
-   "narr_at": 1.0,
+   "narr_at": 0.3,
    "narr_dur": 8.22,
    "segs": [
     {
      "t": "still",
      "src": "backend/assets/samples/bayan/masahat-render-front.jpg",
-     "dur": 3.5,
+     "dur": 2.6,
      "gen": true,
-     "d": 3.5
+     "d": 2.6
     },
     {
      "t": "clip",
      "src": "gen/c1.mp4",
      "gen": true,
-     "d": 6.302
+     "d": 3.0
     },
     {
      "t": "card",
      "src": "cards/q-card.png",
      "min": 3.5,
-     "d": 3.5
+     "d": 3.62
     }
    ]
   },
   {
    "id": 2,
-   "start": 13.302,
-   "dur": 18.417,
+   "start": 9.22,
+   "dur": 12.981,
    "narr": "n2",
-   "narr_at": 13.902,
+   "narr_at": 9.52,
    "narr_dur": 11.981,
    "segs": [
     {
      "t": "real",
      "src": "out/r2.mp4",
      "demo": true,
-     "d": 18.417
+     "ranges": [
+      [
+       0.6,
+       20.0
+      ]
+     ],
+     "d": 12.981
     }
    ]
   },
   {
    "id": 3,
-   "start": 31.719,
-   "dur": 20.83,
+   "start": 22.201,
+   "dur": 12.285,
    "narr": "n3",
-   "narr_at": 32.319,
+   "narr_at": 22.501,
    "narr_dur": 11.285,
    "segs": [
     {
      "t": "clip",
      "src": "gen/c3.mp4",
      "gen": true,
-     "d": 6.302
+     "d": 3.0
     },
     {
      "t": "real",
      "src": "out/r3.mp4",
      "demo": true,
-     "d": 14.528
+     "ranges": [
+      [
+       0.4,
+       14.0
+      ]
+     ],
+     "d": 9.285
     }
    ]
   },
   {
    "id": 4,
-   "start": 52.549,
-   "dur": 21.608,
+   "start": 34.486,
+   "dur": 12.889,
    "narr": "n4",
-   "narr_at": 53.149,
+   "narr_at": 34.786,
    "narr_dur": 11.889,
    "segs": [
     {
      "t": "clip",
      "src": "gen/c4.mp4",
      "gen": true,
-     "d": 6.302
+     "d": 3.0
     },
     {
      "t": "real",
      "src": "out/r4.mp4",
      "demo": true,
-     "d": 15.306
+     "ranges": [
+      [
+       0.4,
+       15.0
+      ]
+     ],
+     "d": 9.889
     }
    ]
   },
   {
    "id": 5,
-   "start": 74.157,
-   "dur": 24.191,
+   "start": 47.375,
+   "dur": 12.749,
    "narr": "n5",
-   "narr_at": 74.757,
+   "narr_at": 47.675,
    "narr_dur": 11.749,
    "segs": [
     {
      "t": "clip",
      "src": "gen/c5.mp4",
      "gen": true,
-     "d": 6.302
+     "d": 3.0
     },
     {
      "t": "real",
      "src": "out/r5.mp4",
      "demo": true,
-     "d": 17.889
+     "ranges": [
+      [
+       0.4,
+       17.4
+      ]
+     ],
+     "d": 9.749
     }
    ]
   },
   {
    "id": 6,
-   "start": 98.348,
-   "dur": 17.0,
+   "start": 60.124,
+   "dur": 9.081,
    "narr": "n6",
-   "narr_at": 98.948,
+   "narr_at": 60.424,
    "narr_dur": 8.081,
    "segs": [
     {
      "t": "still",
      "src": "gen/s6.png",
-     "dur": 4.0,
+     "dur": 3.0,
      "gen": true,
-     "d": 4.0
+     "d": 3.0
     },
     {
      "t": "real",
      "src": "out/r6.mp4",
      "demo": true,
-     "d": 13.0
+     "ranges": [
+      [
+       0.4,
+       2.2
+      ]
+     ],
+     "kb": true,
+     "d": 6.081
     }
    ]
   },
   {
    "id": 7,
-   "start": 115.348,
-   "dur": 19.833,
+   "start": 69.205,
+   "dur": 11.774,
    "narr": "n7",
-   "narr_at": 115.948,
+   "narr_at": 69.505,
    "narr_dur": 10.774,
    "segs": [
     {
      "t": "still",
      "src": "gen/s7.png",
-     "dur": 4.0,
+     "dur": 3.0,
      "gen": true,
-     "d": 4.0
+     "d": 3.0
     },
     {
      "t": "real",
      "src": "out/r7.mp4",
      "demo": true,
-     "d": 15.833
+     "ranges": [
+      [
+       0.4,
+       15.5
+      ]
+     ],
+     "d": 8.774
     }
    ]
   },
   {
    "id": 8,
-   "start": 135.181,
-   "dur": 21.413,
+   "start": 80.979,
+   "dur": 13.492,
    "narr": "n8",
-   "narr_at": 135.781,
+   "narr_at": 81.279,
    "narr_dur": 12.492,
    "segs": [
     {
      "t": "clip",
      "src": "gen/c8.mp4",
      "gen": true,
-     "d": 6.302
+     "d": 3.0
     },
     {
      "t": "real",
      "src": "out/r8.mp4",
      "demo": true,
-     "d": 15.111
+     "ranges": [
+      [
+       0.4,
+       17.0
+      ]
+     ],
+     "d": 10.492
     }
    ]
   },
   {
    "id": 9,
-   "start": 156.594,
-   "dur": 13.583,
+   "start": 94.471,
+   "dur": 12.471,
    "narr": "n9",
-   "narr_at": 157.194,
+   "narr_at": 94.771,
    "narr_dur": 11.471,
    "segs": [
     {
      "t": "card",
      "src": "cards/group-card.png",
-     "dur": 4.5,
-     "d": 4.5
+     "dur": 4.0,
+     "d": 4.0
     },
     {
      "t": "real",
      "src": "out/r9.mp4",
      "demo": true,
-     "d": 9.083
+     "ranges": [
+      [
+       1.4,
+       4.4
+      ],
+      [
+       6.0,
+       9.0
+      ]
+     ],
+     "kb": true,
+     "d": 8.471
     }
    ]
   },
   {
    "id": 10,
-   "start": 170.177,
-   "dur": 10.802,
+   "start": 106.942,
+   "dur": 8.494,
    "narr": "n10",
-   "narr_at": 170.977,
+   "narr_at": 107.242,
    "narr_dur": 6.594,
    "segs": [
     {
      "t": "clip",
      "src": "gen/c10.mp4",
      "gen": true,
-     "d": 6.302
+     "d": 3.0
     },
     {
      "t": "card",
      "src": "cards/end-card.png",
      "min": 4.5,
-     "d": 4.5
+     "d": 5.494
     }
    ]
   }

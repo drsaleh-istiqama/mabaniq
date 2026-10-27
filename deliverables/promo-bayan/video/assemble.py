@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """تجميع فيديو مبانيك لبيان عمان (3 دقائق) — 24 إطارًا/ث، 1920×1080.
    python assemble.py --plan        يطبع الجدول الزمني فقط (بلا تصيير)
-   python assemble.py               تصيير كامل ⟵ out/bayan-promo-3min.mp4 + SRT + timeline.json
+   python assemble.py               تصيير كامل ⟵ out/bayan-promo.mp4 + SRT + timeline.json
    REUSE_SEGS=1                     يعيد استعمال المقاطع المصيَّرة في seg/ إن وُجدت
 مدد المشاهد تُشتق من مدد ملفات الراوي (audio/n*.mp3) فتصلح لأي صوت؛ لقطات المنصة الحقيقية تتمدد/تنضغط لتملأ الباقي
 (بسرعة بين 0.7 و2.2، ولا ارتداد ولا عكس للمقاطع المولَّدة: تشغيل للأمام فقط).
@@ -45,11 +45,10 @@ for sc in S["scenes"]:
     fill = next((i for i, x in enumerate(segs) if x["t"] == "real"), len(segs) - 1)
     for i, sg in enumerate(segs):
         if i == fill: continue
-        if sg["t"] == "clip": sg["d"] = round(dur(HERE / sg["src"]) / sg.get("speed", 0.8), 3)
+        if sg["t"] == "clip": sg["d"] = round(sg["d"] if sg.get("d") else dur(HERE / sg["src"]) / sg.get("speed", 0.8), 3)
         else: sg["d"] = sg["dur"]
     fixed = sum(x["d"] for i, x in enumerate(segs) if i != fill)
     floor = segs[fill].get("min", 3.0)
-    if segs[fill]["t"] == "real": floor = max(floor, dur(HERE / segs[fill]["src"]) / MAX_SPEED)  # لا تُسرَّع لقطة المنصة فوق MAX_SPEED
     segs[fill]["d"] = round(max(target - fixed, floor), 3)
     total = sum(x["d"] for x in segs)
     plan.append({"id": sc["id"], "start": round(t, 3), "dur": round(total, 3), "narr": sc["narr"], "narr_at": round(t + sc["offset"], 3), "narr_dur": round(ndur[sc["narr"]], 3), "segs": segs})
@@ -88,11 +87,15 @@ for k, (sid, sg) in enumerate(flat):
         vf = f"setpts=PTS/{sp},{VF_NORM},tpad=stop_mode=clone:stop_duration=3"
         run(["ffmpeg", "-loglevel", "error", "-y", "-i", str(src), "-vf", vf, "-t", f"{d:.3f}", *ENC, str(f)])
     elif sg["t"] == "real":
-        sd = dur(src); sp = min(2.2, max(0.7, sd / sg["d"]))
+        sd = dur(src)
+        rng = sg.get("ranges") or [[0, sd]]
+        trimmed = sum(b - a for a, b in rng)
+        sp = min(2.0, max(0.8, trimmed / sg["d"]))
         sg["speed"] = round(sp, 3)
-        vf = f"setpts=PTS/{sp:.4f},{VF_NORM},tpad=stop_mode=clone:stop_duration=6"
+        sel = "+".join(f"between(t,{a},{b})" for a, b in rng)
+        zoom = (",zoompan=z='1+0.00045*on':x='(iw-iw/zoom)*0.5':y='(ih-ih/zoom)*0.30':d=1:s=1920x1080:fps=" + str(FPS)) if sg.get("kb") else ""
+        vf = f"select='{sel}',setpts=N/(24*TB),setpts=PTS/{sp:.4f},{VF_NORM},tpad=stop_mode=clone:stop_duration=8{zoom},format=yuv420p"
         run(["ffmpeg", "-loglevel", "error", "-y", "-i", str(src), "-vf", vf, "-t", f"{d:.3f}", *ENC, str(f)])
-        sg["speed"] = round(sp, 3)
     elif sg["t"] == "phone":
         rec = HERE / "rec" / sg["src"] / "list.ffconcat"
         vf = (f"fps={FPS},scale=-2:960:flags=lanczos,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:color=0x124E42,format=yuv420p,tpad=stop_mode=clone:stop_duration=6")
@@ -150,23 +153,20 @@ print("▶ overlay", dur(ovmov))
 
 # ───────────── SRT
 def ts(x): h = int(x // 3600); m = int(x % 3600 // 60); s = x % 60; return f"{h:02d}:{m:02d}:{int(s):02d},{int(round((s % 1) * 1000)):03d}"
-with open(OUT / "bayan-promo-3min.srt", "w", encoding="utf-8") as fh:
+with open(OUT / "bayan-promo.srt", "w", encoding="utf-8") as fh:
     for i, (a, b, n) in enumerate(cap_iv, 1):
         _, nid, idx = n.split("_"); fh.write(f"{i}\n{ts(a)} --> {ts(b)}\n{S['captions'][nid][int(idx)]}\n\n")
 
-# ───────────── الصوت: الراوي + الأنشودة منخفضة مع خفض تلقائي
+# ───────────── الصوت: الراوي فقط (بلا موسيقى — بطلب د. صالح 2026-10-27)
 ain = []; af = []
 for i, p in enumerate(plan):
     ain += ["-i", str(HERE / "audio" / f"{p['narr']}.mp3")]
     af.append(f"[{i + 2}:a]adelay={int(p['narr_at'] * 1000)}|{int(p['narr_at'] * 1000)},apad[n{i}]")
 nm = len(plan)
 mix_n = "".join(f"[n{i}]" for i in range(nm))
-af.append(f"{mix_n}amix=inputs={nm}:normalize=0:duration=longest,atrim=0:{TOTAL:.3f},asplit=2[nar][nsc]")
-ain += ["-stream_loop", "-1", "-i", S["music"]["file"]]
-af.append(f"[{nm + 2}:a]atrim=0:{TOTAL:.3f},volume={S['music']['volume']},afade=t=in:d=2,afade=t=out:st={TOTAL - 3:.2f}:d=3[mus0]")
-af.append("[mus0][nsc]sidechaincompress=threshold=0.04:ratio=6:attack=40:release=400[mus]")
-af.append("[nar][mus]amix=inputs=2:normalize=0:duration=first,alimiter=limit=0.95[aout]")
-final = OUT / "bayan-promo-3min.mp4"
+af.append(f"{mix_n}amix=inputs={nm}:normalize=0:duration=longest,atrim=0:{TOTAL:.3f}[nar]")
+af.append("[nar]alimiter=limit=0.95[aout]")
+final = OUT / "bayan-promo.mp4"
 run(["ffmpeg", "-loglevel", "error", "-y", "-i", str(base), "-i", str(ovmov), *ain,
      "-filter_complex", f"[0:v][1:v]overlay=format=auto[v];" + ";".join(af),
      "-map", "[v]", "-map", "[aout]", "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p", "-r", str(FPS),

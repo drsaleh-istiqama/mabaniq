@@ -52,7 +52,7 @@ const cards = {
     <div style="display:flex;gap:70px;align-items:center">
       <div style="background:#fff;border-radius:26px;padding:22px 40px"><img src="${BAYAN}" style="height:130px"></div>
       <div style="font-size:60px;color:#67BDA0">×</div>
-      <div style="background:#fff;border-radius:26px;padding:22px 40px"><img src="${MBQ}" style="height:130px"></div></div>
+      <div style="background:#fff;border-radius:26px;padding:20px 54px;display:flex;flex-direction:column;align-items:center;gap:6px"><svg viewBox="0 0 386 382" style="height:104px" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="42" width="160" height="160" fill="#124E42"/><polygon points="281,0 384,103 281,206 178,103" fill="#67BDA0"/><path d="M2 220h160A160 160 0 0 1 2 380Z" fill="#1A6F5A"/><rect x="180" y="221" width="160" height="160" fill="#124E42"/></svg><div style="font-size:62px;font-weight:700;color:#124E42;line-height:1.2">مبانيك</div></div></div>
     <div class="big" style="font-size:84px">جرِّبوا مبانيك على بيانات مشاريعكم</div>
     <div class="mid" dir="ltr" style="font-size:46px">mabaneek.com &nbsp;·&nbsp; sales@mabaneek.com</div>
     <div class="small">${S.hijri} الموافق ${S.gregorian}</div>
