@@ -1,0 +1,147 @@
+{
+ "projects": {
+  "MQC": {
+   "id": 1,
+   "name": "مجمع المقصورة التجاري"
+  },
+  "RWQ": {
+   "id": 2,
+   "name": "أروقة الموالح"
+  },
+  "DAR": {
+   "id": 3,
+   "name": "دار المقصورة — فلل العامرات"
+  },
+  "QRM": {
+   "id": 4,
+   "name": "مبنى المقصورة الأول"
+  },
+  "AMR": {
+   "id": 5,
+   "name": "أرض بوشر — دراسة جدوى وتطوير"
+  }
+ },
+ "quote": {
+  "id": 1,
+  "number": "QT-2026-00001",
+  "unit_id": 31,
+  "customer_name": "شركة الواحة للاستشارات الإدارية",
+  "phone": "+968 99000000",
+  "email": "customer@example.com",
+  "plan": "murabaha",
+  "list_price": 35800.0,
+  "discount_pct": 0.02,
+  "price": 35084.0,
+  "valid_until": "2026-11-10",
+  "status": "issued",
+  "schedule": [
+   {
+    "label": "عربون الحجز",
+    "due": "2026-10-27",
+    "amount": 3508.0
+   },
+   {
+    "label": "دفعة أولى",
+    "due": "2026-11-27",
+    "amount": 3508.0
+   },
+   {
+    "label": "تمويل البنك عند التسليم",
+    "due": "2027-07-27",
+    "amount": 28067.0
+   }
+  ],
+  "notes": "عرض افتراضي لأغراض الدليل الترويجي — التمويل بالمرابحة عبر بنك إسلامي، بلا فوائد",
+  "created": "2026-10-27",
+  "created_by": "موظف المبيعات",
+  "booking_id": null,
+  "lead_id": null,
+  "code": "MQC-C-203",
+  "type": "مكتب 65 م²",
+  "area": 65.0,
+  "view": "الشارع",
+  "building": "C",
+  "floor": 2,
+  "project": "مجمع المقصورة التجاري",
+  "location": "الخوض السابعة — السيب",
+  "handover": "2027-07-27",
+  "plan_label": "تمويل مرابحة بنكي",
+  "verify_code": "FCNCWCWAHXQ4"
+ },
+ "campaign": {
+  "id": 1,
+  "project_id": 2,
+  "name": "أروقة الموالح — شقق ومحلات على الرواق في الموالح الجنوبية",
+  "objective": "slow",
+  "channels": [
+   "whatsapp",
+   "email",
+   "instagram",
+   "brokers"
+  ],
+  "audience": "leads_warm",
+  "budget": 1800.0,
+  "start_date": null,
+  "end_date": null,
+  "offer_text": "تقسيط مباشر من المطوّر حتى التسليم بلا أي زيادة على السعر + سنة إعفاء من رسوم الخدمات لمن يحجز قبل نهاية الشهر",
+  "message": "أروقة الموالح في الموالح الجنوبية: شقق من غرفة إلى ثلاث غرف ومحلات على الرواق، بأقساط مباشرة من المطوّر بلا زيادة وخصم على الدفعة الأولى",
+  "status": "draft",
+  "utm": "MK8EBF76",
+  "created_by": "مدير المنصة",
+  "created": "2026-10-27T21:54:17",
+  "notes": "حملة افتراضية للدليل الترويجي",
+  "project": "أروقة الموالح",
+  "channel_labels": [
+   "واتساب",
+   "بريد",
+   "إنستغرام",
+   "الوسطاء"
+  ],
+  "objective_label": "تنشيط مشروع ضعيف البيع",
+  "audience_label": "عملاء في المعاينة/التفاوض",
+  "metrics": {
+   "leads": 0,
+   "quotes": 0,
+   "bookings": 0,
+   "value": 0,
+   "sends": 0,
+   "recipients": 0,
+   "cpl": null,
+   "conversion": null
+  },
+  "creatives": []
+ },
+ "creatives": [
+  {
+   "id": 2,
+   "template": "last_units",
+   "size": "square",
+   "headline": null,
+   "document_id": 12
+  },
+  {
+   "id": 1,
+   "template": "launch",
+   "size": "square",
+   "headline": null,
+   "document_id": 10
+  }
+ ],
+ "docs": {
+  "quote": "QT-2026-00001",
+  "contract": "SPA-00001",
+  "invoice": "INV-2026-000091",
+  "receipt": "MBQ-H-000001",
+  "customer": "إبراهيم الحارثي"
+ },
+ "facts": {
+  "projects": 5,
+  "units": 222,
+  "plans": 7,
+  "leases": 6,
+  "retained": 8,
+  "occupancy": 75,
+  "annual_rent": 46200.0,
+  "arrears": 3250
+ }
+}
