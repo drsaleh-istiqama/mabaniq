@@ -1,0 +1,35 @@
+S 1 @   0.00  dur  13.3  narr    1.00→  11.91  still:3.5 + clip:6.3 + card:3.5
+S 2 @  13.30  dur  18.4  narr   13.90→  28.07  real:18.4
+S 3 @  31.72  dur  20.8  narr   32.32→  45.69  clip:6.3 + real:14.5
+S 4 @  52.55  dur  21.6  narr   53.15→  68.24  clip:6.3 + real:15.3
+S 5 @  74.16  dur  24.2  narr   74.76→  92.22  clip:6.3 + real:17.9
+S 6 @  98.35  dur  17.0  narr   98.95→ 110.46  still:4.0 + real:13.0
+S 7 @ 115.35  dur  19.8  narr  115.95→ 129.69  still:4.0 + real:15.8
+S 8 @ 135.18  dur  21.4  narr  135.78→ 149.62  clip:6.3 + real:15.1
+S 9 @ 156.59  dur  15.1  narr  157.19→ 170.71  card:4.5 + real:10.6
+S10 @ 171.71  dur  10.8  narr  172.51→ 180.45  clip:6.3 + card:4.5
+المجموع 182.5 ث
+▶ seg_00_s1_still.mp4 3.8s
+▶ seg_01_s1_clip.mp4 6.6s
+▶ seg_02_s1_card.mp4 3.8s
+▶ seg_03_s2_real.mp4 18.7s
+▶ seg_04_s3_clip.mp4 6.6s
+▶ seg_05_s3_real.mp4 14.8s
+▶ seg_06_s4_clip.mp4 6.6s
+▶ seg_07_s4_real.mp4 15.6s
+▶ seg_08_s5_clip.mp4 6.6s
+▶ seg_09_s5_real.mp4 18.2s
+▶ seg_10_s6_still.mp4 4.3s
+▶ seg_11_s6_real.mp4 13.3s
+▶ seg_12_s7_still.mp4 4.3s
+▶ seg_13_s7_real.mp4 16.1s
+▶ seg_14_s8_clip.mp4 6.6s
+▶ seg_15_s8_real.mp4 15.4s
+▶ seg_16_s9_card.mp4 4.8s
+▶ seg_17_s9_real.mp4 10.9s
+▶ seg_18_s10_clip.mp4 6.6s
+▶ seg_19_s10_card.mp4 4.5s
+▶ base 182.541667
+▶ overlay 182.5
+✔ C:\mabaniq\deliverables\promo-bayan\video\out\bayan-promo-3min.mp4 182.541667
+done
