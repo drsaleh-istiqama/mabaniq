@@ -102,7 +102,7 @@ TOUR = [
     {"id": "sign-in", "kicker": "Sign-in and identity", "title": "Secure sign-in under your company's name, and one entity per company in the group",
      "lead": "Users pick the developer, Bayan Oman, and sign in with a password or with the company's Google account. Accounts are never created from outside: an identity is matched to an account that an administrator created. "
              "The same developer list is where other entities of the group live, if Bayan Investment House wants a separate portfolio with its own letterhead.",
-     "bullets": ["Ready-made roles: general manager, sales and leasing, finance, engineer, investor, broker and customer. Each role sees only what concerns it.",
+     "bullets": ["Ready-made roles: general manager, sales, finance, engineer, investor, broker and customer. Each role sees only what concerns it.",
                  "Two-factor authentication (TOTP) with recovery codes, sessions listed per device and ended remotely, and graded lockout against guessing.",
                  "Each entity in a group is a developer isolated row by row in the database (row-level security), not merely in the application."],
      "figs": [F("01-login", "Sign-in with developer selection. The password field is masked.", .62), F("30-security-2fa", "The security tab: two-factor set-up, active sessions and sign-out from all devices.", .5)]},
@@ -270,7 +270,7 @@ INFO = {
                ("Marketing", "A board classing every project, non-interest campaigns, an ad studio on your renders, market alerts"),
                ("Reports and analytics", "10 ready reports, a report builder with no SQL, CSV and PDF with charts, scheduled by email"),
                ("Governance and security", "An audit log that cannot be erased, two-factor, roles and permissions, data isolation in the database, public document verification")],
-    "roles": [("General manager", "Today's decisions with their impact"), ("Sales and leasing", "Quotes, bookings, contracts, leases"), ("Finance", "Collection, reconciliation, escrow"),
+    "roles": [("General manager", "Today's decisions with their impact"), ("Sales", "Quotes, bookings, contracts, brokers"), ("Finance", "Collection, reconciliation, escrow"),
               ("Engineer", "Certificates and schedule"), ("Broker", "Own leads and commissions"), ("Customer", "A phone app: my unit, my payments")],
     "facts": [(str(N_PROJECTS), "projects: Masahat, Al Shabab, Alaa, MQ, Mabelah, Khuwair"), (str(N_UNITS), "units on your published brochure areas"), (str(N_PLANS), "plans and renders from the three brochures"),
               ("4", "documents on your letterhead: quote, contract, invoice, receipt"), ("RTL", "Arabic first, Hijri first, Western digits"), ("0%", "no interest, and lateness is a donation")],

@@ -239,15 +239,15 @@ td.u{font-weight:700;color:var(--brand-2);white-space:nowrap}
 
 ACCOUNTS = [
     ("bayan-ceo", "General manager", "Everything: decisions, inventory, leasing, marketing, finance, reports, users and security"),
-    ("bayan-sales", "Sales and leasing", "Inventory, leads, quotes, bookings and contracts, brokers, the leasing portfolio"),
-    ("bayan-finance", "Finance and collections", "Liquidity and default risk, invoices and escrow, bank reconciliation, certificates, reports"),
+    ("bayan-sales", "Sales", "Inventory, leads, quotes, bookings and contracts, brokers and commissions, project marketing"),
+    ("bayan-finance", "Finance and collections", "Liquidity and default risk, invoices and escrow, bank reconciliation, certificates, reports, the leasing portfolio (leases and rent)"),
     ("bayan-engineer", "Project engineer", "Construction and certificates, permits, handover and defects"),
     ("bayan-client", "Customer", "The customer app on a phone: my unit, payments, service, documents (opens by itself after sign-in)"),
 ]
 STEPS = [
     ("bayan-ceo", "Dashboard: the decision box ranked by priority and financial impact; click any decision to see why."),
     ("bayan-ceo", "Inventory and pricing, choose Masahat Al Khoudh, then the Plans button: the ground floor with shop markers and your brochure plans."),
-    ("bayan-sales", "Handover and property, then Leasing: the contracts of the kept units, their quarterly instalments, the late one and the renewal alert. Try + Lease on the vacant unit."),
+    ("bayan-finance", "Handover and property, then Leasing (finance and general manager permission): the contracts of the kept units, their quarterly instalments, the late one and the renewal alert. Try + Lease on the vacant unit."),
     ("bayan-sales", "Contracts and brokers, then Quotes, then + Quote: issue a murabaha quote for an available office, open the PDF on your letterhead and turn it into a booking."),
     ("bayan-client", "The customer app: My unit (progress), Payments (the instalment schedule), More (the contract, the plans and the unit's place on them)."),
     ("bayan-finance", "Liquidity and default risk, then Invoices and escrow: the liquidity radar, arrears, and late-payment donations in place of a penalty."),
@@ -291,7 +291,7 @@ Dear colleagues at Bayan Oman, we have prepared a trial environment of Mabaneek 
 
 - Link: {URL}
 - On the sign-in screen choose the developer Bayan Oman
-- Username for management: bayan-ceo (general manager: sees everything). Other accounts for your team are in the attached trial guide (sales and leasing, finance, engineer, and a customer account to try the customer app)
+- Username for management: bayan-ceo (general manager: sees everything). Other accounts for your team are in the attached trial guide (sales, finance, engineer, and a customer account to try the customer app)
 - I will send the temporary password in a separate message, and you will choose a password of your own at first sign-in
 
 Attached: the trial guide (two pages: signing in, a 15-minute tour and notes), the short brief with screenshots of the platform, and the one-page infographic.

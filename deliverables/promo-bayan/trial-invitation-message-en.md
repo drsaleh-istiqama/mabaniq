@@ -8,7 +8,7 @@ Dear colleagues at Bayan Oman, we have prepared a trial environment of Mabaneek 
 
 - Link: https://mabaneek.com
 - On the sign-in screen choose the developer Bayan Oman
-- Username for management: bayan-ceo (general manager: sees everything). Other accounts for your team are in the attached trial guide (sales and leasing, finance, engineer, and a customer account to try the customer app)
+- Username for management: bayan-ceo (general manager: sees everything). Other accounts for your team are in the attached trial guide (sales, finance, engineer, and a customer account to try the customer app)
 - I will send the temporary password in a separate message, and you will choose a password of your own at first sign-in
 
 Attached: the trial guide (two pages: signing in, a 15-minute tour and notes), the short brief with screenshots of the platform, and the one-page infographic.
