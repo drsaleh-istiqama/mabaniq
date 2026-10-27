@@ -40,7 +40,6 @@ def path(src):
 ndur = {k: dur(HERE / "audio" / f"{k}.mp3") for k in S["captions"]}
 t = 0.0; plan = []
 for sc in S["scenes"]:
-    target = sc["offset"] + ndur[sc["narr"]] + sc["tail"]
     segs = [dict(x) for x in sc["segs"]]
     fill = next((i for i, x in enumerate(segs) if x["t"] == "real"), len(segs) - 1)
     for i, sg in enumerate(segs):
@@ -48,14 +47,27 @@ for sc in S["scenes"]:
         if sg["t"] == "clip": sg["d"] = round(sg["d"] if sg.get("d") else dur(HERE / sg["src"]) / sg.get("speed", 0.8), 3)
         else: sg["d"] = sg["dur"]
     fixed = sum(x["d"] for i, x in enumerate(segs) if i != fill)
+    before = sum(x["d"] for x in segs[:fill])
+    a_end = sc["offset"] + ndur[sc["narr"]]
+    says = [(sc["narr"], sc["offset"])]
+    if sc.get("narr2"):
+        # السطر الثاني يبدأ عند لقطة المنصة التي يصفها (beat بثواني المصدر) بحدّ أقصى 2.5 ث صمتًا بعد الأول
+        rng = segs[fill].get("ranges") or [[0, 1e9]]
+        trimmed_before = sum(max(0, min(sc["beat"], hi) - lo) for lo, hi in rng)
+        beat_est = before + trimmed_before / 1.0
+        b0 = max(a_end + 0.5, min(beat_est - 1.0, a_end + 2.5))
+        says.append((sc["narr2"], round(b0, 3)))
+        a_end = b0 + ndur[sc["narr2"]]
+    target = a_end + sc["tail"]
     floor = segs[fill].get("min", 3.0)
     segs[fill]["d"] = round(max(target - fixed, floor), 3)
     total = sum(x["d"] for x in segs)
-    plan.append({"id": sc["id"], "start": round(t, 3), "dur": round(total, 3), "narr": sc["narr"], "narr_at": round(t + sc["offset"], 3), "narr_dur": round(ndur[sc["narr"]], 3), "segs": segs})
+    plan.append({"id": sc["id"], "start": round(t, 3), "dur": round(total, 3),
+                 "says": [{"n": n, "at": round(t + at, 3), "dur": round(ndur[n], 3)} for n, at in says], "segs": segs})
     t += total
 TOTAL = round(t, 3)
 for p in plan:
-    print(f"S{p['id']:>2} @{p['start']:7.2f}  dur {p['dur']:5.1f}  narr {p['narr_at']:7.2f}→{p['narr_at'] + p['narr_dur']:7.2f}  " + " + ".join(f"{x['t']}:{x['d']:.1f}" for x in p["segs"]))
+    print(f"S{p['id']:>2} @{p['start']:7.2f}  dur {p['dur']:5.1f}  say " + " | ".join(f"{x['n']} {x['at']:.1f}→{x['at'] + x['dur']:.1f}" for x in p["says"]) + "  " + " + ".join(f"{x['t']}:{x['d']:.1f}" for x in p["segs"]))
 print(f"المجموع {TOTAL:.1f} ث")
 (HERE / "timeline.json").write_text(json.dumps({"total": TOTAL, "scenes": plan}, ensure_ascii=False, indent=1), encoding="utf-8")
 if PLAN: sys.exit(0)
@@ -90,7 +102,7 @@ for k, (sid, sg) in enumerate(flat):
         sd = dur(src)
         rng = sg.get("ranges") or [[0, sd]]
         trimmed = sum(b - a for a, b in rng)
-        sp = min(2.0, max(0.8, trimmed / sg["d"]))
+        sp = min(2.0, max(0.75, trimmed / sg["d"]))
         sg["speed"] = round(sp, 3)
         sel = "+".join(f"between(t,{a},{b})" for a, b in rng)
         zoom = (",zoompan=z='1+0.00045*on':x='(iw-iw/zoom)*0.5':y='(ih-ih/zoom)*0.30':d=1:s=1920x1080:fps=" + str(FPS)) if sg.get("kb") else ""
@@ -120,10 +132,11 @@ badge_demo, badge_gen = card("badge-demo"), card("badge-gen")
 events = []  # (start, end, [pngs])
 cap_iv = []
 for p in plan:
-    lines = S["captions"][p["narr"]]; w = [len(x) for x in lines]; tot = sum(w); a = p["narr_at"]
-    for i, ln in enumerate(lines):
-        b = a + p["narr_dur"] * w[i] / tot
-        cap_iv.append((a, b, f"sub_{p['narr']}_{i}")); a = b
+    for sy in p["says"]:
+        lines = S["captions"][sy["n"]]; w = [len(x) for x in lines]; tot = sum(w); a = sy["at"]
+        for i, ln in enumerate(lines):
+            b = a + sy["dur"] * w[i] / tot
+            cap_iv.append((a, b, f"sub_{sy['n']}_{i}")); a = b
 badge_iv = []
 for p in plan:
     s0 = p["start"]
@@ -159,10 +172,11 @@ with open(OUT / "bayan-promo.srt", "w", encoding="utf-8") as fh:
 
 # ───────────── الصوت: الراوي فقط (بلا موسيقى — بطلب د. صالح 2026-10-27)
 ain = []; af = []
-for i, p in enumerate(plan):
-    ain += ["-i", str(HERE / "audio" / f"{p['narr']}.mp3")]
-    af.append(f"[{i + 2}:a]adelay={int(p['narr_at'] * 1000)}|{int(p['narr_at'] * 1000)},apad[n{i}]")
-nm = len(plan)
+evs = [sy for p in plan for sy in p["says"]]
+for i, sy in enumerate(evs):
+    ain += ["-i", str(HERE / "audio" / f"{sy['n']}.mp3")]
+    af.append(f"[{i + 2}:a]adelay={int(sy['at'] * 1000)}|{int(sy['at'] * 1000)},apad[n{i}]")
+nm = len(evs)
 mix_n = "".join(f"[n{i}]" for i in range(nm))
 af.append(f"{mix_n}amix=inputs={nm}:normalize=0:duration=longest,atrim=0:{TOTAL:.3f}[nar]")
 af.append("[nar]alimiter=limit=0.95[aout]")
