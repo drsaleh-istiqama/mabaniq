@@ -1,0 +1,14 @@
+S 1 @   0.00  dur   9.2  say n1 0.3→8.5  still:2.6 + clip:3.0 + card:3.6
+S 2 @   9.22  dur  24.3  say n2 9.5→21.5 | n2b 24.0→32.8  real:24.3
+S 3 @  33.48  dur  21.6  say n3 33.8→45.1 | n3b 46.9→54.4  clip:3.0 + real:18.6
+S 4 @  55.06  dur  24.5  say n4 55.4→67.2 | n4b 69.7→78.9  clip:3.0 + real:21.5
+S 5 @  79.59  dur  22.5  say n5 79.9→91.6 | n5b 94.1→101.4  clip:3.0 + real:19.5
+S 6 @ 102.09  dur   9.1  say n6 102.4→110.5  still:3.0 + real:6.1
+S 7 @ 111.17  dur  22.3  say n7 111.5→122.2 | n7b 124.7→132.7  still:3.0 + real:19.3
+S 8 @ 133.43  dur  21.6  say n8 133.7→146.2 | n8b 146.7→154.3  clip:3.0 + real:18.6
+S 9 @ 154.99  dur  12.5  say n9 155.3→166.8  card:4.0 + real:8.5
+S10 @ 167.46  dur  10.4  say n10 167.8→174.4  clip:3.0 + card:7.4
+المجموع 177.9 ث
+▶ base 177.875
+▶ overlay 177.875
+✔ C:\mabaniq\deliverables\promo-bayan\video\out\bayan-promo-en.mp4 177.875

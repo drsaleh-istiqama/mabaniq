@@ -337,5 +337,82 @@
    "ويكفي أن يُدخل الطرف الآخر رمز المستند،",
    "لتظهر له صحته دون أي بيانات شخصية."
   ]
+ },
+ "captions_en": {
+  "n1": [
+   "A client asks: how many offices are still available?",
+   "In real estate development, whoever answers first wins the deal."
+  ],
+  "n2": [
+   "With Mabaniq, a WhatsApp agent replies within seconds",
+   "with the units that are actually available, books the viewing,",
+   "and logs the client in the leads register."
+  ],
+  "n3": [
+   "At the office, the client sees their unit on the real floor plan,",
+   "and a price quotation on Bayan letterhead is issued on the spot,",
+   "with a clear Murabaha payment plan."
+  ],
+  "n4": [
+   "Behind it all is well-organised data: the data coordinator uploads the plans,",
+   "marks the unit locations,",
+   "and every file carries a fingerprint that proves its authenticity."
+  ],
+  "n5": [
+   "In the meeting room, planning and marketing face the same numbers:",
+   "which units sell fast, and which are stagnant.",
+   "So they agree on the price and the campaign together."
+  ],
+  "n6": [
+   "Leasing in one place: contracts, quarterly instalments and arrears,",
+   "with an alert before each contract expires."
+  ],
+  "n7": [
+   "From site to accounting: completion is approved with evidence,",
+   "collection is tied to the contract,",
+   "and late payment becomes a donation to a charity, not a penalty."
+  ],
+  "n8": [
+   "The CEO opens the dashboard in the morning",
+   "and sees all the company’s projects on one screen,",
+   "with decisions ranked by priority and financial impact."
+  ],
+  "n9": [
+   "Each company in the group has an isolated entity in the database,",
+   "an audit log that can never be erased,",
+   "and every document is publicly verified with a square code."
+  ],
+  "n10": [
+   "Mabaniq: from the offer to the contract to the handover.",
+   "Try it on your own project data."
+  ],
+  "n2b": [
+   "Every conversation becomes a recorded opportunity",
+   "with the client’s name, source and stage — no manual entry."
+  ],
+  "n3b": [
+   "With one click the quotation becomes a reservation,",
+   "or is printed, or sent by email or WhatsApp."
+  ],
+  "n4b": [
+   "Every issued document carries the company logo, stamp and authorised signature,",
+   "with a verifiable code."
+  ],
+  "n5b": [
+   "Then the recommendation moves into a campaign,",
+   "and the ads studio designs the post from the same project data."
+  ],
+  "n7b": [
+   "The donation amount is calculated automatically from every late instalment",
+   "and directed to the approved charity."
+  ],
+  "n8b": [
+   "The reports centre produces the portfolio dashboard, charts and tables,",
+   "ready to print and export."
+  ],
+  "n9b": [
+   "The other party only needs to enter the document code",
+   "to see that it is genuine — with no personal data shown."
+  ]
  }
 }

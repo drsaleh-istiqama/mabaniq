@@ -14,7 +14,10 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 S = json.loads((HERE / "script.json").read_text(encoding="utf-8"))
 FPS, XF = S["fps"], S["xfade"]
-SEG = HERE / "seg"; OUT = HERE / "out"; OV = HERE / "ov"
+SUBLANG = os.environ.get("SUBLANG", "ar")  # ar: ترجمة عربية · en: ترجمة إنجليزية أسفل الشاشة
+CAPS = S["captions_en"] if SUBLANG == "en" else S["captions"]
+SFX = "-en" if SUBLANG == "en" else ""
+SEG = HERE / "seg"; OUT = HERE / "out"; OV = HERE / ("ov_en" if SUBLANG == "en" else "ov")
 for d in (SEG, OUT, OV): d.mkdir(exist_ok=True)
 PLAN = "--plan" in sys.argv
 MAX_SPEED = float(os.environ.get("MAX_SPEED", "1.5"))
@@ -127,13 +130,13 @@ if not (base.exists() and os.environ.get("REUSE_SEGS")):
 print("▶ base", dur(base))
 
 # ───────────── طبقة الترجمة والشارات (فيديو RGBA واحد من PNG بمدد)
-def card(n): return Image.open(HERE / "cards" / f"{n}.png").convert("RGBA")
+def card(n): return Image.open(HERE / "cards" / ("en" if SUBLANG == "en" and n.startswith("sub_") else "") / f"{n}.png").convert("RGBA")
 badge_demo, badge_gen = card("badge-demo"), card("badge-gen")
 events = []  # (start, end, [pngs])
 cap_iv = []
 for p in plan:
     for sy in p["says"]:
-        lines = S["captions"][sy["n"]]; w = [len(x) for x in lines]; tot = sum(w); a = sy["at"]
+        lines = CAPS[sy["n"]]; w = [len(x) for x in lines]; tot = sum(w); a = sy["at"]
         for i, ln in enumerate(lines):
             b = a + sy["dur"] * w[i] / tot
             cap_iv.append((a, b, f"sub_{sy['n']}_{i}")); a = b
@@ -166,9 +169,9 @@ print("▶ overlay", dur(ovmov))
 
 # ───────────── SRT
 def ts(x): h = int(x // 3600); m = int(x % 3600 // 60); s = x % 60; return f"{h:02d}:{m:02d}:{int(s):02d},{int(round((s % 1) * 1000)):03d}"
-with open(OUT / "bayan-promo.srt", "w", encoding="utf-8") as fh:
+with open(OUT / f"bayan-promo{SFX}.srt", "w", encoding="utf-8") as fh:
     for i, (a, b, n) in enumerate(cap_iv, 1):
-        _, nid, idx = n.split("_"); fh.write(f"{i}\n{ts(a)} --> {ts(b)}\n{S['captions'][nid][int(idx)]}\n\n")
+        _, nid, idx = n.split("_"); fh.write(f"{i}\n{ts(a)} --> {ts(b)}\n{CAPS[nid][int(idx)]}\n\n")
 
 # ───────────── الصوت: الراوي فقط (بلا موسيقى — بطلب د. صالح 2026-10-27)
 ain = []; af = []
@@ -180,7 +183,7 @@ nm = len(evs)
 mix_n = "".join(f"[n{i}]" for i in range(nm))
 af.append(f"{mix_n}amix=inputs={nm}:normalize=0:duration=longest,atrim=0:{TOTAL:.3f}[nar]")
 af.append("[nar]alimiter=limit=0.95[aout]")
-final = OUT / "bayan-promo.mp4"
+final = OUT / f"bayan-promo{SFX}.mp4"
 run(["ffmpeg", "-loglevel", "error", "-y", "-i", str(base), "-i", str(ovmov), *ain,
      "-filter_complex", f"[0:v][1:v]overlay=format=auto[v];" + ";".join(af),
      "-map", "[v]", "-map", "[aout]", "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p", "-r", str(FPS),

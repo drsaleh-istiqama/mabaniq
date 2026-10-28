@@ -63,16 +63,22 @@ const cards = {
 
 const subCss = 'html,body{background:transparent}';
 const subs = {};
-for (const [nid, lines] of Object.entries(S.captions)) lines.forEach((t, i) => {
+const EN = process.env.SUBLANG === 'en';
+if (EN) {
+  for (const [nid, lines] of Object.entries(S.captions_en)) lines.forEach((t, i) => {
+    subs[`en/sub_${nid}_${i}`] = doc(`<div dir="ltr" style="direction:ltr;position:absolute;bottom:92px;left:0;right:0;display:flex;justify-content:center"><div style="direction:ltr;background:rgba(8,40,33,.78);color:#fff;font-family:Inter,'Segoe UI',Arial,sans-serif;font-size:44px;font-weight:500;line-height:1.4;padding:12px 44px;border-radius:18px;max-width:1780px;text-align:center">${t}</div></div>`, subCss);
+  });
+} else for (const [nid, lines] of Object.entries(S.captions)) lines.forEach((t, i) => {
   subs[`sub_${nid}_${i}`] = doc(`<div style="position:absolute;bottom:64px;left:0;right:0;display:flex;justify-content:center"><div style="background:rgba(8,40,33,.78);color:#fff;font-size:50px;font-weight:500;line-height:1.5;padding:12px 44px;border-radius:18px;max-width:1740px;text-align:center">${t}</div></div>`, subCss);
 });
 
 const browser = await chromium.launch({channel: process.env.PW_CHANNEL || 'chrome'});
 const page = await (await browser.newContext({viewport: {width: 1920, height: 1080}})).newPage();
-for (const [name, html] of Object.entries({...cards, ...subs})) {
+mkdirSync(join(OUT, 'en'), {recursive: true});
+for (const [name, html] of Object.entries(EN ? subs : {...cards, ...subs})) {
   const f = join(OUT, name + '.html'); writeFileSync(f, html);
   await page.goto(pathToFileURL(f).href); await page.evaluate(() => document.fonts.ready); await page.waitForTimeout(150);
-  await page.screenshot({path: join(OUT, name + '.png'), omitBackground: name.startsWith('badge') || name.startsWith('sub_')});
+  await page.screenshot({path: join(OUT, name + '.png'), omitBackground: name.startsWith('badge') || name.includes('sub_')});
 }
 await browser.close();
 console.log('cards:', Object.keys(cards).length, 'subs:', Object.keys(subs).length);
