@@ -257,6 +257,10 @@ CREATE TABLE IF NOT EXISTS demo_requests(
   id INTEGER PRIMARY KEY, created TEXT NOT NULL, name TEXT NOT NULL, company TEXT NOT NULL, email TEXT NOT NULL, phone TEXT NOT NULL,
   projects INTEGER DEFAULT 0, message TEXT, lang TEXT DEFAULT 'ar', ip_hash TEXT, user_agent TEXT, mailed INTEGER DEFAULT 0);
 
+-- 0.20.0 — الوحدات المفعَّلة لكل مؤسسة (backend/registry.py). لا صفوف = الافتراضي من ملف التعريف. تبقى عبر إعادة البذر.
+CREATE TABLE IF NOT EXISTS org_modules(
+  module TEXT PRIMARY KEY, enabled INTEGER NOT NULL DEFAULT 1, changed_at TEXT, changed_by TEXT);
+
 CREATE INDEX IF NOT EXISTS ix_units_project ON units(project_id);
 CREATE INDEX IF NOT EXISTS ix_inst_booking ON installments(booking_id);
 CREATE INDEX IF NOT EXISTS ix_book_unit ON bookings(unit_id);

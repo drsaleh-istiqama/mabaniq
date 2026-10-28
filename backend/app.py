@@ -22,6 +22,7 @@ from . import observability as O
 from .auth import need
 from .config import settings
 from .db import TENANT, backup, connect, tenants, valid_tenant
+from .orgmodules import module_gate
 from .seed import seed
 
 O.setup_logging()
@@ -56,7 +57,8 @@ async def lifespan(_app):
 
 PROD = os.environ.get("MABANIQ_ENV", "demo") == "prod"
 VERSION = settings.version
-app = FastAPI(title="Mabaniq API", version=VERSION, lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
+app = FastAPI(title="Mabaniq API", version=VERSION, lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None,
+              dependencies=[Depends(module_gate)])  # 0.20.0: a path of a switched-off module answers 404 (backend/orgmodules.py)
 
 
 # ------------------------------------------------------------------ الصحة والإصدار (بلا مصادقة، بلا قاعدة بيانات في /health)
@@ -229,7 +231,14 @@ def ipcs(_=Depends(need("construction"))):
 @app.get("/api/decisions")
 def decisions(_=Depends(need("view"))):
     # Unit 4: whole-portfolio computation (~130 ms) shared by every dashboard for a few seconds; any write of the tenant invalidates it
-    return _cached_json("decisions", lambda: E.decisions(db()))
+    # 0.20.0: only the decisions of modules that are on
+    return _cached_json("decisions", lambda: visible_decisions(db(), E.decisions(db())))
+
+
+@app.get("/api/dashboard")
+def dashboard_ep(_=Depends(need("view"))):
+    """0.20.0 — widgets of the modules that are on (tiles, decisions, leasing properties, cash) — replaces the sales-only overview."""
+    return _cached_json("dashboard", lambda: dashboard(db()))
 
 
 @app.get("/api/audit")
@@ -343,7 +352,7 @@ class DecisionIn(BaseModel):
 @app.post("/api/decisions/act")
 def act(dcs: DecisionIn, u=Depends(act_as("decide"))):
     c = db()
-    item = next((x for x in E.decisions(c) if x["key"] == dcs.key), None)
+    item = next((x for x in visible_decisions(c, E.decisions(c)) if x["key"] == dcs.key), None)
     if not item:
         raise HTTPException(404, "القرار غير موجود")
     if item["done"]:
@@ -362,6 +371,8 @@ def act(dcs: DecisionIn, u=Depends(act_as("decide"))):
             if "approve_ipc" not in u["perms"]:
                 raise HTTPException(403, "اعتماد المستخلصات من صلاحية الإدارة")
             return approve_ipc(p["ipc_id"], c)
+        elif item["kind"].startswith("lease_"):
+            detail = "تكليف فريق التأجير بالمتابعة"
         else:
             detail = "اعتماد خطة معالجة السيولة"
     else:
@@ -894,6 +905,10 @@ from .modules2 import router as modules2_router  # noqa: E402
 
 app.include_router(modules_router)
 app.include_router(modules2_router)
+from .orgmodules import dashboard, visible_decisions
+from .orgmodules import router as orgmodules_router  # noqa: E402
+
+app.include_router(orgmodules_router)
 from .appearance import router as appearance_router  # noqa: E402
 from .assistant import router as assistant_router  # noqa: E402
 from .identity import router as identity_router  # noqa: E402

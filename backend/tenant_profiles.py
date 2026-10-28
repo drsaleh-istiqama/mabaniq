@@ -162,6 +162,9 @@ PROFILES: dict[str, dict] = {
         # the purchased-units workbook (two towers, 30 units, 8 leased), nine shops in Souq Al Sad, one plot for sale in Azaiba.
         # Unknown values stay empty (NULL) and are listed in docs/OWNER_DECISIONS.md — nothing is invented.
         "real_only": True,
+        # 0.20.0 — a leasing company: no sales cycle. Licence and default modules = the leasing bundle (backend/registry.py BUNDLES);
+        # accounting and HR join the licence when they ship (design §2.2) and stay off until the owner asks for them.
+        "bundle": "leasing_only",
         "brand": {"name": "المقصورة العقارية (Almaqsura Real Estate)", "address": "مركز داود للأعمال، الخوض السابعة، ولاية السيب، محافظة مسقط",
                   "phone": "", "email": "", "signatory": "", "signatory_title": "المدير العام"},
         # code, name, location, kind, build %, planned monthly sales, handover (ISO), completed

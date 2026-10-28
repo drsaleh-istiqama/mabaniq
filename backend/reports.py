@@ -248,7 +248,7 @@ def _coerce(meta, v):
 
 def run_spec(c, spec: Spec, perms: set) -> dict:
     ds = DATASETS.get(spec.dataset)
-    if not ds:
+    if not ds or not _on(DATASET_MODULE, spec.dataset, c):
         raise HTTPException(404, "مجموعة البيانات غير معروفة")
     if ds["perm"] not in perms and "admin" not in perms:
         raise HTTPException(403, f"مجموعة «{ds['label']}» تحتاج صلاحية {ds['perm']}")
@@ -549,6 +549,19 @@ READY = OrderedDict([
 ])
 
 
+# 0.20.0 — the module whose data a ready report / dataset draws on (absent = always available)
+READY_MODULE = {"sales": "sales", "funnel": "sales", "quotes": "sales", "brokers": "sales", "collections": "sales", "cash": "finance",
+                "construction": "construction", "handover": "handover"}
+DATASET_MODULE = {"bookings": "sales", "installments": "sales", "payments": "sales", "leads": "sales", "quotes": "sales",
+                  "invoices": "finance", "charity": "finance", "service": "handover"}
+
+
+def _on(table: dict, key: str, c) -> bool:
+    from . import registry
+    m = table.get(key)
+    return m is None or m in registry.enabled_modules(c)
+
+
 def _perm_ok(perm: str, perms: set) -> bool:
     return perm in perms or "admin" in perms or "reports" in perms
 
@@ -556,15 +569,16 @@ def _perm_ok(perm: str, perms: set) -> bool:
 @router.get("/api/reports/catalog")
 def catalog(u=Depends(need_any(*PERM))):
     perms = set(u["perms"])
-    ready = [{"key": k, "title": v["title"], "desc": v["desc"], "group": v["group"]} for k, v in READY.items() if _perm_ok(v["perm"], perms)]
-    return {"ready": ready, "datasets": datasets_public(perms | ({"view", "leads", "finance", "invoices", "service", "inventory", "brokers", "handover"} if "admin" in perms or "reports" in perms else set())),
+    c0 = db()
+    ready = [{"key": k, "title": v["title"], "desc": v["desc"], "group": v["group"]} for k, v in READY.items() if _perm_ok(v["perm"], perms) and _on(READY_MODULE, k, c0)]
+    return {"ready": ready, "datasets": [d for d in datasets_public(perms | ({"view", "leads", "finance", "invoices", "service", "inventory", "brokers", "handover"} if "admin" in perms or "reports" in perms else set())) if _on(DATASET_MODULE, d["key"], c0)],
             "projects": rows(db().execute("SELECT id, name FROM projects ORDER BY id")),
             "links": [{"key": "lender", "title": "تقرير الممول (البنك)", "api": "/api/reports/lender"}, {"key": "investor", "title": "تقرير المستثمرين", "api": "/api/reports/investor"}]}
 
 
 def run_ready(c, key: str, params: dict, perms: set) -> dict:
     r = READY.get(key)
-    if not r:
+    if not r or not _on(READY_MODULE, key, c):
         raise HTTPException(404, "التقرير غير موجود")
     if not _perm_ok(r["perm"], perms):
         raise HTTPException(403, "ليست لديك صلاحية هذا التقرير")
@@ -782,6 +796,9 @@ def run_due_all() -> int:
         try:
             c = connect()
             try:
+                from . import registry
+                if "reports" not in registry.enabled_modules(c):  # 0.20.0: a switched-off module does no background work
+                    continue
                 n += run_due_schedules(c)
             finally:
                 c.close()

@@ -511,8 +511,17 @@ _SCHEMA = {
 }
 
 
+# 0.20.0 — a tool is offered only while the module whose data it reads is on (core tools — overview, inventory, find — always)
+TOOL_MODULE = {"project_ranking": "sales", "leads": "sales", "bookings": "sales", "collections": "sales", "risk": "sales", "brokers": "sales",
+               "pricing_advice": "sales", "construction": "construction", "handover_service": "handover", "leasing": "leasing",
+               "permits": "land", "land": "land"}
+
+
 def _allowed(u, name) -> bool:
     perms = TOOLS[name][0]
+    mod = TOOL_MODULE.get(name)
+    if mod and mod not in u.get("modules", ()):
+        return False
     return not perms or bool(set(perms) & set(u["perms"]))
 
 

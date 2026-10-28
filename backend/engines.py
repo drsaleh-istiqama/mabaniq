@@ -321,6 +321,23 @@ def decisions(c):
                     "impact": cr["gap"], "impact_label": "عجز متوقع",
                     "why": "؛ ".join(cr["worst"]["drivers"]) or "تجاوز المصروفات للتحصيل المتوقع",
                     "payload": {}, "done": done.get(key)})
+    if c.has_table("leases"):  # 0.20.0 — leasing decisions (shown only while the leasing module is on; see orgmodules.visible_decisions)
+        t0 = TODAY()
+        for l in c.execute("""SELECT l.id, l."end", l.annual_rent, u.code unit, t.name tenant FROM leases l JOIN units u ON u.id=l.unit_id
+                              JOIN tenants_l t ON t.id=l.tenant_id WHERE l.status='active' ORDER BY l."end" """):
+            days = (dt.date.fromisoformat(l["end"]) - t0).days
+            if 0 <= days <= 60:
+                key = f"lease_renew:{l['id']}"
+                out.append({"key": key, "kind": "lease_renew", "priority": "عالية" if days <= 30 else "متوسطة", "source": "عقود الإيجار",
+                            "title": f"عقد الوحدة {l['unit']} ({l['tenant']}) ينتهي خلال {days} يومًا — قرار التجديد",
+                            "impact": round(l["annual_rent"]), "impact_label": "إيجار سنوي معرّض للشغور",
+                            "why": f"ينتهي العقد في {l['end']}؛ التجديد المبكر يتجنّب فترة شغور.", "payload": {"lease_id": l["id"]}, "done": done.get(key)})
+        arrears = c.execute("SELECT COALESCE(SUM(amount-paid),0), COUNT(DISTINCT lease_id) FROM rent_dues WHERE due<=? AND paid<amount", (t0.isoformat(),)).fetchone()
+        if arrears[0] > 0:
+            key = f"lease_arrears:{t0:%Y-%m}"
+            out.append({"key": key, "kind": "lease_arrears", "priority": "عالية", "source": "تحصيل الإيجار",
+                        "title": f"متأخرات إيجار على {arrears[1]} عقد — متابعة التحصيل", "impact": round(arrears[0]), "impact_label": "إيجار مستحق غير محصَّل",
+                        "why": "دفعات استحقت ولم تُسدَّد؛ ابدأ بالتذكير ثم الإنذار.", "payload": {}, "done": done.get(key)})
     order = {"حرجة": 0, "عالية": 1}
     return sorted(out, key=lambda x: (x["done"] is not None, order.get(x["priority"], 2), -x["impact"]))
 

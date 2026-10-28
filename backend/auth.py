@@ -371,7 +371,8 @@ def login(username: str, pw: str, ip: str, otp: str | None = None, ua: str = "")
         token = _new_session(c, u["id"], ip, ua)
         audit_insert(c, u["name"], "تسجيل دخول", f"{u['username']} من {ip}{via} · {_ua_label(ua)}")
         c.commit()
-        return token, public(u)
+        from . import registry
+        return token, public(u, registry.enabled_modules(c))
     finally:
         c.close()
 
@@ -417,10 +418,15 @@ def kill_sessions(c, user_id: int, keep_hash: str | None = None) -> None:
     c.execute("DELETE FROM sessions WHERE user_id=? AND token_hash!=?", (user_id, keep_hash or ""))
 
 
-def public(u) -> dict:
+def public(u, mods=None) -> dict:
+    """`mods` (0.20.0): the modules switched on for this developer — a role's permissions owned by a module that is off are removed,
+    so every `need()`/`act_as()` check and the web's `can()` agree. None keeps the role's full set (internal callers without a connection)."""
+    from . import registry
     needs_2fa = prod() and u["role"] in TWO_FA_REQUIRED and not u["totp_enabled"]
+    perms = sorted(PERMS[u["role"]]) if mods is None else registry.effective_perms(PERMS[u["role"]], mods)
     return {"id": u["id"], "username": u["username"], "name": u["name"], "role": u["role"],
-            "role_label": ROLES[u["role"]], "perms": sorted(PERMS[u["role"]]), "customer_id": u["customer_id"],
+            "role_label": ROLES[u["role"]], "perms": perms, "customer_id": u["customer_id"],
+            "modules": sorted(mods) if mods is not None else [],
             "broker_id": u["broker_id"], "must_change": bool(u["must_change"]), "totp_enabled": bool(u["totp_enabled"]),
             "needs_2fa": needs_2fa, "tenant": TENANT.get()}
 
@@ -449,7 +455,9 @@ def session_user(request: Request) -> dict | None:
         if now - last > 60:  # touch at most once a minute
             c.execute("UPDATE sessions SET last_seen=? WHERE token_hash=?", (now, th))
             c.commit()
-        return public(row)
+        from . import registry
+        mods = getattr(request.state, "mods", None)  # set by the module gate when the path belongs to a module
+        return public(row, mods if mods is not None else registry.enabled_modules(c))
     finally:
         c.close()
 

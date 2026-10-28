@@ -49,7 +49,9 @@ const S = {screen: 'ov', projects: [], proj: null, bld: null, plan: 0, me: null}
 const SCREEN_PERM = {ov: 'view', inv: 'inventory', crm: 'leads', fin: 'finance', con: 'construction', svc: 'service', log: 'audit', pre: 'permits', sal: 'kyc', bill: 'invoices', post: 'handover', rep: 'reports', mk: 'leads', adm: 'view'};
 const SCREEN_ANY = {pre: ['permits', 'land'], post: ['handover', 'oa', 'leasing', 'service'], sal: ['kyc', 'brokers', 'market'], rep: ['reports', 'finance', 'view'], mk: ['leads', 'inventory', 'reports']};  // Unit 7: reports for every staff role (the API filters by permission), marketing for sales/inventory/reports
 const can = p => S.me?.perms.includes(p);
-const canS = s => (SCREEN_ANY[s] || [SCREEN_PERM[s]]).some(can);
+const SCREEN_MOD = {pre: ['land'], inv: [], crm: ['sales'], mk: ['marketing'], sal: ['sales'], con: ['construction'], post: ['handover', 'leasing'], svc: ['handover'], fin: ['finance'], bill: ['finance'], rep: ['reports']};  // 0.20.0: a screen needs one of its modules (none listed = core)
+const modOn = m => (S.me?.modules || []).includes(m);
+const canS = s => (SCREEN_ANY[s] || [SCREEN_PERM[s]]).some(can) && (!(SCREEN_MOD[s] || []).length || SCREEN_MOD[s].some(modOn));
 function go(s) {
   if (!canS(s)) s = canS('ov') ? 'ov' : 'rep';
   S.screen = s;
@@ -124,30 +126,37 @@ $$('.ti[data-go]').forEach(t => t.onclick = () => go(t.dataset.go));
 /* ---------------- نظرة عامة ---------------- */
 let DEC = [];
 async function loadOverview() {
-  const [k, dec, projects] = await Promise.all([api('/kpis'), api('/decisions'), api('/projects')]);
-  renderCycle(projects);
-  const cash = await api('/cash');
-  $('#kpis').innerHTML = `
-    <div><small>مبيعات آخر 30 يومًا</small><b>${K(k.sales_30d_value)} ر.ع</b><small>${N(k.sales_30d_count)} وحدة</small></div>
-    <div><small>نسبة التحصيل (90 يومًا)</small><b>${N(k.collection_rate)}٪</b><small>من الأقساط المستحقة</small></div>
-    <div><small>فجوة السيولة المتوقعة</small><b style="color:${cash.gap ? 'var(--bad)' : 'var(--ok)'}">${cash.gap ? K(cash.gap) + ' ر.ع' : 'لا توجد'}</b><small>${cash.gap ? esc(cash.worst_project) + ' · ' + fmtMonth(cash.worst.month) : 'خلال 12 شهرًا'}</small></div>
-    <div><small>المخزون المتاح</small><b>${N(k.available)}</b><small>من ${N(k.total_units)} وحدة</small></div>`;
+  const D = await api('/dashboard');   // 0.20.0: widgets of the modules that are on
+  const fm = {omr: v => K(v) + ' ر.ع', pct: v => N(v) + '٪', n: v => N(v)};
+  $('#kpis').innerHTML = D.tiles.map(t => `<div><small>${esc(t.label)}</small><b${t.tone === 'bad' ? ' style="color:var(--bad)"' : t.tone === 'ok' ? ' style="color:var(--ok)"' : ''}>${!t.value && t.zero_text ? esc(t.zero_text) : fm[t.unit](t.value)}</b><small>${esc(t.sub || '')}${t.sub_month ? ' · ' + fmtMonth(t.sub_month) : ''}</small></div>`).join('');
+  const dec = D.decisions;
   DEC = dec;
   $('#qc').textContent = N(dec.filter(d => !d.done).length) + ' مفتوحة';
   $('#dq').innerHTML = dec.map((d, i) => `<tr data-i="${i}" class="${d.done ? 'done' : ''}"><td>${tx(d.title)}</td><td>${pill(esc(d.source), 'p-bl')}</td><td>${K(d.impact)} ر.ع<br><span class="muted">${esc(d.impact_label)}</span></td><td>${pill(d.priority, d.priority === 'حرجة' ? 'p-b' : 'p-w')}</td><td>${d.done ? pill(d.done === 'approve' ? '✓ معتمد' : 'متجاهَل', d.done === 'approve' ? 'p-ok' : '') : pill('مفتوح', 'p-w')}</td></tr>`).join('');
   $$('#dq tr').forEach(tr => tr.onclick = () => { sel(tr); showDecision(DEC[+tr.dataset.i]); });
-  const byP = Object.fromEntries(cash.projects.map(p => [p.project_id, p]));
-  $('#ph').innerHTML = projects.map(p => `<tr data-p="${p.id}"><td><b>${esc(p.name)}</b><br><span class="muted">${esc(p.location)} · ${N(p.total_units)} ${p.kind === 'villa' ? 'فيلا' : p.kind === 'land' ? 'قطعة أرض' : 'وحدة'}</span></td>
+  $('#cycBox').hidden = $('#phBox').hidden = !D.develop;
+  if (D.develop) {
+    const projects = await api('/projects');
+    renderCycle(projects);
+    const byP = Object.fromEntries((D.cash?.projects || []).map(p => [p.project_id, p]));
+    $('#ph').innerHTML = projects.map(p => { const c = byP[p.id]; return `<tr data-p="${p.id}"><td><b>${esc(p.name)}</b><br><span class="muted">${esc(p.location)} · ${N(p.total_units)} ${p.kind === 'villa' ? 'فيلا' : p.kind === 'land' ? 'قطعة أرض' : 'وحدة'}</span></td>
     <td><span class="bar-s"><i style="width:${p.build_pct}%"></i></span>${N(p.build_pct)}٪</td><td>${N(p.sold_pct)}٪</td><td>${N(p.available)}</td>
-    <td>${N(byP[p.id].sales_pace)} / ${N(p.planned_monthly_sales)} شهريًا</td>
-    <td>${byP[p.id].gap ? pill('عجز ' + K(byP[p.id].gap), 'p-b') : pill('سليم', 'p-ok')}</td></tr>`).join('');
-  $$('#ph tr').forEach(tr => tr.onclick = () => { S.proj = +tr.dataset.p; S.bld = null; go('inv'); });
+    <td>${c ? N(c.sales_pace) + ' / ' + N(p.planned_monthly_sales) + ' شهريًا' : '—'}</td>
+    <td>${c ? (c.gap ? pill('عجز ' + K(c.gap), 'p-b') : pill('سليم', 'p-ok')) : '—'}</td></tr>`; }).join('');
+    $$('#ph tr').forEach(tr => tr.onclick = () => { S.proj = +tr.dataset.p; S.bld = null; go('inv'); });
+  }
+  $('#leaseBox').hidden = !D.lease_properties;
+  if (D.lease_properties) {
+    $('#pl').innerHTML = D.lease_properties.map(p => `<tr data-p="${p.id}"><td><b>${esc(p.name)}</b><br><span class="muted">${esc(p.location || '')}</span></td><td>${N(p.leased)} / ${N(p.units)}</td><td><span class="bar-s"><i style="width:${p.occupancy}%"></i></span>${N(p.occupancy)}٪</td><td>${OMR(p.annual_rent)}</td><td>${p.arrears ? pill(OMR(p.arrears), 'p-b') : pill('لا متأخرات', 'p-ok')}</td></tr>`).join('');
+    $$('#pl tr').forEach(tr => tr.onclick = () => { S.proj = +tr.dataset.p; S.bld = null; go('inv'); });
+  }
 }
 function showDecision(d) {
   let act = '';
   if (!d.done && !can('decide')) act = `<span class="muted">اعتماد القرارات من صلاحية الإدارة والمالية.</span>`;
   else if (!d.done) {
-    if (d.kind === 'ipc') act = `<button class="btn p" data-call="go" data-args="${J(['con'])}">فتح المستخلص للمراجعة</button>`;
+    if (String(d.kind).startsWith('lease_')) act = `<button class="btn p" data-call="go" data-args="${J(['post'])}">فتح الإيجارات</button> <button class="btn" data-call="decide" data-args="${J([d.key, 'approve'])}">تكليف الفريق بالمتابعة</button> <button class="btn" data-call="decide" data-args="${J([d.key, 'dismiss'])}">تجاهل</button>`;
+    else if (d.kind === 'ipc') act = `<button class="btn p" data-call="go" data-args="${J(['con'])}">فتح المستخلص للمراجعة</button>`;
     else if (d.kind === 'cash') act = `<button class="btn p" data-call="go" data-args="${J(['fin'])}">عرض الرادار وخطة المعالجة</button> <button class="btn" data-call="decide" data-args="${J([d.key, 'approve'])}">اعتماد الخطة</button>`;
     else act = `<button class="btn p" data-call="decide" data-args="${J([d.key, 'approve'])}">اعتماد وتنفيذ</button> <button class="btn" data-call="decide" data-args="${J([d.key, 'dismiss'])}">تجاهل</button>`;
   }
@@ -516,7 +525,8 @@ const KP = items => `<div class="kp">${items.map(([l, v, s]) => `<div><small>${l
 const SUBP = {'pre.land': ['land'], 'pre.permit': ['permits'], 'sal.kyc': ['kyc'], 'sal.brk': ['brokers'], 'sal.mkt': ['market', 'decide'], 'sal.disc': ['decide', 'book'], 'sal.wa': ['leads'],
   'bill.inv': ['invoices'], 'bill.pen': ['finance'], 'bill.bank': ['finance'], 'bill.esc': ['finance', 'reports'], 'bill.erp': ['invoices'],
   'post.hand': ['handover', 'service'], 'post.title': ['handover', 'finance'], 'post.fm': ['service', 'handover'], 'post.oa': ['oa'], 'post.lease': ['leasing']};
-const subOk = (id, k) => !SUBP[id + '.' + k] || SUBP[id + '.' + k].some(p => can(p));
+const SUBM = {'post.hand': ['handover'], 'post.title': ['handover'], 'post.fm': ['handover', 'leasing'], 'post.oa': ['handover']};  // 0.20.0: a sub-tab also needs one of its modules
+const subOk = (id, k) => (!SUBP[id + '.' + k] || SUBP[id + '.' + k].some(p => can(p))) && (!SUBM[id + '.' + k] || SUBM[id + '.' + k].some(modOn));
 const SUB0 = (id, tabs, cur) => `<div class="seg subt" style="margin-bottom:14px">${tabs.map(([k, l]) => `<button class="${k === cur ? 'on' : ''}" data-call="EXT.sub" data-args="${J([id, k])}">${l}</button>`).join('')}</div>`;
 const SUB = (id, tabs, cur) => { const t = tabs.filter(([k]) => subOk(id, k)); return t.length > 1 ? SUB0(id, t, cur) : ''; };
 const pct = v => N(v) + '٪';
@@ -726,8 +736,10 @@ EXT.waive = async id => { if (!confirm('إعفاء العميل من تبرع ا
 
 /* ================================================================ ما بعد البيع */
 EXT.l_post = async function () {
-  const k = this.cur.post, el = $('#post');
-  el.innerHTML = SUB('post', [['hand', 'التسليم والعيوب'], ['title', 'نقل الملكية'], ['fm', 'إدارة المرافق'], ['oa', 'اتحاد الملاك'], ['lease', 'التأجير']], k) + '<div id="postB">…</div>';
+  const tabs = [['hand', 'التسليم والعيوب'], ['title', 'نقل الملكية'], ['fm', 'إدارة المرافق'], ['oa', 'اتحاد الملاك'], ['lease', 'التأجير']], el = $('#post');
+  if (!subOk('post', this.cur.post)) this.cur.post = (tabs.find(([x]) => subOk('post', x)) || tabs[4])[0];  // 0.20.0: land on the first tab the organisation has
+  const k = this.cur.post;
+  el.innerHTML = SUB('post', tabs, k) + '<div id="postB">…</div>';
   const B = $('#postB');
   if (k === 'hand') {
     const H = await api('/handover');
@@ -790,12 +802,25 @@ EXT.l_lender = async function (el) {
 /* ================================================================ الإدارة والأمان */
 EXT.l_adm = async function () {
   const k = this.cur.adm, el = $('#adm');
-  el.innerHTML = SUB('adm', [['users', 'المستخدمون'], ['sec', 'أماني'], ['brand', 'هوية المستندات والختم'], ['look', 'المظهر والمساعد'], ['ops', 'السجل والنسخ والتكامل'], ['notif', 'الإشعارات'], ['priv', 'طلبات الخصوصية']].filter(([x]) => x === 'sec' || can('admin') || (x === 'notif' && can('notify'))), k) + '<div id="admB">…</div>';
+  el.innerHTML = SUB('adm', [['users', 'المستخدمون'], ['mods', 'الوحدات والترخيص'], ['sec', 'أماني'], ['brand', 'هوية المستندات والختم'], ['look', 'المظهر والمساعد'], ['ops', 'السجل والنسخ والتكامل'], ['notif', 'الإشعارات'], ['priv', 'طلبات الخصوصية']].filter(([x]) => x === 'sec' || can('admin') || (x === 'notif' && can('notify'))), k) + '<div id="admB">…</div>';
   const B = $('#admB');
   if (k === 'users' && can('users')) {
     const U = await api('/users');
     B.innerHTML = BOX('المستخدمون والأدوار', T(['المستخدم', 'الاسم', 'البريد', 'الدور', 'الحالة', 'تحقق ثنائي', 'تغيير كلمة المرور', ''], U.map(u => `<tr><td><span class="num">${esc(u.username)}</span></td><td>${esc(u.name)}</td><td><span class="num">${esc(u.email || '—')}</span>${u.google_linked ? ' <span class="pill p-ok">Google</span>' : ''} <button class="link" data-call="EXT.uemail" data-args="${J([u.id, u.email || ''])}">تعديل</button></td><td>${esc(u.role)}</td><td>${u.active ? pill('مفعّل', 'p-ok') : pill('معطّل', 'p-b')}</td><td>${u.totp_enabled ? '✓' : '—'}</td><td>${u.must_change ? pill('مطلوب', 'p-w') : fmtDate(u.pw_changed)}</td><td><button class="btn" data-call="EXT.ureset" data-args="${J([u.id])}">إعادة تعيين</button> <button class="btn" data-call="EXT.uact" data-args="${J([u.id, u.active ? 0 : 1])}">${u.active ? 'تعطيل' : 'تفعيل'}</button> <button class="btn" data-call="EXT.ukill" data-args="${J([u.id])}">إنهاء الجلسات</button>${u.totp_enabled ? ` <button class="btn" data-call="EXT.u2fa" data-args="${J([u.id])}">إعادة ضبط التحقق</button>` : ''}</td></tr>`)),
       '<button class="btn" data-call="EXT.newUser">+ مستخدم</button>');
+  } else if (k === 'mods' && can('admin')) {
+    const [M, L] = await Promise.all([api('/modules'), api('/license')]);
+    const ttl = Object.fromEntries(M.modules.map(m => [m.key, m.title]));
+    B.innerHTML = BOX('الوحدات المفعَّلة <span class="muted">إطفاء وحدة يُخفي شاشاتها ومساراتها وصلاحياتها دون حذف أي بيانات، وإعادة تفعيلها تعيد كل شيء</span>',
+      T(['الوحدة', 'ما تشمله', 'تعتمد على', 'الترخيص', 'مفعَّلة'], M.modules.map(m => `<tr><td><b>${esc(m.title)}</b></td><td>${esc(m.desc)}</td><td>${m.deps.length ? m.deps.map(d => esc(ttl[d])).join('، ') : '—'}</td>
+        <td>${!m.available ? pill('قريبًا', 'p-bl') : m.licensed ? pill('مرخَّصة', 'p-ok') : pill('غير مرخَّصة', 'p-w')}</td>
+        <td>${m.available && m.licensed ? `<input type="checkbox" class="modchk" data-k="${m.key}" ${m.enabled ? 'checked' : ''} aria-label="${esc(m.title)}">` : '—'}</td></tr>`))
+      + `<div class="btns" style="padding:12px 14px"><span class="muted">باقات جاهزة:</span> ${M.bundles.map(b => `<button class="btn" data-b="${esc(b.key)}">${esc(b.title)}</button>`).join(' ')} <button class="btn p" id="modsave">حفظ</button></div>`)
+      + BOX('الترخيص وسجل التغييرات', `<div style="padding:14px"><p>المرخَّص لمؤسستكم: ${L.licensed.map(x => esc(x.title)).join('، ')}.${L.not_licensed.length ? ' غير مرخَّص: ' + L.not_licensed.map(x => esc(x.title)).join('، ') + '.' : ''}${L.soon.length ? ' قيد التطوير: ' + L.soon.map(x => esc(x.title)).join('، ') + '.' : ''}</p></div>`
+        + T(['الوقت', 'المنفّذ', 'الإجراء', 'الوحدة'], L.log.map(r => `<tr><td>${esc(r.at)}</td><td>${esc(r.actor)}</td><td>${esc(r.action)}</td><td>${esc(r.detail)}</td></tr>`)));
+    const bundle = Object.fromEntries(M.bundles.map(b => [b.key, b.modules]));
+    $$('#admB [data-b]').forEach(b => b.onclick = () => $$('#admB .modchk').forEach(x => { x.checked = bundle[b.dataset.b].includes(x.dataset.k); }));
+    $('#modsave').onclick = async () => { await tryDo(() => api('/modules', {method: 'POST', body: {modules: [...$$('#admB .modchk:checked')].map(x => x.dataset.k)}})); toast('حُفظت الوحدات'); location.reload(); };
   } else if (k === 'brand' && can('admin')) {
     const b = await api('/admin/brand');
     const f = (id, l, v, ph = '') => `<label>${l}</label><input id="${id}" value="${esc(v || '')}" placeholder="${ph}">`;

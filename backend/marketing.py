@@ -538,6 +538,9 @@ def alerts_due_all() -> int:
         try:
             c = connect()
             try:
+                from . import registry
+                if "marketing" not in registry.enabled_modules(c):  # 0.20.0: a switched-off module does no background work
+                    continue
                 last = c.execute("SELECT v FROM settings WHERE k='marketing:alerts_last_run'").fetchone()
                 if not last or last["v"][:10] < today().isoformat():
                     n += persist_alerts(c)

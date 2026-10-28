@@ -10,7 +10,7 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
-VERSION = "0.19.1"
+VERSION = "0.20.0"
 ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -34,6 +34,12 @@ def tenants_extra() -> str:
     """0.13.0 — `MABANIQ_TENANTS="code:الاسم;code2:الاسم"`: developer organisations added by configuration (read at call time so a
     hosted demo can gain a tenant without a rebuild; `backend/tenant_profiles.py` turns a known code into a full profile)."""
     return os.environ.get("MABANIQ_TENANTS", "")
+
+
+def licenses_env() -> str:
+    """0.20.0 — `MABANIQ_LICENSES="almaqsura:leasing_only;bayan:sales+leasing+finance"`: what the operator licenses to a developer
+    (a bundle name or `+`-joined module keys). Read at call time; a developer without an entry keeps its profile's / the default licence."""
+    return os.environ.get("MABANIQ_LICENSES", "")
 
 
 # Unit 4 — retention policy in days (backend/retention.py documents what each rule does)

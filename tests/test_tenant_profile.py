@@ -338,12 +338,12 @@ def test_almaqsura_is_real_data_only(cl):
         TENANT.reset(tok)
     b = cl.get("/api/admin/brand").json()
     assert b["name"].startswith("المقصورة العقارية") and b["logo_doc"]
-    # a quote or booking on a unit without a price is refused clearly (not a 500)
+    # 0.20.0 — a leasing company has no sales module: quotes/bookings answer 404 (the "no price ⟵ 400" rule is exercised on the view tenant below)
     r = cl.post("/api/quotes", json={"unit_code": "AZB-L-01", "customer_name": "عميل", "phone": "+968 90000000", "plan": "milestone"})
-    assert r.status_code == 400 and "سعر" in r.text
+    assert r.status_code == 404
     # reports and dashboards render on a real-data tenant
     assert cl.get("/api/reports/ready/portfolio").status_code == 200
-    assert cl.get("/api/decisions").status_code == 200 and cl.get("/api/marketing/board").status_code == 200
+    assert cl.get("/api/decisions").status_code == 200 and cl.get("/api/marketing/board").status_code == 404  # marketing module off
     for other, must in ((T, "MAB"), (B, "MSK")):
         login_as(cl, "admin", other)
         assert must in {p["code"] for p in cl.get("/api/projects").json()}
@@ -364,7 +364,7 @@ def test_unit_card_handles_null_price_and_shows_lease(cl):
     assert vacant["retained"] == 1 and vacant["lease"] is None
     land = cl.get("/api/units/AZB-L-01")
     assert land.status_code == 200 and land.json()["suggestion"] is None and "lease" not in land.json()
-    assert cl.get(f"/api/pricing/{land.json()['project_id']}").status_code == 200
+    assert cl.get(f"/api/pricing/{land.json()['project_id']}").status_code == 404  # pricing belongs to the sales module (off for a leasing company)
 
 
 # ───────────────────────────────────────────────────────────────── 0.19.0 — رؤية العقارية (off-plan developer, published data only)
