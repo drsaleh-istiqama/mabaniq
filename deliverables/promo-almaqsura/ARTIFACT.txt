@@ -1,2 +1,2 @@
 النسخة التفاعلية للدليل (خاصة حتى تُشارَك): https://claude.ai/artifact/ByFTPYQNDnZU2rZ5UQYL1C
-نُشرت 2026-10-27 من الخزنة deliverables/mabaniq-review/promo-almaqsura/index.html مع web-assets/ (59 ملفًا).
+النسخة 2 — 2026-10-28: أُعيد نشرها على البيانات الحقيقية (0.18.2) من الخزنة deliverables/mabaniq-review/promo-almaqsura/index.html مع web-assets/ (34 ملفًا)؛ أصول النسخة التوضيحية الأولى (2026-10-27، 0.16.0) حُذفت من الـartifact.
