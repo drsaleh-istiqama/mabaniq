@@ -99,7 +99,7 @@ function renderCycle(P) {
 }
 $('#theme').onclick = () => { document.body.classList.toggle('light'); localStorage.setItem('mbq-theme', document.body.classList.contains('light') ? 'l' : 'd'); if (S.screen === 'fin') loadFinance(); };
 $('#ix').onclick = () => { document.body.classList.remove('io'); $$('tr.sel').forEach(x => x.classList.remove('sel')); };
-$('#askBtn').onclick = () => insp('المساعد الذكي', '<p class="muted">اسأل عن بياناتك الحية في الأسفل، مثل: «ما المشروع الأخطر؟» أو «فجوة السيولة» أو «مبيعات هذا الشهر».</p>');
+$('#askBtn').onclick = () => aiOpen($('#ai').hidden);
 $('#hb').onclick = () => document.body.classList.toggle('nav-open');
 $('#scrim').onclick = () => { document.body.classList.remove('nav-open', 'io'); $$('tr.sel').forEach(x => x.classList.remove('sel')); };
 $('.sb-brand').onclick = () => document.body.classList.remove('nav-open');
@@ -387,13 +387,61 @@ async function loadAudit() {
 }
 
 /* ---------------- المساعد ---------------- */
-$('#cf').onsubmit = async e => {
-  e.preventDefault(); const q = $('#ci').value.trim(); if (!q) return; $('#ci').value = '';
-  const log = $('#clog'); log.insertAdjacentHTML('beforeend', `<div class="q">${esc(q)}</div><div class="a" id="pend">…</div>`); log.scrollTop = 1e6;
-  try { const r = await api('/assistant', {method: 'POST', body: {q}}); const p = $('#pend'); p.removeAttribute('id'); p.innerHTML = `${tx(r.answer)}<small>المصدر: ${esc(r.source)}</small>`; }
-  catch (err) { $('#pend').textContent = err.message; }
-  log.scrollTop = 1e6;
-};
+// لوحة مستقلة عن لوحة التفاصيل: تُفتح بالزر وتُغلق بـ✕ أو Esc، و«⟲» تبدأ محادثة جديدة (تمسح السجل والسياق).
+const AI = {hist: [], intent: null, busy: false};
+const AI_SUGG = [['ما ملخص المحفظة؟', 'view'], ['كم وحدة متاحة؟', 'inventory'], ['من الأعلى احتمالًا للشراء؟', 'leads'], ['ما المتأخرات وفجوة السيولة؟', 'finance'], ['ما حال الإنشاء والمستخلصات؟', 'construction'], ['كيف أحجز وحدة؟', 'inventory']];
+function aiFmt(t) {
+  return String(t || '').split('\n').map(l => l.trim() ? `<div class="ln${/^(•|\d+\. )/.test(l) ? ' li' : ''}">${esc(l).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\b([A-Z]{2,5}-[A-Z0-9-]+)\b/g, '<bdi dir="ltr">$1</bdi>')}</div>` : '<div class="sp"></div>').join('');
+}
+function aiSugg(list) {
+  const L = (list && list.length ? list : AI_SUGG.filter(([, p]) => can(p)).map(x => x[0])).slice(0, 4);
+  $('#aiSugg').innerHTML = L.map(q => `<button type="button" class="chip" data-call="aiAsk" data-args="${J([q])}">${esc(q)}</button>`).join('');
+}
+function aiWelcome() {
+  AI.hist = []; AI.intent = null; $('#aiMode').textContent = '';
+  $('#clog').innerHTML = '<div class="a"><div class="ln">أجيب من بيانات مؤسستك الحية: المخزون والمبيعات والعملاء المحتملون والتحصيل والإنشاء والتسليم والتأجير. ويمكنك أن تسألني أيضًا كيف تنفّذ مهمة في المنصة.</div></div>';
+  aiSugg();
+}
+function aiOpen(on = true) {
+  const a = $('#ai'); a.hidden = !on; document.body.classList.toggle('ai-on', on); $('#askBtn').setAttribute('aria-expanded', String(on));
+  if (on) { if (!$('#clog').children.length) aiWelcome(); $('#ci').focus(); } else $('#askBtn').focus();
+}
+async function aiAsk(q) {
+  q = (q || '').trim(); if (!q || AI.busy) return; AI.busy = true; $('#ci').value = '';
+  const log = $('#clog'); log.insertAdjacentHTML('beforeend', `<div class="q">${esc(q)}</div><div class="a pend"><span class="ln">…</span></div>`);
+  const pend = log.lastElementChild; log.scrollTop = log.scrollHeight; $('#aiSugg').innerHTML = '';
+  try {
+    const r = await api('/assistant', {method: 'POST', body: {q, history: AI.hist.slice(-4), intent: AI.intent}});
+    pend.classList.remove('pend'); pend.innerHTML = `${aiFmt(r.answer)}<small>المصدر: ${esc(r.source)}</small>`;
+    AI.hist.push({q, a: String(r.answer).slice(0, 1200)}); if (r.intent) AI.intent = r.intent;
+    $('#aiMode').textContent = r.mode === 'llm' ? '· بنموذج لغوي' : ''; aiSugg(r.suggestions);
+  } catch (err) { pend.classList.remove('pend'); pend.textContent = err.message; aiSugg(); }
+  AI.busy = false; log.scrollTop = log.scrollHeight;
+}
+CALLS.aiAsk = aiAsk;
+$('#cf').onsubmit = e => { e.preventDefault(); aiAsk($('#ci').value); };
+$('#aiX').onclick = () => aiOpen(false);
+$('#aiNew').onclick = () => { aiWelcome(); $('#ci').focus(); };
+
+/* ---------------- مظهر المنصة (خلفية المؤسسة) ---------------- */
+// القيم تأتي من /api/appearance (قائمة بيضاء في الخادم)؛ الألوان نفسها في shell.css عبر html[data-bg]. تُخزَّن نسخة في المتصفح لتفادي وميض اللون الافتراضي.
+let UI = null;
+function applyUI(u) {
+  if (!u) return; const h = document.documentElement; UI = u;
+  h.dataset.bg = u.preset || 'navy'; h.dataset.pat = u.pattern || 'none'; h.dataset.fit = u.fit || 'cover';
+  h.style.setProperty('--ps', (u.size || 24) + 'px'); h.style.setProperty('--pstr', String(u.strength ?? 40));
+  h.style.setProperty('--bgimg', u.image_doc ? `url("/api/appearance/image?v=${u.image_doc}${can('admin') ? '&doc=' + u.image_doc : ''}")` : 'none');
+  const forced = u.mode === 'dark' || u.mode === 'light';
+  let lightPref = false; try { lightPref = localStorage.getItem('mbq-theme') === 'l'; } catch (e) { /* التخزين محجوب */ }
+  document.body.classList.toggle('light', forced ? u.mode === 'light' : lightPref);
+  $('#theme')?.classList.toggle('hidden', forced);
+}
+async function loadUI() {
+  const u = await api('/appearance'); EXT.uiOpt = u.options; applyUI(u);
+  try { localStorage.setItem('mbq-ui', JSON.stringify(u)); } catch (e) { /* التخزين محجوب */ }
+  return u;
+}
+try { applyUI(JSON.parse(localStorage.getItem('mbq-ui') || 'null')); } catch (e) { /* أول زيارة */ }
 
 /* ---------------- لوحة الأوامر ---------------- */
 const CMDS0 = [['صندوق القرارات', () => go('ov')], ['مخطط الوحدات', () => go('inv')], ['العملاء المحتملون', () => go('crm')], ['رادار السيولة', () => go('fin')], ['عملاء معرّضون للتعثر', () => go('fin')], ['المستخلصات', () => go('con')], ['سجل التدقيق', () => go('log')], ['الأراضي ودراسات الجدوى', () => go('pre')], ['التحقق من الهوية والعقود', () => go('sal')], ['الوسطاء والعمولات', () => { EXT.cur.sal = 'brk'; go('sal'); }], ['الفواتير وضريبة القيمة المضافة', () => go('bill')], ['حساب الضمان', () => { EXT.cur.bill = 'esc'; go('bill'); }], ['التسليم والعيوب', () => go('post')], ['اتحاد الملاك', () => { EXT.cur.post = 'oa'; go('post'); }], ['التأجير', () => { EXT.cur.post = 'lease'; go('post'); }], ['تقرير الممول', () => go('rep')], ['تفعيل التحقق الثنائي', () => { EXT.cur.adm = 'sec'; go('adm'); }], ['تبديل الوضع الفاتح/الداكن', () => $('#theme').click()]];
@@ -416,7 +464,7 @@ $('#cmdBtn').onclick = () => pal(1);
 $('#pi').oninput = e => renderPal(e.target.value.trim());
 $('#pi').onkeydown = e => { if (e.key === 'ArrowDown') { palIdx = Math.min(PAL.length - 1, palIdx + 1); drawPal(); } if (e.key === 'ArrowUp') { palIdx = Math.max(0, palIdx - 1); drawPal(); } if (e.key === 'Enter') runPal(palIdx); };
 $('#pal').onclick = e => { if (e.target.id === 'pal') pal(0); };
-document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); pal(1); } if (e.key === 'Escape') { pal(0); closeModal(); document.body.classList.remove('io', 'nav-open'); } });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#ai').hidden && $('#ai').contains(document.activeElement)) { aiOpen(false); return; } if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); pal(1); } if (e.key === 'Escape') { pal(0); closeModal(); document.body.classList.remove('io', 'nav-open'); } });
 
 /* ---------------- تشغيل ---------------- */
 async function refreshAll() { if (can('view')) await loadSide(); else $('#pfSec').classList.add('hidden'); go(S.screen); }
@@ -426,6 +474,7 @@ function groupsVis() { $$('.side .grp').forEach(g => { if (g.id === 'pfSec') ret
   S.screen = localStorage.getItem('mbq-screen') || 'ov';
   try {
     S.me = await api('/me');
+    loadUI().catch(() => {});
     $('#whoName').textContent = S.me.name; $('#whoRole').textContent = S.me.role_label;
     $$('[data-s]').forEach(b => b.classList.toggle('hidden', !canS(b.dataset.s)));
     $('#resetBtn').classList.toggle('hidden', !can('admin')); groupsVis();
@@ -725,7 +774,7 @@ EXT.l_lender = async function (el) {
 /* ================================================================ الإدارة والأمان */
 EXT.l_adm = async function () {
   const k = this.cur.adm, el = $('#adm');
-  el.innerHTML = SUB('adm', [['users', 'المستخدمون'], ['sec', 'أماني'], ['brand', 'هوية المستندات والختم'], ['ops', 'السجل والنسخ والتكامل'], ['notif', 'الإشعارات'], ['priv', 'طلبات الخصوصية']].filter(([x]) => x === 'sec' || can('admin') || (x === 'notif' && can('notify'))), k) + '<div id="admB">…</div>';
+  el.innerHTML = SUB('adm', [['users', 'المستخدمون'], ['sec', 'أماني'], ['brand', 'هوية المستندات والختم'], ['look', 'المظهر والمساعد'], ['ops', 'السجل والنسخ والتكامل'], ['notif', 'الإشعارات'], ['priv', 'طلبات الخصوصية']].filter(([x]) => x === 'sec' || can('admin') || (x === 'notif' && can('notify'))), k) + '<div id="admB">…</div>';
   const B = $('#admB');
   if (k === 'users' && can('users')) {
     const U = await api('/users');
@@ -739,6 +788,10 @@ EXT.l_adm = async function () {
       <div class="btns" style="margin-top:12px"><button class="btn p" id="brsave">حفظ</button></div></div>`)
       + BOX('الشعار والختم والتوقيع المعتمد <span class="muted">صور PNG/JPEG بخلفية بيضاء أو شفافة؛ تُطبع في كل مستند</span>', `<div style="padding:14px" class="grid3">${['logo', 'stamp', 'sign'].map(k => `<div><b>${{logo: 'الشعار', stamp: 'الختم', sign: 'التوقيع'}[k]}</b><div style="margin:8px 0">${img(b[k + '_doc'])}</div><input type="file" id="br_${k}" accept=".png,.jpg,.jpeg"><button class="btn" data-call="EXT.brandUpload" data-args="${J([k])}">رفع</button></div>`).join('')}</div>`);
     $('#brsave').onclick = async () => { await tryDo(() => api('/admin/brand', {method: 'POST', body: {name: $('#brn').value, cr: $('#brcr').value, vat: $('#brvat').value, address: $('#brad').value, phone: $('#brph').value, email: $('#brem').value, signatory: $('#brsg').value, signatory_title: $('#brst').value}}), 'حُفظت الترويسة'); };
+  } else if (k === 'look' && can('admin')) {
+    const [U, AC] = await Promise.all([api('/appearance'), api('/admin/assistant')]);
+    EXT.uiOpt = U.options; EXT.ui = {preset: U.preset, pattern: U.pattern, fit: U.fit, mode: U.mode, size: U.size, strength: U.strength, image_doc: U.image_doc}; EXT.aiCfg = AC;
+    applyUI(EXT.ui); lookRender();
   } else if (k === 'ops' && can('admin')) {
     const v = await api('/audit/verify');
     B.innerHTML = KP([['سلامة سجل التدقيق', v.ok ? '✓ سليم' : '⚠ مكسور', N(v.entries) + ' قيدًا · بصمة ' + (v.head || '')], ['السجل', 'إلحاق فقط', 'لا تعديل ولا حذف'], ['النسخ الاحتياطي', 'آخر 14 نسخة', 'مشفّر في الإنتاج'], ['واجهة التكامل', '/api/v1', 'مفاتيح قراءة فقط']])
@@ -765,6 +818,42 @@ EXT.l_adm = async function () {
     $('#cpw').onclick = () => EXT.changePw(false);
     $('#sall').onclick = async () => { const r = await tryDo(() => api('/me/sessions/revoke', {method: 'POST', body: {others: true}})); toast(`أُنهيت ${N(r.revoked)} جلسة`); EXT.l_adm(); };
   }
+};
+function lookRender() {
+  const U = EXT.ui, O = EXT.uiOpt, A = EXT.aiCfg, lt = document.body.classList.contains('light') ? ' lt' : '';
+  const seg = (key, opts) => `<div class="seg">${Object.entries(opts).map(([v, l]) => `<button class="${U[key] === v ? 'on' : ''}" data-call="EXT.lookSet" data-args="${J([key, v])}">${esc(l)}</button>`).join('')}</div>`;
+  const sw = Object.entries(O.presets).map(([id, l]) => `<button class="sw${lt}${U.preset === id ? ' on' : ''}" data-bg="${id}" data-call="EXT.lookSet" data-args="${J(['preset', id])}" aria-pressed="${U.preset === id}"><span class="spv"><i></i><b></b><u></u></span><em>${esc(l)}</em></button>`).join('');
+  const img = U.image_doc ? `<img src="/api/appearance/image?v=${U.image_doc}&doc=${U.image_doc}" alt="" style="height:56px;border:1px solid var(--line);border-radius:8px">` : '<span class="muted">لم تُرفع صورة</span>';
+  const patNote = U.pattern === 'none' ? '' : `<div class="grid2" style="margin-top:12px"><div><label>${U.pattern === 'image' && U.fit !== 'tile' ? 'حجم الصورة غير مستخدم مع «تغطية/احتواء»' : 'حجم النقش / البلاطة'} <b class="num" id="lkSizeV">${U.size}</b> px</label><input type="range" id="lkSize" min="${O.limits.size[0]}" max="${O.limits.size[1]}" value="${U.size}"></div>
+    <div><label>${U.pattern === 'image' ? 'ظهور الصورة' : 'وضوح النقش'} <b class="num" id="lkStrV">${U.strength}</b>٪</label><input type="range" id="lkStr" min="${O.limits.strength[0]}" max="${O.limits.strength[1]}" value="${U.strength}"></div></div>`;
+  const imgBox = U.pattern === 'image' || U.image_doc ? `<div style="margin-top:14px"><b>صورة المؤسسة</b><div style="margin:8px 0">${img}</div>
+    <input type="file" id="lkFile" accept=".png,.jpg,.jpeg"> <button class="btn" data-call="EXT.lookUpload">رفع</button> ${U.image_doc ? '<button class="btn" data-call="EXT.lookNoImg">إزالة الصورة</button>' : ''}
+    <div style="margin-top:8px">${seg('fit', O.fits)}</div><p class="muted">الظهور المرتفع يُضعف قراءة النصوص؛ يُنصح بما دون 40٪. صور PNG/JPEG حتى 5 ميجابايت.</p></div>` : '';
+  const offLLM = !A.key_configured;
+  $('#admB').innerHTML = BOX('خلفية المنصة <span class="muted">المعاينة فورية ولا تُحفظ لجميع مستخدمي المؤسسة إلا بزر «حفظ»</span>',
+    `<div style="padding:14px"><div class="swg">${sw}</div>
+     <div class="grid2" style="margin-top:14px"><div><b>النقش</b><div style="margin-top:6px">${seg('pattern', O.patterns)}</div></div><div><b>الوضع</b><div style="margin-top:6px">${seg('mode', O.modes)}</div></div></div>${patNote}${imgBox}
+     <div class="btns" style="margin-top:14px"><button class="btn p" data-call="EXT.lookSave">حفظ للمؤسسة</button><button class="btn" data-call="EXT.lookReset">القيم الافتراضية</button><button class="btn" data-call="EXT.lookCancel">تراجع عن المعاينة</button></div></div>`)
+    + BOX('المساعد الذكي <span class="muted">' + (A.active ? 'النموذج اللغوي يعمل' : 'المحرك المحلي يعمل') + '</span>',
+    `<div style="padding:14px"><p>المحرك المحلي يجيب بلا مغادرة أي بيانات للخادم. تفعيل النموذج اللغوي يتيح فهمًا أوسع للأسئلة الحرّة؛ ويُرسل أرقامًا مجمَّعة فقط، ولا يُرسل هاتفًا ولا هوية ولا بريدًا.</p>
+     <label style="display:flex;gap:8px;align-items:center;margin:10px 0"><input type="checkbox" id="aiLlm" ${A.llm ? 'checked' : ''} ${offLLM ? 'disabled' : ''} data-ai="llm"> استخدام نموذج لغوي لفهم أوسع للأسئلة</label>
+     ${offLLM ? '<p class="muted">لم يُضبط مفتاح النموذج في بيئة التشغيل (MABANIQ_AI_KEY) — اطلب ذلك من مسؤول الاستضافة؛ حتى ذلك الحين يعمل المحرك المحلي.</p>' : `<p class="muted">النموذج: <span class="num">${esc(A.model)}</span></p>`}
+     <label style="display:flex;gap:8px;align-items:center;margin:10px 0"><input type="checkbox" id="aiNames" ${A.names ? 'checked' : ''} data-ai="names"> السماح بإرسال أسماء العملاء إلى النموذج (الافتراضي: تُحجب وتظهر «عميل #رقم»)</label>
+     <p class="muted">${esc(A.note)}</p></div>`);
+  const live = (id, key, out) => { const el = $(id); if (el) el.oninput = e => { U[key] = +e.target.value; $(out).textContent = e.target.value; applyUI(U); }; };
+  live('#lkSize', 'size', '#lkSizeV'); live('#lkStr', 'strength', '#lkStrV');
+  $$('[data-ai]').forEach(el => el.onchange = async () => { try { EXT.aiCfg = await api('/admin/assistant', {method: 'POST', body: {[el.dataset.ai]: el.checked}}); toast('حُفظ إعداد المساعد'); } catch (e) { toast(e.message, 1); } lookRender(); });
+}
+EXT.lookSet = (key, val) => { EXT.ui[key] = val; if (key === 'pattern' && val === 'image' && !EXT.ui.image_doc) toast('ارفع صورة المؤسسة ثم احفظ'); applyUI(EXT.ui); lookRender(); };
+EXT.lookSave = async () => { const r = await tryDo(() => api('/admin/appearance', {method: 'POST', body: EXT.ui}), 'حُفظ مظهر المنصة لكل مستخدمي المؤسسة'); EXT.ui = {...EXT.ui, ...r}; applyUI(r); try { localStorage.setItem('mbq-ui', JSON.stringify(r)); } catch (e) { /* محجوب */ } lookRender(); };
+EXT.lookReset = () => { EXT.ui = {preset: 'navy', pattern: 'none', fit: 'cover', mode: 'user', size: 24, strength: 30, image_doc: 0}; applyUI(EXT.ui); lookRender(); };
+EXT.lookCancel = async () => { const u = await loadUI(); EXT.ui = {preset: u.preset, pattern: u.pattern, fit: u.fit, mode: u.mode, size: u.size, strength: u.strength, image_doc: u.image_doc}; lookRender(); };
+EXT.lookNoImg = () => { EXT.ui.image_doc = 0; if (EXT.ui.pattern === 'image') EXT.ui.pattern = 'none'; applyUI(EXT.ui); lookRender(); };
+EXT.lookUpload = async () => {
+  const f = $('#lkFile').files[0]; if (!f) return toast('اختر صورة', 1);
+  const fd = new FormData(); fd.append('ref_type', 'brand'); fd.append('ref_id', '0'); fd.append('title', 'خلفية المنصة'); fd.append('category', 'هوية'); fd.append('file', f);
+  try { const r = await fetch('/api/documents', {method: 'POST', headers: {'X-CSRF-Token': csrf()}, body: fd}); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.detail || 'تعذّر الرفع');
+    EXT.ui.image_doc = j.id; EXT.ui.pattern = 'image'; applyUI(EXT.ui); lookRender(); toast('رُفعت الصورة — اضغط «حفظ للمؤسسة» لاعتمادها'); } catch (e) { toast(e.message, 1); }
 };
 EXT.brandUpload = async kind => { const f = $(`#br_${kind}`).files[0]; if (!f) return toast('اختر صورة', 1); const fd = new FormData(); fd.append('ref_type', 'brand'); fd.append('ref_id', '0'); fd.append('title', {logo: 'الشعار', stamp: 'الختم', sign: 'التوقيع'}[kind]); fd.append('category', 'هوية'); fd.append('file', f);
   try { const r = await fetch('/api/documents', {method: 'POST', headers: {'X-CSRF-Token': csrf()}, body: fd}); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.detail || 'تعذّر الرفع'); await api('/admin/brand', {method: 'POST', body: {[kind + '_doc']: j.id}}); toast('رُفعت الصورة'); EXT.l_adm(); } catch (e) { toast(e.message, 1); } };

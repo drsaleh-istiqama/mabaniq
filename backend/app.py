@@ -380,15 +380,6 @@ def approve_ipc(ipc_id: int, c=None):
     return {"ok": True, "detail": f"اعتُمد بنسبة {v['verified_pct']}٪", "amount": v["verified_amount"]}
 
 
-class AskIn(BaseModel):
-    q: str = Field(min_length=1, max_length=500)
-
-
-@app.post("/api/assistant")
-def ask(a: AskIn, _=Depends(need("view"))):
-    return E.assistant(db(), a.q)
-
-
 @app.post("/api/reset")
 def reset(_=Depends(act_as("admin"))):
     if PROD:
@@ -893,6 +884,8 @@ from .modules2 import router as modules2_router  # noqa: E402
 
 app.include_router(modules_router)
 app.include_router(modules2_router)
+from .appearance import router as appearance_router  # noqa: E402
+from .assistant import router as assistant_router  # noqa: E402
 from .identity import router as identity_router  # noqa: E402
 from .landing import router as landing_router  # noqa: E402
 from .marketing import router as marketing_router  # noqa: E402
@@ -906,5 +899,7 @@ app.include_router(paperwork_router)
 app.include_router(plans_router)
 app.include_router(reports_router)
 app.include_router(marketing_router)
+app.include_router(assistant_router)  # 0.18.0: المساعد الذكي (أدوات قراءة + نموذج اختياري)
+app.include_router(appearance_router)  # 0.18.0: خلفية المنصة وحجمها لكل مؤسسة
 app.mount("/static", StaticFiles(directory=FRONT), name="static")
 app.add_middleware(O.ObservabilityMiddleware)  # الأبعد خارجيًا: معرّف الطلب وسجل الوصول وتحويل الأعطال إلى JSON 500

@@ -121,12 +121,18 @@
  <aside class="insp" aria-label="التفاصيل">
   <div class="ih"><span id="ih">التفاصيل</span><button class="x" id="ix" aria-label="إغلاق اللوحة">✕</button></div>
   <div class="ib" id="ib"><p class="muted">اختر قرارًا أو وحدة أو عميلًا أو مستخلصًا لتظهر تفاصيله وتوصية الذكاء الاصطناعي هنا.</p></div>
-  <div class="copilot">
-   <div class="log" id="clog"><div class="muted">✦ المساعد: أجيب من بياناتك الحية. جرّب: «ما المشروع الأخطر؟» أو «فجوة السيولة».</div></div>
-   <form id="cf"><input id="ci" placeholder="اسأل المساعد…" aria-label="سؤال للمساعد" autocomplete="off"></form>
-  </div>
  </aside>
 </div>
+
+<aside class="ai" id="ai" hidden aria-label="المساعد الذكي" role="complementary">
+ <div class="ai-h">
+  <span class="ai-t">✦ المساعد الذكي <small id="aiMode"></small></span>
+  <span class="ai-b"><button class="x" id="aiNew" title="محادثة جديدة" aria-label="محادثة جديدة">⟲</button><button class="x" id="aiX" aria-label="إغلاق المساعد">✕</button></span>
+ </div>
+ <div class="log" id="clog" aria-live="polite"></div>
+ <div class="ai-s" id="aiSugg"></div>
+ <form id="cf"><input id="ci" placeholder="اسأل عن وحداتك أو عملائك أو تحصيلك أو مشاريعك…" aria-label="سؤال للمساعد" autocomplete="off" maxlength="500"><button class="btn p" type="submit" aria-label="إرسال">إرسال</button></form>
+</aside>
 
 <div class="palette" id="pal" role="dialog" aria-modal="true"><div><input id="pi" placeholder="اكتب اسم عميل أو رقم وحدة أو أمرًا…" autocomplete="off"><div id="pl"></div></div></div>
 <div class="modal" id="modal" role="dialog" aria-modal="true"><div class="mbox" id="mbox"></div></div>

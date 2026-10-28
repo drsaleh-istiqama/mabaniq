@@ -97,12 +97,7 @@ select{background:var(--pane);border:1px solid var(--line);border-radius:8px;pad
 .inst:last-child{border:0}
 .items .it{margin-bottom:10px}.items .it .row{display:flex;justify-content:space-between;font-size:13px}
 .prog{height:6px;background:var(--line);border-radius:6px;overflow:hidden;margin-top:4px}.prog i{display:block;height:100%;background:var(--ok)}
-.copilot{border-top:1px solid var(--line);padding:12px}
-.copilot .log{max-height:210px;overflow:auto;font-size:13px;line-height:1.8;margin-bottom:8px;display:flex;flex-direction:column;gap:6px}
-.copilot .q{align-self:flex-start;background:var(--pane2);border-radius:10px;padding:5px 10px}
-.copilot .a{border-inline-start:2px solid var(--pri);padding-inline-start:8px}
-.copilot .a small{display:block;color:var(--muted);font-size:11px}
-.copilot input,.mbox input{width:100%;background:var(--pane2);border:1px solid var(--line);border-radius:9px;padding:10px 12px;min-height:42px}
+.mbox input,.ai input{width:100%;background:var(--pane2);border:1px solid var(--line);border-radius:9px;padding:10px 12px;min-height:42px}
 /* palette & modal */
 .palette,.modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;justify-content:center;z-index:50;padding:20px}
 .palette{align-items:flex-start;padding-top:12vh}.modal{align-items:center}
