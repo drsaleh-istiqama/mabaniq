@@ -188,10 +188,23 @@ function renderHeat(p) {
     h.innerHTML = list.map(cell).join('');
     $('#invTitle').textContent = p.kind === 'land' ? 'المخطط العام لقطع الأرض' : 'المخطط العام للفلل';
   } else {
-    const cols = Math.max(...list.map(u => u.pos));
+    const known = list.filter(u => u.floor !== null && u.floor !== undefined), unknown = list.filter(u => u.floor === null || u.floor === undefined);
+    const cols = Math.max(1, ...known.map(u => u.pos), unknown.length ? Math.min(14, unknown.length) : 1);
     h.className = 'heat'; h.style.gridTemplateColumns = `44px repeat(${cols},1fr)`;
-    const floors = [...new Set(list.map(u => u.floor))].sort((a, b) => b - a);
-    h.innerHTML = floors.map(f => `<span class="fl">ط ${N(f)}</span>` + list.filter(u => u.floor === f).sort((a, b) => a.pos - b.pos).map(cell).join('')).join('');
+    const floors = [...new Set(known.map(u => u.floor))].sort((a, b) => b - a);
+    h.innerHTML = floors.map(f => `<span class="fl">ط ${N(f)}</span>` + known.filter(u => u.floor === f).sort((a, b) => a.pos - b.pos).map(cell).join('')).join('');
+    // 0.19.0 — units whose floor is not supplied (off-plan developers publish the unit mix, not the floor plan): one labelled band per type,
+    // wrapped into rows, instead of inventing floors
+    const types = [...new Set(unknown.map(u => u.type))];
+    h.innerHTML += types.map(tp => {
+      const us = unknown.filter(u => u.type === tp).sort((a, b) => a.pos - b.pos);
+      let out = '';
+      for (let i = 0; i < us.length; i += cols) {
+        const row = us.slice(i, i + cols);
+        out += `<span class="fl" title="${esc(tp)} — الطابق غير مزوَّد">${i ? '' : esc(tp.split(' ')[0])}</span>` + row.map(cell).join('') + '<span></span>'.repeat(cols - row.length);
+      }
+      return out;
+    }).join('');
     $('#invTitle').textContent = `مخطط المبنى ${S.bld}`;
   }
   const c = st => list.filter(u => u.status === st).length;

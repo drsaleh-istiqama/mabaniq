@@ -1,0 +1,136 @@
+{
+ "facts": {
+  "projects": 6,
+  "units": 265,
+  "sold": 200,
+  "available": 65,
+  "per_project": {
+   "BRK": {
+    "name": "واجهة بركاء",
+    "location": "بركاء",
+    "units": 53,
+    "sold": 53,
+    "available": 0,
+    "sold_pct": 100,
+    "build_pct": 100.0,
+    "types": {
+     "مكتب": {
+      "total": 45,
+      "sold": 45
+     },
+     "محل تجاري": {
+      "total": 8,
+      "sold": 8
+     }
+    }
+   },
+   "SLH": {
+    "name": "صلالة هيلز",
+    "location": "صلالة",
+    "units": 38,
+    "sold": 29,
+    "available": 9,
+    "sold_pct": 76,
+    "build_pct": 40.0,
+    "types": {
+     "شقة": {
+      "total": 24,
+      "sold": 19
+     },
+     "محل تجاري": {
+      "total": 13,
+      "sold": 10
+     },
+     "وحدة (النوع غير مزوَّد)": {
+      "total": 1,
+      "sold": 0
+     }
+    }
+   },
+   "KYN": {
+    "name": "كيان",
+    "location": "الموالح، مسقط",
+    "units": 38,
+    "sold": 29,
+    "available": 9,
+    "sold_pct": 76,
+    "build_pct": 40.0,
+    "types": {
+     "شقة": {
+      "total": 24,
+      "sold": 19
+     },
+     "محل تجاري": {
+      "total": 13,
+      "sold": 10
+     },
+     "وحدة (النوع غير مزوَّد)": {
+      "total": 1,
+      "sold": 0
+     }
+    }
+   },
+   "VHT": {
+    "name": "فيوو هايتس",
+    "location": "بوشر، مسقط",
+    "units": 46,
+    "sold": 9,
+    "available": 37,
+    "sold_pct": 20,
+    "build_pct": 10.0,
+    "types": {
+     "مكتب": {
+      "total": 45,
+      "sold": 9
+     },
+     "صالة عرض": {
+      "total": 1,
+      "sold": 0
+     }
+    }
+   },
+   "VBZ": {
+    "name": "فيوو بازار",
+    "location": "قرب بركاء",
+    "units": 34,
+    "sold": 25,
+    "available": 9,
+    "sold_pct": 74,
+    "build_pct": 95.0,
+    "types": {
+     "محل تجاري": {
+      "total": 32,
+      "sold": 24
+     },
+     "صالة عرض": {
+      "total": 1,
+      "sold": 1
+     },
+     "وحدة (النوع غير مزوَّد)": {
+      "total": 1,
+      "sold": 0
+     }
+    }
+   },
+   "VGD": {
+    "name": "فيوو جاردنس",
+    "location": "الموالح، مسقط",
+    "units": 56,
+    "sold": 55,
+    "available": 1,
+    "sold_pct": 98,
+    "build_pct": 70.0,
+    "types": {
+     "شقة": {
+      "total": 45,
+      "sold": 44
+     },
+     "محل تجاري": {
+      "total": 11,
+      "sold": 11
+     }
+    }
+   }
+  }
+ }
+}

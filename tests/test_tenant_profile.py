@@ -7,7 +7,7 @@ import tempfile
 
 os.environ.setdefault("MABANIQ_DB", os.path.join(tempfile.mkdtemp(), "tp.db"))
 os.environ["MABANIQ_FORCE_PW_CHANGE"] = "0"
-os.environ["MABANIQ_TENANTS"] = "almukhatat:المخطط العقارية;bayan:بيان عمان;almaqsura:المقصورة العقارية"
+os.environ["MABANIQ_TENANTS"] = "almukhatat:المخطط العقارية;bayan:بيان عمان;almaqsura:المقصورة العقارية;view:رؤية العقارية"
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
@@ -55,8 +55,8 @@ def test_env_adds_tenant_and_api_lists_it(cl):
     ts = tenants()
     assert ts[T] == "المخطط العقارية" and "jadwa" in ts
     assert any(t["code"] == T for t in cl.get("/api/tenants").json())
-    assert TP.tenants_from_env() == {T: "المخطط العقارية", "bayan": "بيان عمان", "almaqsura": "المقصورة العقارية"}
-    assert ts["bayan"] == "بيان عمان" and ts["almaqsura"] == "المقصورة العقارية"
+    assert TP.tenants_from_env() == {T: "المخطط العقارية", "bayan": "بيان عمان", "almaqsura": "المقصورة العقارية", "view": "رؤية العقارية"}
+    assert ts["bayan"] == "بيان عمان" and ts["almaqsura"] == "المقصورة العقارية" and ts["view"] == "رؤية العقارية"
 
 
 def test_profile_projects_units_and_brand(cl):
@@ -365,3 +365,48 @@ def test_unit_card_handles_null_price_and_shows_lease(cl):
     land = cl.get("/api/units/AZB-L-01")
     assert land.status_code == 200 and land.json()["suggestion"] is None and "lease" not in land.json()
     assert cl.get(f"/api/pricing/{land.json()['project_id']}").status_code == 200
+
+
+# ───────────────────────────────────────────────────────────────── 0.19.0 — رؤية العقارية (off-plan developer, published data only)
+V = "view"
+
+
+def test_view_is_off_plan_published_data_only(cl):
+    """0.19.0 — six projects from viewom.com: 265 units, the published unit mix, construction % ("status") and sold % applied to the unit
+    count; nothing the site does not publish exists (no price, area, floor, buyer, booking, contractor); unit codes are placeholders."""
+    login_as(cl, "admin", V)
+    ps = {p["code"]: p for p in cl.get("/api/projects").json()}
+    assert set(ps) == {"BRK", "SLH", "KYN", "VHT", "VBZ", "VGD"}, set(ps)
+    assert {k: p["total_units"] for k, p in ps.items()} == {"BRK": 53, "SLH": 38, "KYN": 38, "VHT": 46, "VBZ": 34, "VGD": 56}
+    assert {k: p["build_pct"] for k, p in ps.items()} == {"BRK": 100, "SLH": 40, "KYN": 40, "VHT": 10, "VBZ": 95, "VGD": 70}
+    assert ps["BRK"]["completed"] and not ps["VHT"]["completed"]
+    assert {k: p["sold_pct"] for k, p in ps.items()} == {"BRK": 100, "SLH": 76, "KYN": 76, "VHT": 20, "VBZ": 74, "VGD": 98}  # published 100/76/76/20/75/99, whole units
+    from collections import Counter
+    for code, mix in (("SLH", {"شقة": 24, "محل تجاري": 13}), ("VHT", {"مكتب": 45, "صالة عرض": 1}), ("BRK", {"مكتب": 45, "محل تجاري": 8}), ("VGD", {"شقة": 45, "محل تجاري": 11})):
+        us = cl.get("/api/units", params={"project_id": ps[code]["id"]}).json()
+        got = Counter(u["type"] for u in us if "غير مزوَّد" not in u["type"])
+        assert dict(got) == mix, (code, got)
+        assert all(u["price"] is None and u["area"] is None and u["floor"] is None and u["retained"] == 0 for u in us)
+    unknown = [u for p in ps.values() for u in cl.get("/api/units", params={"project_id": p["id"]}).json() if "غير مزوَّد" in u["type"]]
+    assert len(unknown) == 3 and all(u["status"] == "a" for u in unknown)  # SLH, KYN, VBZ: one unit each whose type the site does not state
+    tok = TENANT.set(V)
+    try:
+        c = connect()
+        for t in ("bookings", "customers", "leads", "contractors", "ipcs", "cost_schedule", "permits", "installments", "sale_contracts", "leases"):
+            assert c.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] == 0, t
+        assert TP.ensure_assets(c, V) == 0
+        c.close()
+    finally:
+        TENANT.reset(tok)
+    b = cl.get("/api/admin/brand").json()
+    assert b["name"].startswith("رؤية للتطوير العقاري") and b["logo_doc"] and b["phone"] == "+968 9756 6600"
+    # no price ⟵ a clear refusal, not a 500; the assistant answers an availability question on a portfolio without prices
+    r = cl.post("/api/quotes", json={"unit_code": "VHT-O-20", "customer_name": "عميل", "phone": "+968 90000000", "plan": "milestone"})
+    assert r.status_code == 400 and "سعر" in r.text
+    a = cl.post("/api/assistant", json={"q": "كم وحدة متاحة؟"})
+    assert a.status_code == 200 and "غير مزوَّد" in a.json()["answer"] and "65" in a.json()["answer"], a.text
+    assert cl.get("/api/units/VHT-O-20").json()["status"] == "a" and cl.get("/api/units/VHT-O-01").json()["status"] == "s"
+    for path in ("/api/kpis", "/api/leasing", "/api/marketing/board", "/api/reports/ready/portfolio", "/api/reports/ready/inventory", "/api/ipcs", "/api/cash"):
+        assert cl.get(path).status_code == 200, path
+    login_as(cl, "admin", T)
+    assert "MAB" in {p["code"] for p in cl.get("/api/projects").json()}

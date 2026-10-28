@@ -262,6 +262,44 @@ PROFILES: dict[str, dict] = {
             ("mq-engineer", "الاستشارات الهندسية والإشراف", "engineer", None),
         ],
     },
+    "view": {
+        "display": "رؤية العقارية",
+        "seed": 2014,
+        # 0.19.0 — REAL data only, an off-plan (sell-on-the-map) developer. Source: viewom.com (the About page and the six project pages),
+        # collected 2026-10-28 in `view-realestate-mabaneek-data.md`. Published per project: location, coordinates, year, floors, total
+        # units, the unit mix, sold % and a "status" % (read as construction progress until the company confirms). NOT published: unit
+        # numbers, areas, prices, payment plans, handover dates, buyers, contractors — they stay NULL / "not supplied". Unit codes are
+        # system placeholders (`VHT-O-01`), the sold count is the published % applied to the unit total (rounded, never up to sold-out
+        # unless the site says 100 %), and which placeholder is sold is arbitrary until the sales ledger arrives.
+        "real_only": True,
+        "brand": {"name": "رؤية للتطوير العقاري (View Real Estate Development)", "address": "مسقط، سلطنة عُمان", "phone": "+968 9756 6600",
+                  "email": "", "signatory": "", "signatory_title": "المؤسس والرئيس التنفيذي"},
+        # code, name, location, kind, construction % (the site's "status"), sold units (see above), built year, floors, [(type, count, use)]
+        "real_sales": [
+            ("BRK", "واجهة بركاء", "بركاء", "tower", 100, 53, 2023, None, [("مكتب", 45, "commercial"), ("محل تجاري", 8, "commercial")]),
+            ("SLH", "صلالة هيلز", "صلالة", "tower", 40, 29, 2025, 5, [("شقة", 24, "residential"), ("محل تجاري", 13, "commercial"), ("وحدة (النوع غير مزوَّد)", 1, "residential")]),
+            ("KYN", "كيان", "الموالح، مسقط", "tower", 40, 29, 2025, 5, [("شقة", 24, "residential"), ("محل تجاري", 13, "commercial"), ("وحدة (النوع غير مزوَّد)", 1, "residential")]),
+            ("VHT", "فيوو هايتس", "بوشر، مسقط", "tower", 10, 9, 2026, 9, [("مكتب", 45, "commercial"), ("صالة عرض", 1, "commercial")]),
+            ("VBZ", "فيوو بازار", "قرب بركاء", "tower", 95, 25, 2025, 1, [("محل تجاري", 32, "commercial"), ("صالة عرض", 1, "commercial"), ("وحدة (النوع غير مزوَّد)", 1, "commercial")]),
+            ("VGD", "فيوو جاردنس", "الموالح، مسقط", "tower", 70, 55, 2025, 5, [("شقة", 45, "residential"), ("محل تجاري", 11, "commercial")]),
+        ],
+        "projects": [("BRK", "BRK", "واجهة بركاء", "بركاء", "tower", 100, 0, 0, "0"), ("SLH", "SLH", "صلالة هيلز", "صلالة", "tower", 40, 0, 0, "0"),
+                     ("KYN", "KYN", "كيان", "الموالح، مسقط", "tower", 40, 0, 0, "0"), ("VHT", "VHT", "فيوو هايتس", "بوشر، مسقط", "tower", 10, 0, 0, "0"),
+                     ("VBZ", "VBZ", "فيوو بازار", "قرب بركاء", "tower", 95, 0, 0, "0"), ("VGD", "VGD", "فيوو جاردنس", "الموالح، مسقط", "tower", 70, 0, 0, "0")],
+        "assets": [("view/view-logo.png", "brand", "logo", None, None, None, 0),
+                   ("view/barka-render.jpg", "BRK", "render", "واجهة بركاء — التصور المنشور على موقع الشركة", None, None, 1),
+                   ("view/salalah-hills-render.jpg", "SLH", "render", "صلالة هيلز — التصور المنشور على موقع الشركة", None, None, 1),
+                   ("view/kayan-render.jpg", "KYN", "render", "كيان — التصور المنشور على موقع الشركة", None, None, 1),
+                   ("view/view-heights-render.jpg", "VHT", "render", "فيوو هايتس — التصور المنشور على موقع الشركة", None, None, 1),
+                   ("view/view-bazaar-render.jpg", "VBZ", "render", "فيوو بازار — التصور المنشور على موقع الشركة", None, None, 1),
+                   ("view/view-gardens-render.jpg", "VGD", "render", "فيوو جاردنس — التصور المنشور على موقع الشركة", None, None, 1)],
+        "pilot_accounts": [
+            ("vw-ceo", "الرئيس التنفيذي — رؤية العقارية", "admin", None),
+            ("vw-sales", "المبيعات والحجوزات", "sales", None),
+            ("vw-finance", "المالية والتحصيل", "finance", None),
+            ("vw-engineer", "المشاريع والإنشاء", "engineer", None),
+        ],
+    },
     "almukhatat": {
         "display": "المخطط العقارية",
         "seed": 2010,
@@ -402,6 +440,22 @@ def seed_leases(c, p: dict, rnd, today) -> int:
 def _unit_tuples(p: dict) -> list[tuple]:
     """Real-data profiles: (slot, code, building, floor, pos, type, area, view, price, sold_p, use, retained, status, lease) for every unit."""
     out = []
+    if p.get("real_sales"):  # 0.19.0 — off-plan developer: placeholders per published unit mix, sold count from the published %
+        for code, _n, _l, _k, _b, sold, _y, _f, groups in p["real_sales"]:
+            typed = [(tp, n, use) for tp, n, use in groups if "غير مزوَّد" not in tp]
+            total = sum(n for _tp, n, _u in typed)
+            quota = {tp: sold * n / total for tp, n, _u in typed}  # proportional split, largest remainder
+            take = {tp: int(q) for tp, q in quota.items()}
+            for tp in sorted(quota, key=lambda t: quota[t] - take[t], reverse=True)[:sold - sum(take.values())]:
+                take[tp] += 1
+            letter = {"مكتب": "O", "محل تجاري": "S", "شقة": "A", "صالة عرض": "H"}
+            pos = 0
+            for tp, n, use in groups:
+                for i in range(1, n + 1):
+                    pos += 1
+                    st = "s" if i <= take.get(tp, 0) else "a"
+                    out.append((code, f"{code}-{letter.get(tp, 'X')}-{i:02d}", "A", None, pos, tp, None, None, None, 0, use, 0, st, None))
+        return out
     for u, tp, fl, pos, use, st, rent, paid, unpaid, lessee, start, note in p.get("ist_units", []):
         lease = None if st == "vacant" else {"lessee": lessee or f"مستأجر الوحدة {tp if tp != 'شقة' else u} (الاسم غير مزوَّد)", "monthly": rent,
                                                 "start": start, "end": "2027-06-30", "paid": paid, "unpaid": unpaid, "note": note}
@@ -428,7 +482,9 @@ def seed_real(c, p: dict, tenant: str) -> None:
     for k, v in SETTINGS.items():
         c.execute("INSERT OR REPLACE INTO settings VALUES(?,?)", (k, v))
     pid = {}
-    for code, name, loc, kind, b, pl, ho, completed in p["real_projects"]:
+    real_projects = p.get("real_projects") or [(code, name, loc, kind, b, 0, None, 1 if b >= 100 else 0)
+                                               for code, name, loc, kind, b, _s, _y, _f, _g in p["real_sales"]]
+    for code, name, loc, kind, b, pl, ho, completed in real_projects:
         pid[code] = c.execute("INSERT INTO projects(code,name,location,kind,build_pct,planned_monthly_sales,handover,completed) VALUES(?,?,?,?,?,?,?,?)",
                               (code, name, loc, kind, b, pl, ho, completed)).lastrowid
     for slot, code, bld, fl, pos, tp, area, vw, price, _sp, use, retained, st, lease in _unit_tuples(p):

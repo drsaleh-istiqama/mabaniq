@@ -196,21 +196,26 @@ def t_inventory(ctx, a):
     pool = rows if st else avail  # عند السؤال عن «المباعة» أو «المحجوزة» نعرضها هي لا المتاحة
     if pool:
         label = {"a": "المتاح", "r": "المحجوز", "s": "المباع"}.get(st, "المتاح")
-        per = [r["price"] / r["area"] for r in pool if r["area"]]
-        pr = [r["price"] for r in pool]
-        data.update(min_price=min(pr), max_price=max(pr), avg_price_per_m2=round(sum(per) / len(per)) if per else None)
-        lines.append(f"{label}: أقل سعر {omr(min(pr))} وأعلاه {omr(max(pr))}" + (f"، ومتوسط سعر المتر {omr(sum(per) / len(per))}" if per else "") + ".")
-        cheap = sorted(pool, key=lambda r: r["price"])[:3]
-        dear = sorted(pool, key=lambda r: -r["price"])[:3]
-        big = sorted(pool, key=lambda r: -r["area"])[:2]
-        row = lambda r: {"code": r["code"], "type": r["type"], "area": r["area"], "price": r["price"], "project": r["pname"]}
-        data.update(cheapest=[row(r) for r in cheap], priciest=[row(r) for r in dear], largest=[row(r) for r in big])
-        fmt = lambda L: "؛ ".join(f"{r['code']} ({r['type']}) {omr(r['price'])}" for r in L)
-        if a.get("sort") == "desc":
-            lines += ["الأغلى: " + fmt(dear), "الأرخص: " + fmt(cheap[:2])]
+        priced = [r for r in pool if r["price"] is not None]  # 0.19.0 — real-data tenants may publish no price / area (NULL, never invented)
+        if priced:
+            per = [r["price"] / r["area"] for r in priced if r["area"]]
+            pr = [r["price"] for r in priced]
+            data.update(min_price=min(pr), max_price=max(pr), avg_price_per_m2=round(sum(per) / len(per)) if per else None)
+            lines.append(f"{label}: أقل سعر {omr(min(pr))} وأعلاه {omr(max(pr))}" + (f"، ومتوسط سعر المتر {omr(sum(per) / len(per))}" if per else "") + ".")
+            cheap = sorted(priced, key=lambda r: r["price"])[:3]
+            dear = sorted(priced, key=lambda r: -r["price"])[:3]
+            big = sorted((r for r in priced if r["area"]), key=lambda r: -r["area"])[:2]
+            row = lambda r: {"code": r["code"], "type": r["type"], "area": r["area"], "price": r["price"], "project": r["pname"]}
+            data.update(cheapest=[row(r) for r in cheap], priciest=[row(r) for r in dear], largest=[row(r) for r in big])
+            fmt = lambda L: "؛ ".join(f"{r['code']} ({r['type']}) {omr(r['price'])}" for r in L)
+            if a.get("sort") == "desc":
+                lines += ["الأغلى: " + fmt(dear), "الأرخص: " + fmt(cheap[:2])]
+            else:
+                lines += ["الأرخص: " + fmt(cheap), "الأغلى: " + fmt(dear[:2])]
+            if big:
+                lines.append("الأكبر مساحة: " + "؛ ".join(f"{r['code']} {r['area']:g} م² {omr(r['price'])}" for r in big))
         else:
-            lines += ["الأرخص: " + fmt(cheap), "الأغلى: " + fmt(dear[:2])]
-        lines.append("الأكبر مساحة: " + "؛ ".join(f"{r['code']} {r['area']:g} م² {omr(r['price'])}" for r in big))
+            lines.append(f"{label}: الأسعار والمساحات غير مزوَّدة بعد — تظهر هنا فور إدخالها.")
         bt = defaultdict(list)
         for r in pool:
             bt[_category(r["type"])].append(r)
