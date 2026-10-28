@@ -61,7 +61,7 @@ def pricing(c, project_id: int):
 def unit_suggestion(c, unit_row):
     segs = pricing(c, unit_row["project_id"])
     s = next((x for x in segs if x["view"] == unit_row["view"] and x["type"] == unit_row["type"]), None)
-    if not s or unit_row["status"] != "a":
+    if not s or unit_row["status"] != "a" or unit_row["price"] is None:  # 0.18.2 — real-data units may carry no price yet
         return None
     return {"change": s["suggested_change"],
             "price": round(unit_row["price"] * (1 + s["suggested_change"]) / 100) * 100,

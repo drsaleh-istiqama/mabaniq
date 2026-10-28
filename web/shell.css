@@ -208,24 +208,24 @@ html[data-pat="image"] .body{background-attachment:local,local}
 /* الغطاء المعتّم يبدأ تحت الشريط العلوي (58px) كي يبقى «المساعد» والبحث قابلين للنقر والتفاصيل مفتوحة */
 @media(min-width:901px){body.io .scrim{inset:58px 0 0 0}}
 /* لوحة المساعد: مستقلة عن لوحة التفاصيل، تُفتح بالزر وتُغلق بـ✕ أو Esc */
-.ai{position:fixed;left:16px;bottom:16px;width:min(420px,calc(100vw - 32px));height:min(600px,calc(100vh - 96px));display:flex;flex-direction:column;background:var(--pane);color:var(--ink);border:1px solid var(--line);border-radius:16px;box-shadow:0 18px 60px rgba(0,0,0,.45);z-index:45;overflow:hidden;animation:aiin .18s ease}
-.ai[hidden]{display:none}
+.aipanel{position:fixed;left:16px;bottom:16px;width:min(420px,calc(100vw - 32px));height:min(600px,calc(100vh - 96px));display:flex;flex-direction:column;background:var(--pane);color:var(--ink);border:1px solid var(--line);border-radius:16px;box-shadow:0 18px 60px rgba(0,0,0,.45);z-index:45;overflow:hidden;animation:aiin .18s ease}
+.aipanel[hidden]{display:none}
 @keyframes aiin{from{opacity:0;transform:translateY(10px)}}
-@media(prefers-reduced-motion:reduce){.ai{animation:none}}
-body.io .ai{left:calc(min(400px,94vw) + 28px)}
+@media(prefers-reduced-motion:reduce){.aipanel{animation:none}}
+body.io .aipanel{left:calc(min(400px,94vw) + 28px)}
 .ai-h{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid var(--line);background:var(--pane2);font-weight:700}
 .ai-t small{font-weight:400;color:var(--muted);font-size:11.5px}
 .ai-b{display:flex;gap:2px}.ai-b .x{width:34px;height:34px;border-radius:8px;font-size:16px}.ai-b .x:hover{background:var(--line);color:var(--ink)}
-.ai .log{flex:1;min-height:0;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:10px;font-size:13.5px;line-height:1.85;scrollbar-width:thin;scrollbar-color:var(--line) transparent}
-.ai .q{align-self:flex-start;max-width:88%;background:var(--pri2);border-radius:12px;padding:6px 12px}
-.ai .a{border-inline-start:2px solid var(--pri);padding-inline-start:10px}
-.ai .a.pend{opacity:.6}
-.ai .a small{display:block;color:var(--muted);font-size:11px;margin-top:4px}
-.ai .ln{margin:1px 0}.ai .ln.li{padding-inline-start:4px}.ai .sp{height:6px}
+.aipanel .log{flex:1;min-height:0;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:10px;font-size:13.5px;line-height:1.85;scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+.aipanel .q{align-self:flex-start;max-width:88%;background:var(--pri2);border-radius:12px;padding:6px 12px}
+.aipanel .a{border-inline-start:2px solid var(--pri);padding-inline-start:10px}
+.aipanel .a.pend{opacity:.6}
+.aipanel .a small{display:block;color:var(--muted);font-size:11px;margin-top:4px}
+.aipanel .ln{margin:1px 0}.aipanel .ln.li{padding-inline-start:4px}.aipanel .sp{height:6px}
 .ai-s{display:flex;flex-wrap:wrap;gap:6px;padding:0 14px 8px}
 .chip{border:1px solid var(--line);background:var(--pane2);color:var(--ink);border-radius:999px;padding:5px 11px;font-size:12px;min-height:30px}
 .chip:hover{border-color:var(--pri);color:var(--pri)}
-.ai form{display:flex;gap:8px;padding:10px 12px;border-top:1px solid var(--line);background:var(--pane2)}
-.ai form input{flex:1;min-width:0}
-@media(max-width:900px){.ai,body.io .ai{left:0;right:0;bottom:0;width:auto;height:min(78vh,640px);border-radius:16px 16px 0 0}}
+.aipanel form{display:flex;gap:8px;padding:10px 12px;border-top:1px solid var(--line);background:var(--pane2)}
+.aipanel form input{flex:1;min-width:0}
+@media(max-width:900px){.aipanel,body.io .aipanel{left:0;right:0;bottom:0;width:auto;height:min(78vh,640px);border-radius:16px 16px 0 0}}
 

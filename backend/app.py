@@ -102,7 +102,7 @@ def metrics_endpoint(request: Request):
     return Response(O.metrics.render(dbx.pool_stats()), media_type="text/plain; version=0.0.4; charset=utf-8", headers={"Cache-Control": "no-store"})
 
 
-from .common import ACTOR, act_as, audit, db  # noqa: E402
+from .common import ACTOR, act_as, audit, db, today  # noqa: E402
 
 
 def expire_holds(c):
@@ -170,6 +170,16 @@ def unit(code: str, _=Depends(need("inventory"))):
         raise HTTPException(404, "الوحدة غير موجودة")
     res = dict(u)
     res["suggestion"] = E.unit_suggestion(c, u)
+    if u["retained"]:  # 0.18.2 — leasing-portfolio units: the active lease belongs on the card (tenant, rent, term, arrears)
+        l = c.execute("""SELECT l.id, l.start, l."end", l.annual_rent, l.frequency, l.status, t.name tenant FROM leases l
+                         JOIN tenants_l t ON t.id=l.tenant_id WHERE l.unit_id=? AND l.status='active' ORDER BY l."end" DESC""", (u["id"],)).fetchone()
+        if l:
+            t0 = today().isoformat()
+            dues = [dict(d) for d in c.execute("SELECT due, amount, paid FROM rent_dues WHERE lease_id=?", (l["id"],))]
+            res["lease"] = {**dict(l), "arrears": round(sum(d["amount"] - d["paid"] for d in dues if d["due"] <= t0)),
+                            "next_due": min((d["due"] for d in dues if d["paid"] < d["amount"] and d["due"] > t0), default=None)}
+        else:
+            res["lease"] = None
     b = c.execute("""SELECT b.*, cu.name cname, cu.phone FROM bookings b JOIN customers cu ON cu.id=b.customer_id
                      WHERE b.unit_id=? AND b.status!='cancelled' ORDER BY b.id DESC""", (u["id"],)).fetchone()
     if b:

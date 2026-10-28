@@ -169,6 +169,7 @@ def test_pilot_accounts_created_once_with_temp_password_and_never_reset(cl, monk
     tok = TENANT.set(T)
     try:
         d = connect()
+        d.execute("DELETE FROM sessions WHERE user_id IN (SELECT id FROM users WHERE username IN ('dawood','mk-sales','mk-finance','mk-engineer','mk-client'))")  # PG: FK from sessions
         d.execute("DELETE FROM users WHERE username IN ('dawood','mk-sales','mk-finance','mk-engineer','mk-client')")
         d.commit()
         monkeypatch.delenv("MABANIQ_PILOT_PASSWORD", raising=False)
@@ -201,6 +202,7 @@ def test_pilot_staff_login_sees_the_company_and_client_sees_the_unit(cl, monkeyp
     tok = TENANT.set(T)
     try:
         d = connect()
+        d.execute("DELETE FROM sessions WHERE user_id IN (SELECT id FROM users WHERE username IN ('dawood','mk-client'))")  # PG: FK from sessions
         d.execute("DELETE FROM users WHERE username IN ('dawood','mk-client')")
         d.commit()
         monkeypatch.setenv("MABANIQ_PILOT_PASSWORD", "Pilot-Temp-2026-xyz")
@@ -345,3 +347,21 @@ def test_almaqsura_is_real_data_only(cl):
     for other, must in ((T, "MAB"), (B, "MSK")):
         login_as(cl, "admin", other)
         assert must in {p["code"] for p in cl.get("/api/projects").json()}
+
+
+def test_unit_card_handles_null_price_and_shows_lease(cl):
+    """0.18.2 — real-data units carry no price: the card must not 500 (pricing suggestion skipped, no price/m²), and retained units
+    expose their active lease (tenant, rent, term, arrears) so the inventory map tells the leasing story too."""
+    login_as(cl, "admin", M)
+    sw = cl.get("/api/units/IST-A-SW")
+    assert sw.status_code == 200, sw.text
+    sw = sw.json()
+    assert sw["price"] is None and sw["suggestion"] is None and sw["retained"] == 1
+    assert sw["lease"] and "محل W" in sw["lease"]["tenant"] and sw["lease"]["annual_rent"] == 400 * 12 and sw["lease"]["arrears"] == 0
+    m5 = cl.get("/api/units/IST-A-M5").json()
+    assert m5["lease"]["arrears"] == 330 * 9 and m5["lease"]["next_due"] is not None
+    vacant = cl.get("/api/units/IST-A-S2").json()
+    assert vacant["retained"] == 1 and vacant["lease"] is None
+    land = cl.get("/api/units/AZB-L-01")
+    assert land.status_code == 200 and land.json()["suggestion"] is None and "lease" not in land.json()
+    assert cl.get(f"/api/pricing/{land.json()['project_id']}").status_code == 200

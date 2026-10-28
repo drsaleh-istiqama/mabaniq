@@ -204,13 +204,16 @@ $('#fStat').onchange = $('#fAi').onchange = () => renderHeat(S.projects.find(x =
 
 async function showUnit(code) {
   const u = await api('/units/' + encodeURIComponent(code));
-  let h = `<h3><span class="num">${esc(u.code)}</span> ${pill(ST[u.status], u.status === 'a' ? 'p-ok' : u.status === 'r' ? 'p-w' : 'p-bl')}</h3>
-   <dl class="kv"><dt>النوع</dt><dd>${esc(u.type)}</dd><dt>المساحة</dt><dd>${u.area == null ? 'غير مزوَّدة' : N(u.area) + ' م²'}</dd>${u.floor ? `<dt>الطابق</dt><dd>${N(u.floor)}</dd>` : ''}<dt>الموقع/الإطلالة</dt><dd>${esc(u.view)}</dd><dt>السعر</dt><dd>${OMR(u.price)}</dd><dt>سعر المتر</dt><dd>${OMR(u.price / u.area)}</dd></dl>`;
+  const stPill = u.lease ? pill('مؤجَّرة', 'p-bl') : u.retained ? pill('محفظة التأجير — شاغرة', 'p-w') : pill(ST[u.status], u.status === 'a' ? 'p-ok' : u.status === 'r' ? 'p-w' : 'p-bl');
+  let h = `<h3><span class="num">${esc(u.code)}</span> ${stPill}</h3>
+   <dl class="kv"><dt>النوع</dt><dd>${esc(u.type)}</dd><dt>المساحة</dt><dd>${u.area == null ? 'غير مزوَّدة' : N(u.area) + ' م²'}</dd>${u.floor ? `<dt>الطابق</dt><dd>${N(u.floor)}</dd>` : ''}<dt>الموقع/الإطلالة</dt><dd>${esc(u.view)}</dd><dt>السعر</dt><dd>${OMR(u.price)}</dd><dt>سعر المتر</dt><dd>${u.price != null && u.area ? OMR(u.price / u.area) : '—'}</dd></dl>`;
+  if (u.retained) h += u.lease ? `<div class="ai"><b class="k">محفظة التأجير:</b> المستأجر <b>${esc(u.lease.tenant)}</b> · الإيجار السنوي <b>${OMR(u.lease.annual_rent)}</b> (${N(u.lease.frequency)} دفعات في السنة) · العقد من ${fmtDate(u.lease.start)} إلى ${fmtDate(u.lease.end)}${u.lease.arrears ? ` · متأخرات ${pill(OMR(u.lease.arrears), 'p-b')}` : ' · لا متأخرات'}${u.lease.next_due ? ` · الدفعة القادمة ${fmtDate(u.lease.next_due)}` : ''}<br><span class="muted">العقد والدفعات والتحصيل في «التسليم والأملاك ← التأجير».</span></div>`
+    : `<div class="ai"><b class="k">محفظة التأجير:</b> وحدة شاغرة معروضة للإيجار — يُنشأ عقدها من «التسليم والأملاك ← التأجير».</div>`;
   if (u.suggestion) {
     const s = u.suggestion;
     h += `<div class="ai"><b class="k">✦ التسعير الديناميكي:</b> ${s.change ? `${s.change > 0 ? 'رفع' : 'خفض'} ${N(Math.abs(s.change * 100))}٪ ← <b>${OMR(s.price)}</b>` : 'السعر الحالي متوافق مع الطلب.'}<br><span class="muted">${tx(s.reason)}</span></div>`;
   }
-  if (u.status === 'a' && can('book')) h += `<div class="btns"><button class="btn p" data-call="openBooking" data-args="${J([u.code])}">حجز الوحدة لعميل</button><button class="btn" data-call="EXT.newQuote" data-args="${J([u.code])}">عرض سعر</button></div>`;
+  if (u.status === 'a' && can('book') && !u.retained) h += `<div class="btns"><button class="btn p" data-call="openBooking" data-args="${J([u.code])}">حجز الوحدة لعميل</button><button class="btn" data-call="EXT.newQuote" data-args="${J([u.code])}">عرض سعر</button></div>`;
   if (u.booking) {
     const b = u.booking;
     h += `<dl class="kv"><dt>العميل</dt><dd>${esc(b.cname)}</dd><dt>الهاتف</dt><dd><span class="num">${esc(b.phone)}</span></dd><dt>خطة الدفع</dt><dd>${PLANS[b.plan][0]}</dd><dt>المسدَّد</dt><dd>${OMR(b.paid)} من ${OMR(b.total)}</dd>${b.status === 'pending' ? `<dt>مهلة الحجز</dt><dd>حتى ${fmtDate(b.expires)}</dd>` : ''}</dl>`;
