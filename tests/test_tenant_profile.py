@@ -299,48 +299,49 @@ def test_bayan_assets_plans_markers_and_cycle_projects(cl):
 M = "almaqsura"
 
 
-def test_almaqsura_profile_projects_units_leases_brand_and_assets(cl):
-    """0.16.0 — third profiled developer (Almaqsura Real Estate): illustrative portfolio on its published renders, schematic plans
-    with computed markers, retained shops with leases, villas slot, pilot accounts; the two other profiles stay untouched."""
+def test_almaqsura_is_real_data_only(cl):
+    """0.18.1 — the tenant holds only documented data: building 534 (42 units, August-2026 report), the purchased units workbook (29 units,
+    8 leased), nine Souq Al Sad shops, one Azaiba plot (land sector); no demo buyers, leads or invented projects; unknowns stay NULL."""
     login_as(cl, "admin", M)
     ps = {p["code"]: p for p in cl.get("/api/projects").json()}
-    for code in ("MQC", "RWQ", "DAR", "AMR", "QRM"):
-        assert code in ps, code
-    assert not {"RAY", "SEB", "KHD", "MAB", "MSK"} & set(ps)
-    assert ps["MQC"]["name"] == "مجمع المقصورة التجاري" and ps["DAR"]["kind"] == "villa"
-    mqc = cl.get("/api/units", params={"project_id": ps["MQC"]["id"]}).json()
-    assert len(mqc) == 52 and sum("محل" in u["type"] for u in mqc) == 16 and sum("مكتب" in u["type"] for u in mqc) == 24
-    assert sum(u["use"] == "commercial" for u in mqc) == 40 and sum(u["use"] == "residential" for u in mqc) == 12
-    rwq = cl.get("/api/units", params={"project_id": ps["RWQ"]["id"]}).json()
-    assert len(rwq) == 32 and all(u["code"].startswith("RWQ-R-") for u in rwq)
-    dar = cl.get("/api/units", params={"project_id": ps["DAR"]["id"]}).json()
-    assert len(dar) == 30 and all(u["code"].startswith("DAR-V-") for u in dar)
-    b = cl.get("/api/admin/brand").json()
-    assert b["name"].startswith("المقصورة العقارية") and "مركز داود" in b["address"] and b["logo_doc"]
+    assert set(ps) == {"IST", "MQT", "SAD", "AZB"}, set(ps)
+    assert ps["AZB"]["kind"] == "land" and ps["IST"]["completed"]
+    ist = {u["code"]: u for u in cl.get("/api/units", params={"project_id": ps["IST"]["id"]}).json()}
+    assert len(ist) == 42 and sum("شقة" == u["type"] for u in ist.values()) == 30 and sum("محل" in u["type"] for u in ist.values()) == 7
+    assert all(u["retained"] == 1 and u["status"] == "a" and u["price"] is None for u in ist.values())
+    mqt = {u["code"]: u for u in cl.get("/api/units", params={"project_id": ps["MQT"]["id"]}).json()}
+    assert len(mqt) == 29 and mqt["MQT-T1-703"]["area"] == 55 and mqt["MQT-T2-330"]["area"] == 205
+    assert len(cl.get("/api/units", params={"project_id": ps["SAD"]["id"]}).json()) == 9
+    azb = cl.get("/api/units", params={"project_id": ps["AZB"]["id"]}).json()
+    assert len(azb) == 1 and azb[0]["use"] == "land" and azb[0]["price"] is None and azb[0]["retained"] == 0
+    # leasing: 40 leases in building 534 (incl. two reserved shops and the association's storage) + 8 in the towers; August arrears as reported
     L = cl.get("/api/leasing").json()
     by_unit = {x["unit"]: x for x in L["leases"]}
-    assert {"MQC-C-001", "MQC-C-006", "MQC-C-010"} <= set(by_unit) and "MQC-C-013" not in by_unit
-    assert by_unit["MQC-C-010"]["arrears"] > 0 and by_unit["MQC-C-006"]["frequency"] == 12
-    retained = {u["code"] for u in L["units"]}
-    assert TP.lease_units(TP.profile(M)) <= retained and all(u["status"] == "a" for u in mqc if u["code"] in retained)
-    plans = cl.get("/api/plans", params={"project_id": ps["MQC"]["id"]}).json()
-    assert {"site", "floor", "render"} <= {p["kind"] for p in plans} and len(plans) >= 6
-    gf = next(p for p in plans if p["kind"] == "floor" and p["floor"] == 0)
-    assert {m["unit_code"] for m in gf["markers"]} == {f"MQC-C-{i:03d}" for i in range(1, 17)}
-    assert all(0 < m["x"] < 100 and 0 < m["y"] < 100 for m in gf["markers"])
-    assert cl.get(f"/api/documents/{gf['document_id']}").status_code == 200
-    assert cl.get("/api/plans", params={"project_id": ps["RWQ"]["id"]}).json()
+    assert sum(k.startswith("IST-") for k in by_unit) == 40 and sum(k.startswith("MQT-") for k in by_unit) == 8
+    assert by_unit["IST-A-M5"]["arrears"] == 330 * 9 and by_unit["IST-A-12"]["arrears"] == 750 and by_unit["IST-A-42"]["arrears"] == 520
+    assert by_unit["IST-A-32"]["arrears"] == 260 and by_unit["IST-A-13"]["arrears"] == 0 and by_unit["IST-A-63"]["arrears"] == 0
+    assert by_unit["IST-A-SW"]["arrears"] == 0 and by_unit["MQT-T1-707"]["arrears"] == 0  # undocumented months are not shown as arrears
+    assert "IST-A-S2" not in by_unit and "IST-A-BA" not in by_unit and "MQT-T1-701" not in by_unit  # vacant / not leased
+    assert L["annual_rent"] >= (8760 - 0) * 12 * 0.9  # the report's monthly total ≈ 8,760 OMR (two shops reserved, storage unpaid)
+    # nothing demo-generated
     tok = TENANT.set(M)
     try:
         c = connect()
-        gap = c.execute("SELECT COALESCE(SUM(paid_amount),0) - (SELECT COALESCE(SUM(amount),0) FROM payments) FROM installments").fetchone()[0]
-        assert abs(gap) < 0.01
+        for t in ("bookings", "customers", "leads", "contractors", "ipcs", "cost_schedule", "permits"):
+            assert c.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] == 0, t
+        assert c.execute("SELECT COUNT(*) FROM rent_dues WHERE paid>0").fetchone()[0] == 33  # 25 flats + 2 offices + 4 shops in August, + unit 63 (July + August)
         assert TP.ensure_assets(c, M) == 0
         c.close()
     finally:
         TENANT.reset(tok)
-    for other, must, mustnot in ((T, "MAB", "MQC"), (B, "MSK", "MQC")):
+    b = cl.get("/api/admin/brand").json()
+    assert b["name"].startswith("المقصورة العقارية") and b["logo_doc"]
+    # a quote or booking on a unit without a price is refused clearly (not a 500)
+    r = cl.post("/api/quotes", json={"unit_code": "AZB-L-01", "customer_name": "عميل", "phone": "+968 90000000", "plan": "milestone"})
+    assert r.status_code == 400 and "سعر" in r.text
+    # reports and dashboards render on a real-data tenant
+    assert cl.get("/api/reports/ready/portfolio").status_code == 200
+    assert cl.get("/api/decisions").status_code == 200 and cl.get("/api/marketing/board").status_code == 200
+    for other, must in ((T, "MAB"), (B, "MSK")):
         login_as(cl, "admin", other)
-        codes = {p["code"] for p in cl.get("/api/projects").json()}
-        assert must in codes and mustnot not in codes
-
+        assert must in {p["code"] for p in cl.get("/api/projects").json()}

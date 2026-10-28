@@ -426,6 +426,8 @@ def quote_create(q: QuoteIn, request: Request, u=Depends(act_as("book"))):
         q.email = norm_email(q.email)
         if not EMAIL_RE.match(q.email):
             raise HTTPException(400, "صيغة البريد غير صحيحة")
+    if unit["price"] is None:
+        raise HTTPException(400, "سعر الوحدة غير محدد بعد — حدّده في المخزون قبل إصدار عرض سعر")
     price = round(unit["price"] * (1 - q.discount_pct))
     t = today()
     sched = schedule(q.plan, price, t, dt.date.fromisoformat(unit["handover"]))
@@ -466,6 +468,8 @@ def create_booking(c, unit, customer_name: str, phone: str, plan: str, lead_id: 
     t = today()
     cid = c.execute("INSERT INTO customers(name,phone,email,created) VALUES(?,?,?,?)", (customer_name, phone, email, t.isoformat())).lastrowid
     agreed = price if price is not None else unit["price"]
+    if agreed is None:
+        raise HTTPException(400, "سعر الوحدة غير محدد بعد — حدّده في المخزون قبل الحجز")
     bid = c.execute("INSERT INTO bookings(unit_id,customer_id,lead_id,plan,price,status,created,expires,broker_id,list_price) VALUES(?,?,?,?,?,?,?,?,?,?)",
                     (unit["id"], cid, lead_id, plan, agreed, "pending", t.isoformat(), (t + dt.timedelta(days=3)).isoformat(), broker_id, unit["price"])).lastrowid
     sched = schedule(plan, agreed, t, dt.date.fromisoformat(unit["handover"]))

@@ -94,7 +94,7 @@ DATASETS: dict[str, dict] = {
                 "columns": OrderedDict([("created", ("التاريخ", "date")), ("category", ("الفئة", "text")), ("status", ("الحالة", "enum", {"new": "جديد", "in_progress": "قيد التنفيذ", "done": "منجز"})), ("project", ("المشروع", "text")), ("code", ("الوحدة", "text"))])},
     "projects": {"label": "المشاريع", "perm": "view",
                  "sql": "SELECT id, name, location, kind, build_pct, planned_monthly_sales, handover, completed FROM projects",
-                 "columns": OrderedDict([("name", ("المشروع", "text")), ("location", ("الموقع", "text")), ("kind", ("النوع", "enum", {"tower": "أبراج", "villa": "فلل"})), ("build_pct", ("الإنجاز ٪", "num")),
+                 "columns": OrderedDict([("name", ("المشروع", "text")), ("location", ("الموقع", "text")), ("kind", ("النوع", "enum", {"tower": "أبراج", "villa": "فلل", "land": "أراضٍ"})), ("build_pct", ("الإنجاز ٪", "num")),
                                          ("planned_monthly_sales", ("المبيعات الشهرية المخططة", "num")), ("handover", ("التسليم", "date")), ("completed", ("مكتمل", "bool"))])},
 }
 OPS = {"eq": "=", "ne": "!=", "gt": ">", "gte": ">=", "lt": "<", "lte": "<="}

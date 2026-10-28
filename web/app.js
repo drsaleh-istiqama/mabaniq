@@ -3,7 +3,7 @@ import {t, applyI18n, toggleLang, lang} from './i18n.js';
 /* مبانيك — منطق الواجهة. كل البيانات تأتي من الـ API الحي. */
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const nf = new Intl.NumberFormat('ar-OM-u-nu-latn'), N = v => nf.format(Math.round(v || 0));
-const OMR = v => N(v) + '\u00a0ر.ع';
+const OMR = v => v == null ? '—' : N(v) + '\u00a0ر.ع';
 const K = v => Math.abs(v) >= 1e6 ? (v / 1e6).toLocaleString('ar-OM-u-nu-latn', {maximumFractionDigits: 2}) + ' مليون' : Math.abs(v) >= 1e3 ? N(v / 1e3) + ' ألف' : N(v);
 const WD = t => String(t ?? '').replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/(\d)٫(?=\d)/g, '$1.'); // الوحدة 3 — قرار ب: أرقام غربية في كل الواجهة؛ ثابت واحد يطبَّع هنا
 const tx = t => esc(t);
@@ -137,7 +137,7 @@ async function loadOverview() {
   $('#dq').innerHTML = dec.map((d, i) => `<tr data-i="${i}" class="${d.done ? 'done' : ''}"><td>${tx(d.title)}</td><td>${pill(esc(d.source), 'p-bl')}</td><td>${K(d.impact)} ر.ع<br><span class="muted">${esc(d.impact_label)}</span></td><td>${pill(d.priority, d.priority === 'حرجة' ? 'p-b' : 'p-w')}</td><td>${d.done ? pill(d.done === 'approve' ? '✓ معتمد' : 'متجاهَل', d.done === 'approve' ? 'p-ok' : '') : pill('مفتوح', 'p-w')}</td></tr>`).join('');
   $$('#dq tr').forEach(tr => tr.onclick = () => { sel(tr); showDecision(DEC[+tr.dataset.i]); });
   const byP = Object.fromEntries(cash.projects.map(p => [p.project_id, p]));
-  $('#ph').innerHTML = projects.map(p => `<tr data-p="${p.id}"><td><b>${esc(p.name)}</b><br><span class="muted">${esc(p.location)} · ${N(p.total_units)} ${p.kind === 'villa' ? 'فيلا' : 'وحدة'}</span></td>
+  $('#ph').innerHTML = projects.map(p => `<tr data-p="${p.id}"><td><b>${esc(p.name)}</b><br><span class="muted">${esc(p.location)} · ${N(p.total_units)} ${p.kind === 'villa' ? 'فيلا' : p.kind === 'land' ? 'قطعة أرض' : 'وحدة'}</span></td>
     <td><span class="bar-s"><i style="width:${p.build_pct}%"></i></span>${N(p.build_pct)}٪</td><td>${N(p.sold_pct)}٪</td><td>${N(p.available)}</td>
     <td>${N(byP[p.id].sales_pace)} / ${N(p.planned_monthly_sales)} شهريًا</td>
     <td>${byP[p.id].gap ? pill('عجز ' + K(byP[p.id].gap), 'p-b') : pill('سليم', 'p-ok')}</td></tr>`).join('');
@@ -183,10 +183,10 @@ function renderHeat(p) {
   const dim = u => (fs && u.status !== fs) || (ai && !u.ai_change);
   const cell = u => `<button class="cell ${u.status} ${dim(u) ? 'dim' : ''} ${u.ai_change > 0 ? 'up' : u.ai_change < 0 ? 'dn' : ''}" data-c="${u.code}" aria-label="${u.code} ${ST[u.status]}">${u.code.split('-').pop()}</button>`;
   const h = $('#heat');
-  if (p.kind === 'villa') {
+  if (p.kind === 'villa' || p.kind === 'land') {
     h.className = 'heat villas'; h.style.gridTemplateColumns = '';
     h.innerHTML = list.map(cell).join('');
-    $('#invTitle').textContent = 'المخطط العام للفلل';
+    $('#invTitle').textContent = p.kind === 'land' ? 'المخطط العام لقطع الأرض' : 'المخطط العام للفلل';
   } else {
     const cols = Math.max(...list.map(u => u.pos));
     h.className = 'heat'; h.style.gridTemplateColumns = `44px repeat(${cols},1fr)`;
@@ -205,7 +205,7 @@ $('#fStat').onchange = $('#fAi').onchange = () => renderHeat(S.projects.find(x =
 async function showUnit(code) {
   const u = await api('/units/' + encodeURIComponent(code));
   let h = `<h3><span class="num">${esc(u.code)}</span> ${pill(ST[u.status], u.status === 'a' ? 'p-ok' : u.status === 'r' ? 'p-w' : 'p-bl')}</h3>
-   <dl class="kv"><dt>النوع</dt><dd>${esc(u.type)}</dd><dt>المساحة</dt><dd>${N(u.area)} م²</dd>${u.floor ? `<dt>الطابق</dt><dd>${N(u.floor)}</dd>` : ''}<dt>الموقع/الإطلالة</dt><dd>${esc(u.view)}</dd><dt>السعر</dt><dd>${OMR(u.price)}</dd><dt>سعر المتر</dt><dd>${OMR(u.price / u.area)}</dd></dl>`;
+   <dl class="kv"><dt>النوع</dt><dd>${esc(u.type)}</dd><dt>المساحة</dt><dd>${u.area == null ? 'غير مزوَّدة' : N(u.area) + ' م²'}</dd>${u.floor ? `<dt>الطابق</dt><dd>${N(u.floor)}</dd>` : ''}<dt>الموقع/الإطلالة</dt><dd>${esc(u.view)}</dd><dt>السعر</dt><dd>${OMR(u.price)}</dd><dt>سعر المتر</dt><dd>${OMR(u.price / u.area)}</dd></dl>`;
   if (u.suggestion) {
     const s = u.suggestion;
     h += `<div class="ai"><b class="k">✦ التسعير الديناميكي:</b> ${s.change ? `${s.change > 0 ? 'رفع' : 'خفض'} ${N(Math.abs(s.change * 100))}٪ ← <b>${OMR(s.price)}</b>` : 'السعر الحالي متوافق مع الطلب.'}<br><span class="muted">${tx(s.reason)}</span></div>`;

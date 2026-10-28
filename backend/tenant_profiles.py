@@ -74,20 +74,6 @@ _MQR_FLOOR = [("شقة غرفة وصالة — 68 م²", 68.0, "داخلي", 590
               ("شقة غرفتان وصالة — 98 م²", 98.0, "الحديقة", 610, "residential"), ("شقة غرفة وصالة — 72 م²", 72.0, "داخلي", 590, "residential")]
 
 
-# ---- المقصورة العقارية (Almaqsura Real Estate, Muscat, since 2005) — the company publishes designs but no project sheets or prices:
-# every project below is an illustrative portfolio built on its published renders (courtyard commercial complex, arcaded building);
-# names, areas, prices and sold ratios are stated as illustrative in the platform's documentation.
-_MQC_SHOPS = [(f"محل تجاري {a} م²", a, "الشارع" if i < 5 or 8 <= i < 13 else "الفناء", 1250, "commercial")
-              for i, a in enumerate((48, 42, 36, 36, 42, 48, 32, 28, 32, 48, 42, 36, 36, 42, 32, 28))]
-_MQC_OFF = [(f"مكتب {a} م²", a, "الشارع" if i % 2 == 0 else "الفناء", 540, "commercial") for i, a in enumerate((95, 75, 65, 75, 95, 55, 60, 95, 75, 65, 75, 60))]
-_MQC_RES = [("شقة غرفتان وصالة — 112 م²", 112, "الفناء", 600, "residential"), ("شقة 3 غرف وصالة — 148 م²", 148, "الشارع", 590, "residential"),
-            ("شقة غرفة وصالة — 76 م²", 76, "الفناء", 620, "residential"), ("شقة غرفتان وصالة — 118 م²", 118, "الشارع", 600, "residential"),
-            ("شقة 3 غرف وصالة — 152 م²", 152, "الفناء", 590, "residential"), ("شقة غرفة وصالة — 72 م²", 72, "الشارع", 620, "residential")]
-_RWQ_SHOPS = [(f"محل تجاري {a} م²", a, "الرواق", 1150, "commercial") for a in (34, 34, 40, 40, 46, 46, 52, 58)]
-_RWQ_RES = [("شقة غرفتان وصالة — 105 م²", 105, "الرواق", 560, "residential"), ("شقة غرفتان وصالة — 105 م²", 105, "داخلي", 540, "residential"),
-            ("شقة 3 غرف وصالة — 138 م²", 138, "الرواق", 560, "residential"), ("شقة 3 غرف وصالة — 138 م²", 138, "داخلي", 540, "residential"),
-            ("شقة غرفة وصالة — 68 م²", 68, "الرواق", 580, "residential"), ("شقة غرفة وصالة — 68 م²", 68, "داخلي", 560, "residential")]
-
 PROFILES: dict[str, dict] = {
     "bayan": {
         "display": "بيان عمان",
@@ -171,53 +157,110 @@ PROFILES: dict[str, dict] = {
     "almaqsura": {
         "display": "المقصورة العقارية",
         "seed": 2005,
+        # 0.18.1 — REAL data only (owner's instruction 2026-10-28): no demo buyers, leads, contractors or invented projects. Sources:
+        # the approved August-2026 rent report of building 534 (Al Khuwair South, phase 3, plot 1742; manager Al Bara'a International),
+        # the purchased-units workbook (two towers, 30 units, 8 leased), nine shops in Souq Al Sad, one plot for sale in Azaiba.
+        # Unknown values stay empty (NULL) and are listed in docs/OWNER_DECISIONS.md — nothing is invented.
+        "real_only": True,
         "brand": {"name": "المقصورة العقارية (Almaqsura Real Estate)", "address": "مركز داود للأعمال، الخوض السابعة، ولاية السيب، محافظة مسقط",
                   "phone": "", "email": "", "signatory": "", "signatory_title": "المدير العام"},
-        # slot, code, name, location, kind, build %, planned monthly sales, handover (months from today), escrow balance (illustrative)
-        "projects": [
-            ("RAY", "MQC", "مجمع المقصورة التجاري", "الخوض السابعة — السيب", "tower", 56, 4, 9, "170000"),
-            ("SEB", "RWQ", "أروقة الموالح", "الموالح الجنوبية — السيب", "tower", 30, 3, 18, "120000"),
-            ("KHD", "DAR", "دار المقصورة — فلل العامرات", "العامرات", "villa", 88, 3, 4, "70000"),
+        # code, name, location, kind, build %, planned monthly sales, handover (ISO), completed
+        "real_projects": [
+            ("IST", "بناية الاستقامة — الخوير الجنوبية", "الخوير الجنوبية، المرحلة 3 — شارع المها (مبنى 534، أرض 1742)", "tower", 100, 0, "2025-01-01", 1),
+            ("MQT", "الوحدات المملوكة — البرجان 1 و2", "مسقط (الموقع والمبنى غير مزوَّدين)", "tower", 100, 0, "2025-01-01", 1),
+            ("SAD", "محلات سوق السد", "سوق السد — مسقط", "tower", 100, 0, "2025-01-01", 1),
+            ("AZB", "أرض العذيبة — للبيع", "العذيبة، محافظة مسقط", "land", 100, 1, "2027-01-01", 0),
         ],
-        "buildings": [
-            ("RAY", "C", (0, 0), _MQC_SHOPS, 0, {"الشارع": .55, "الفناء": .45}),
-            ("RAY", "C", (1, 2), _MQC_OFF, .01, {"الشارع": .42, "الفناء": .34}),
-            ("RAY", "C", (3, 4), _MQC_RES, .012, {"الشارع": .6, "الفناء": .55}),
-            ("SEB", "R", (0, 0), _RWQ_SHOPS, 0, {"الرواق": .4}),
-            ("SEB", "R", (1, 4), _RWQ_RES, .01, {"الرواق": .32, "داخلي": .25}),
-        ],
-        "villas": {"slot": "KHD", "building": "V", "count": 30,
-                   "types": [("فيلا 4 غرف — 320 م²", 320, 138000), ("فيلا 5 غرف — 380 م²", 380, 162000)],
-                   "views": {"زاوية": .85, "قرب الحديقة": .8, "داخلية": .66}},
-        "interests": {"RAY": ["محل بواجهة على الشارع", "مكتب 95 م² بالطابق الأول", "شقة غرفتان على الفناء", "إيجار محل لمعرض"],
-                      "SEB": ["شقة 3 غرف على الرواق", "محل 46 م²", "شقة غرفة وصالة للاستثمار"],
-                      "KHD": ["فيلا زاوية 5 غرف", "فيلا 4 غرف قرب الحديقة", "تمويل من بنك نزوى"]},
-        "lead_mix": ["RAY", "RAY", "SEB", "KHD", "RAY"],
-        "cycle_names": {"AMR": ("أرض بوشر — دراسة جدوى وتطوير", "بوشر"), "QRM": ("مبنى المقصورة الأول", "الخوير")},
-        # retained shops the company leases itself (brokerage/property management is one of its services)
-        "leases": [("MQC-C-001", "معرض الأثاث العصري", 7200, 4, -9, 0),
-                   ("MQC-C-006", "مقهى الفناء", 6600, 12, -6, 0),
-                   ("MQC-C-010", "صيدلية الخوض السابعة", 7800, 4, -13, 1),
-                   ("MQC-C-013", None, 0, 0, 0, 0)],
-        "assets": [
-            ("almaqsura/almaqsura-logo.png", "brand", "logo", None, None, None, 0),
-            ("almaqsura/mqc-plan-ground-shops.jpg", "RAY", "floor", "مخطط تخطيطي — الطابق الأرضي: 16 محلًا حول الفناء", "C", 0, 1),
-            ("almaqsura/mqc-plan-typical-offices.jpg", "RAY", "floor", "مخطط تخطيطي — الطابق المتكرر للمكاتب (1–2)", "C", 1, 1),
-            ("almaqsura/mqc-render-courtyard-day.jpg", "RAY", "render", "التصور النهائي — الفناء الداخلي والممرات", None, None, 1),
-            ("almaqsura/mqc-render-courtyard-02.jpg", "RAY", "render", "التصور النهائي — المدخل من الشارع", None, None, 1),
-            ("almaqsura/mqc-render-night-aerial.jpg", "RAY", "render", "التصور النهائي ليلًا — من الجو", None, None, 1),
-            ("almaqsura/mqc-render-aerial.jpg", "RAY", "site", "المجمع من الجو — الكتلة والفناء والمواقف", None, None, 1),
-            ("almaqsura/rwq-render-facade.jpg", "SEB", "render", "التصور النهائي — الواجهة والرواق", None, None, 1),
-        ],
+        # the seed's `projects` tuple shape (slot = code) keeps the generic guards working
+        "projects": [("IST", "IST", "بناية الاستقامة — الخوير الجنوبية", "الخوير الجنوبية — شارع المها", "tower", 100, 0, 0, "0"),
+                     ("MQT", "MQT", "الوحدات المملوكة — البرجان 1 و2", "مسقط", "tower", 100, 0, 0, "0"),
+                     ("SAD", "SAD", "محلات سوق السد", "سوق السد — مسقط", "tower", 100, 0, 0, "0"),
+                     ("AZB", "AZB", "أرض العذيبة — للبيع", "العذيبة", "land", 100, 1, 0, "0")],
+        # building 534: (unit, type, floor, pos, use, status, monthly rent, paid dues, unpaid dues, lessee, lease start, note)
+        "ist_units": [
+    ('11', 'شقة', 1, 1, 'residential', 'leased', 180, [('2026-08-01', 180, '2026-08-24', 'تحويل')], [], None, '2026-01-01', None),
+    ('12', 'شقة', 1, 2, 'residential', 'leased', 250, [], ['2026-06-01', '2026-07-01', '2026-08-01'], None, '2026-01-01', None),
+    ('13', 'شقة', 1, 3, 'residential', 'leased', 260, [('2026-08-01', 260, '2026-08-10', 'شيك')], [], None, '2026-01-01', None),
+    ('14', 'شقة', 1, 4, 'residential', 'leased', 200, [('2026-08-01', 200, '2026-09-04', 'تحويل')], [], None, '2026-01-01', None),
+    ('15', 'شقة', 1, 5, 'residential', 'leased', 260, [('2026-08-01', 260, '2026-08-16', 'شيك')], [], None, '2026-01-01', None),
+    ('21', 'شقة', 2, 1, 'residential', 'leased', 160, [('2026-08-01', 160, '2026-08-25', 'تحويل')], [], None, '2026-01-01', None),
+    ('22', 'شقة', 2, 2, 'residential', 'leased', 260, [('2026-08-01', 260, '2026-08-06', 'شيك')], [], None, '2026-01-01', None),
+    ('23', 'شقة', 2, 3, 'residential', 'leased', 230, [('2026-08-01', 230, '2026-08-26', 'تحويل')], [], None, '2026-01-01', None),
+    ('24', 'شقة', 2, 4, 'residential', 'leased', 260, [('2026-08-01', 260, '2026-08-24', 'تحويل')], [], None, '2026-01-01', None),
+    ('25', 'شقة', 2, 5, 'residential', 'leased', 250, [('2026-08-01', 250, '2026-08-06', 'شيك')], [], None, '2026-01-01', None),
+    ('31', 'شقة', 3, 1, 'residential', 'leased', 160, [('2026-08-01', 160, '2026-08-26', 'تحويل')], [], None, '2026-01-01', None),
+    ('32', 'شقة', 3, 2, 'residential', 'leased', 260, [], ['2026-08-01'], None, '2026-01-01', None),
+    ('33', 'شقة', 3, 3, 'residential', 'leased', 260, [('2026-08-01', 260, '2026-08-24', 'تحويل')], [], None, '2026-01-01', None),
+    ('34', 'شقة', 3, 4, 'residential', 'leased', 250, [('2026-08-01', 250, '2026-08-03', 'شيك')], [], None, '2026-01-01', None),
+    ('35', 'شقة', 3, 5, 'residential', 'leased', 230, [('2026-08-01', 230, '2026-08-23', 'تحويل')], [], None, '2026-01-01', None),
+    ('41', 'شقة', 4, 1, 'residential', 'leased', 180, [('2026-08-01', 180, '2026-09-01', 'تحويل')], [], None, '2026-01-01', None),
+    ('42', 'شقة', 4, 2, 'residential', 'leased', 260, [], ['2026-02-01', '2026-08-01'], None, '2026-01-01', None),
+    ('43', 'شقة', 4, 3, 'residential', 'leased', 260, [('2026-08-01', 260, '2026-08-10', 'شيك')], [], None, '2026-01-01', None),
+    ('44', 'شقة', 4, 4, 'residential', 'leased', 260, [('2026-08-01', 260, '2026-08-16', 'شيك')], [], None, '2026-01-01', None),
+    ('45', 'شقة', 4, 5, 'residential', 'leased', 260, [('2026-08-01', 260, '2026-08-06', 'شيك')], [], None, '2026-01-01', None),
+    ('51', 'شقة', 5, 1, 'residential', 'leased', 200, [('2026-08-01', 200, '2026-08-01', 'تحويل')], [], None, '2026-01-01', None),
+    ('52', 'شقة', 5, 2, 'residential', 'leased', 260, [('2026-08-01', 260, '2026-08-03', 'شيك')], [], None, '2026-01-01', None),
+    ('53', 'شقة', 5, 3, 'residential', 'leased', 250, [('2026-08-01', 250, '2026-08-25', 'تحويل')], [], None, '2026-01-01', None),
+    ('54', 'شقة', 5, 4, 'residential', 'leased', 230, [('2026-08-01', 230, '2026-08-18', 'شيك')], [], None, '2026-01-01', None),
+    ('55', 'شقة', 5, 5, 'residential', 'leased', 160, [('2026-08-01', 160, '2026-08-02', 'شيك')], [], None, '2026-01-01', None),
+    ('61', 'شقة', 6, 1, 'residential', 'leased', 180, [], ['2026-07-01', '2026-08-01'], None, '2026-01-01', None),
+    ('62', 'شقة', 6, 2, 'residential', 'leased', 260, [('2026-08-01', 260, '2026-08-05', 'شيك')], [], None, '2026-01-01', None),
+    ('63', 'شقة', 6, 3, 'residential', 'leased', 260, [('2026-07-01', 260, '2026-08-16', 'شيك'), ('2026-08-01', 260, '2026-09-16', 'تحويل')], [], None, '2026-01-01', None),
+    ('64', 'شقة', 6, 4, 'residential', 'leased', 260, [('2026-08-01', 260, '2026-08-29', 'تحويل')], [], None, '2026-01-01', None),
+    ('65', 'شقة', 6, 5, 'residential', 'leased', 200, [('2026-08-01', 200, '2026-09-09', 'تحويل')], [], None, '2026-01-01', None),
+    ('M4', 'مكتب 4', 0, 1, 'commercial', 'leased', 200, [('2026-07-01', 200, '2026-09-01', 'تحويل')], ['2026-08-01'], None, '2026-01-01', 'دفع إيجار 2026/7 ولم يدفع 2026/8'),
+    ('M5', 'مكتب 5', 0, 2, 'commercial', 'leased', 330, [], ['2025-12-01', '2026-01-01', '2026-02-01', '2026-03-01', '2026-04-01', '2026-05-01', '2026-06-01', '2026-07-01', '2026-08-01'], None, '2025-12-01', 'لم يدفع من 2025/12 إلى 2026/08'),
+    ('M6', 'مكتب 6', 0, 3, 'commercial', 'leased', 450, [('2026-08-01', 450, '2026-08-25', 'شيك')], [], None, '2026-01-01', None),
+    ('S1', 'محل 1', 0, 4, 'commercial', 'leased', 150, [('2026-08-01', 150, '2026-08-03', 'شيك')], [], None, '2026-01-01', None),
+    ('S2', 'محل 2', 0, 5, 'commercial', 'vacant', 0, [], [], None, None, 'شاغر'),
+    ('S3', 'محل 3', 0, 6, 'commercial', 'reserved', 200, [], [], None, '2026-09-01', 'محجوز — يبدأ العقد 2026/09/01 (سماح فترة تجهيز)'),
+    ('SDG', 'محل D/G', 0, 7, 'commercial', 'reserved', 900, [], [], None, '2026-10-01', 'محجوز — يبدأ العقد 2026/10/01 (سماح فترة تجهيز)'),
+    ('SZ', 'محل Z', 0, 8, 'commercial', 'leased', 500, [('2026-08-01', 500, '2026-09-14', 'تحويل')], [], None, '2026-01-01', None),
+    ('SH', 'محل H', 0, 9, 'commercial', 'leased', 800, [('2026-08-01', 800, '2026-08-02', 'شيك')], [], None, '2026-01-01', None),
+    ('SW', 'محل W', 0, 10, 'commercial', 'leased', 400, [('2026-08-01', 400, '2026-09-04', 'تحويل')], [], None, '2026-01-01', 'محل الخوير — 400 ر.ع شهريًا'),
+    ('BA', 'القبو A', -1, 1, 'commercial', 'vacant', 0, [], [], None, None, 'شاغر'),
+    ('BB', 'القبو B', -1, 2, 'commercial', 'leased', 250, [], ['2026-08-01'], 'جمعية الاستقامة الخيرية — مخزن', '2026-01-01', 'مخزن الجمعية؛ لم يُسجَّل تحصيل في أغسطس'),
+],
+        # workbook: (tower, floor, unit, area m², lessee, monthly rent year 1, year 2, year 3, parking spaces)
+        "wb_units": [
+    (1, 7, '701', 132, None, 0, 0, 0, 0),
+    (1, 7, '702', 99, None, 0, 0, 0, 0),
+    (1, 7, '703', 55, 'Dineshcandra Agrawal Infra LLC', 655, 780, 0, 2),
+    (1, 7, '704', 54, None, 0, 0, 0, 0),
+    (1, 7, '705', 54, None, 0, 0, 0, 0),
+    (1, 7, '706', 53, None, 0, 0, 0, 0),
+    (1, 7, '707', 165, 'Nari Technology LTD', 950, 1060, 0, 5),
+    (1, 7, '708', 116, None, 0, 0, 0, 0),
+    (1, 7, '709', 80, 'Itizan International Capital LLC', 450, 600, 0, 1),
+    (1, 7, '710', 52, None, 0, 0, 0, 0),
+    (1, 7, '711', 51, None, 0, 0, 0, 0),
+    (1, 7, '712', 51, None, 0, 0, 0, 0),
+    (1, 7, '713', 51, None, 0, 0, 0, 0),
+    (1, 7, '714', 51, None, 0, 0, 0, 0),
+    (1, 7, '715', 51, None, 0, 0, 0, 0),
+    (1, 7, '716', 52, None, 0, 0, 0, 0),
+    (1, 7, '717', 52, None, 0, 0, 0, 0),
+    (1, 7, '718', 114, None, 0, 0, 0, 0),
+    (2, 0, '114', 70, 'Laqtah Projects for Businesses and Photography', 385, 735, 0, 1),
+    (2, 0, '115', 52, None, 0, 0, 0, 0),
+    (2, 0, '116', 63, None, 0, 0, 0, 0),
+    (2, 0, '117', 64, None, 0, 0, 0, 0),
+    (2, 2, '220', 110, None, 0, 0, 0, 0),
+    (2, 2, '221', 103, None, 0, 0, 0, 0),
+    (2, 3, '330', 205, 'Al Bahar Trading Business Agency SPC', 900, 1200, 1400, 4),
+    (2, 4, '419', 147, 'شركة الحصين الدولية', 810, 1180, 0, 3),
+    (2, 4, '433', 62, None, 0, 0, 0, 0),
+    (2, 4, '434', 131, 'Distinctive Edge Business Projects SPC', 762, 1050, 0, 2),
+    (2, 5, '519', 147, 'Apex One Services LLC', 885, 1180, 0, 3),
+],
+        "sad_shops": 9,
+        "assets": [("almaqsura/almaqsura-logo.png", "brand", "logo", None, None, None, 0)],
         "pilot_accounts": [
             ("mq-ceo", "المدير العام — المقصورة العقارية", "admin", None),
             ("mq-sales", "التسويق والوساطة العقارية", "sales", None),
             ("mq-finance", "المالية والتحصيل", "finance", None),
             ("mq-engineer", "الاستشارات الهندسية والإشراف", "engineer", None),
-            ("mq-client", "عميل تجريبي — محل في مجمع المقصورة", "customer", "client1"),
         ],
-        # markers on the schematic ground-floor plan (computed from the drawing itself)
-        "markers": {"almaqsura/mqc-plan-ground-shops.jpg": [("MQC-C-001", 23.3, 25.0), ("MQC-C-002", 36.7, 25.0), ("MQC-C-003", 50.0, 25.0), ("MQC-C-004", 63.3, 25.0), ("MQC-C-005", 76.7, 25.0), ("MQC-C-006", 89.2, 40.1), ("MQC-C-007", 89.2, 53.6), ("MQC-C-008", 89.2, 67.1), ("MQC-C-009", 76.7, 82.1), ("MQC-C-010", 63.3, 82.1), ("MQC-C-011", 50.0, 82.1), ("MQC-C-012", 36.7, 82.1), ("MQC-C-013", 23.3, 82.1), ("MQC-C-014", 10.8, 67.1), ("MQC-C-015", 10.8, 53.6), ("MQC-C-016", 10.8, 40.1)]},
     },
     "almukhatat": {
         "display": "المخطط العقارية",
@@ -296,6 +339,8 @@ def profile(tenant: str) -> dict | None:
 
 def profile_units(p: dict) -> list[tuple]:
     """→ [(slot, unit code, building, floor, pos, type, area, view, price, sold probability)] in the seed's tuple shape."""
+    if p.get("real_only"):
+        return [t[:11] for t in _unit_tuples(p)]
     code_of = {slot: code for slot, code, *_ in p["projects"]}
     units = []
     for slot, bld, (f0, f1), specs, uplift, sold in p.get("buildings", []):
@@ -352,6 +397,71 @@ def seed_leases(c, p: dict, rnd, today) -> int:
                       (lid, due.isoformat(), rent / freq, paid, due.isoformat() if paid else None))
         n += 1
     return n
+
+
+def _unit_tuples(p: dict) -> list[tuple]:
+    """Real-data profiles: (slot, code, building, floor, pos, type, area, view, price, sold_p, use, retained, status, lease) for every unit."""
+    out = []
+    for u, tp, fl, pos, use, st, rent, paid, unpaid, lessee, start, note in p.get("ist_units", []):
+        lease = None if st == "vacant" else {"lessee": lessee or f"مستأجر الوحدة {tp if tp != 'شقة' else u} (الاسم غير مزوَّد)", "monthly": rent,
+                                                "start": start, "end": "2027-06-30", "paid": paid, "unpaid": unpaid, "note": note}
+        out.append(("IST", f"IST-A-{u}", "A", fl, pos, tp, None, "شارع المها", None, 0, use, 1, "a", lease))
+    for tower, fl, u, area, lessee, y1, y2, y3, parking in p.get("wb_units", []):
+        lease = {"lessee": lessee, "monthly": y1, "start": "2026-01-01", "end": "2027-12-31", "paid": [], "unpaid": [],
+                 "note": f"إيجار السنة الثانية {y2} ر.ع/شهر" + (f"، الثالثة {y3}" if y3 else "") + f"؛ مواقف: {parking}"} if lessee else None
+        out.append(("MQT", f"MQT-T{tower}-{u}", f"T{tower}", fl, int(u[-2:]) if u[-2:].isdigit() else 1, "وحدة تجارية (مكتب)", area, "البرج " + str(tower), None, 0, "commercial", 1, "a", lease))
+    for i in range(1, int(p.get("sad_shops", 0)) + 1):
+        out.append(("SAD", f"SAD-S-{i:02d}", "S", 0, i, "محل تجاري", None, "سوق السد", None, 0, "commercial", 1, "a", None))
+    out.append(("AZB", "AZB-L-01", "L", 0, 1, "قطعة أرض — للبيع", None, "العذيبة", None, 0, "land", 0, "a", None))
+    return out
+
+
+def seed_real(c, p: dict, tenant: str) -> None:
+    """0.18.1 — real-data-only tenant: projects, units, leases and rent dues exactly as documented; staff accounts; letterhead; no demo
+    buyers, leads, contractors, cost schedules or cycle projects. Dues exist only for documented months (the August-2026 report) and from
+    the import month onward; undocumented months are neither invented as paid nor shown as arrears."""
+    import datetime as dt
+
+    from .auth import ensure_users
+    from .seed_ext import SETTINGS
+    today = dt.date.today()
+    for k, v in SETTINGS.items():
+        c.execute("INSERT OR REPLACE INTO settings VALUES(?,?)", (k, v))
+    pid = {}
+    for code, name, loc, kind, b, pl, ho, completed in p["real_projects"]:
+        pid[code] = c.execute("INSERT INTO projects(code,name,location,kind,build_pct,planned_monthly_sales,handover,completed) VALUES(?,?,?,?,?,?,?,?)",
+                              (code, name, loc, kind, b, pl, ho, completed)).lastrowid
+    for slot, code, bld, fl, pos, tp, area, vw, price, _sp, use, retained, st, lease in _unit_tuples(p):
+        uid = c.execute("INSERT INTO units(project_id,code,building,floor,pos,type,area,view,price,status,use,retained) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+                        (pid[slot], code, bld, fl, pos, tp, area, vw, price, st, use, retained)).lastrowid
+        if not lease:
+            continue
+        tid = c.execute("INSERT INTO tenants_l(name,phone,id_number) VALUES(?,?,?)", (lease["lessee"], "", "")).lastrowid
+        start = dt.date.fromisoformat(lease["start"])
+        lid = c.execute("INSERT INTO leases(unit_id,tenant_id,start,\"end\",annual_rent,frequency,deposit,status,municipality_ref) VALUES(?,?,?,?,?,?,?,?,?)",
+                        (uid, tid, lease["start"], lease["end"], lease["monthly"] * 12, 12, 0, "active", lease.get("note") or "")).lastrowid
+        seen = set()
+        for due, amount, paid_on, _method in lease["paid"]:
+            c.execute("INSERT INTO rent_dues(lease_id,due,amount,paid,paid_date) VALUES(?,?,?,?,?)", (lid, due, amount, amount, paid_on))
+            seen.add(due)
+        for due in lease["unpaid"]:
+            c.execute("INSERT INTO rent_dues(lease_id,due,amount,paid,paid_date) VALUES(?,?,?,?,?)", (lid, due, lease["monthly"], 0, None))
+            seen.add(due)
+        # from the month after the import forward, one due per month until the end of the lease (nothing is assumed about earlier months)
+        y, m = today.year, today.month
+        end = dt.date.fromisoformat(lease["end"])
+        first = max(start, dt.date(y + (m // 12), m % 12 + 1, 1))
+        d = first
+        while d <= end:
+            if d.isoformat() not in seen:
+                c.execute("INSERT INTO rent_dues(lease_id,due,amount,paid,paid_date) VALUES(?,?,?,?,?)", (lid, d.isoformat(), lease["monthly"], 0, None))
+            d = dt.date(d.year + (d.month // 12), d.month % 12 + 1, 1)
+    apply_brand(c, p)
+    c.commit()
+    ensure_users(c, [], [])
+    ensure_assets(c, tenant, p)
+    ensure_pilot_accounts(c, tenant)
+    c.commit()
 
 
 def apply_brand(c, p: dict) -> None:
@@ -421,7 +531,7 @@ def ensure_assets(c, tenant: str, p: dict | None = None) -> int:
     return written
 
 
-__all__ = ["PROFILES", "ASSETS", "profile", "profile_units", "apply_brand", "ensure_assets", "tenants_from_env", "lease_units", "seed_leases"]
+__all__ = ["PROFILES", "ASSETS", "profile", "profile_units", "apply_brand", "ensure_assets", "tenants_from_env", "lease_units", "seed_real", "seed_leases"]
 
 
 def ensure_pilot_accounts(c, tenant: str) -> int:

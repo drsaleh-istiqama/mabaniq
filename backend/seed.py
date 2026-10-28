@@ -133,6 +133,10 @@ def _seed_body(c, force: bool, tenant: str) -> None:
                      AND username NOT LIKE 'client%' AND username NOT LIKE 'broker%')""")
         c.execute("DELETE FROM users WHERE username NOT IN ('admin','sales','finance','engineer','investor1') AND username NOT LIKE 'client%' AND username NOT LIKE 'broker%'")
         c.commit()
+    if (pf0 := profile(tenant)) and pf0.get("real_only"):  # 0.18.1: a real-data tenant takes nothing from the demo generators
+        from .tenant_profiles import seed_real
+        seed_real(c, pf0, tenant)
+        return
     rnd = random.Random(42 if tenant == "jadwa" else 7)
     today = dt.date.today()
 
