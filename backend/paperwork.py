@@ -428,6 +428,8 @@ def quote_create(q: QuoteIn, request: Request, u=Depends(act_as("book"))):
             raise HTTPException(400, "صيغة البريد غير صحيحة")
     if unit["price"] is None:
         raise HTTPException(400, "سعر الوحدة غير محدد بعد — حدّده في المخزون قبل إصدار عرض سعر")
+    if not unit["handover"]:  # 0.19.1 — real-data developers may not publish a handover date: refuse clearly instead of a 500
+        raise HTTPException(400, "موعد تسليم المشروع غير محدد بعد — حدّده قبل إصدار عرض سعر")
     price = round(unit["price"] * (1 - q.discount_pct))
     t = today()
     sched = schedule(q.plan, price, t, dt.date.fromisoformat(unit["handover"]))
@@ -466,10 +468,12 @@ def create_booking(c, unit, customer_name: str, phone: str, plan: str, lead_id: 
                    price: float | None = None, email: str | None = None) -> dict:
     """The one path that turns a unit into a pending booking (manual booking and quotation conversion share it)."""
     t = today()
-    cid = c.execute("INSERT INTO customers(name,phone,email,created) VALUES(?,?,?,?)", (customer_name, phone, email, t.isoformat())).lastrowid
     agreed = price if price is not None else unit["price"]
-    if agreed is None:
+    if agreed is None:  # checks first: a refusal must not leave a half-written transaction (it would hold SQLite's write lock)
         raise HTTPException(400, "سعر الوحدة غير محدد بعد — حدّده في المخزون قبل الحجز")
+    if not unit["handover"]:  # 0.19.1 — a developer may not publish a handover date: refuse clearly instead of a 500
+        raise HTTPException(400, "موعد تسليم المشروع غير محدد بعد — حدّده قبل الحجز")
+    cid = c.execute("INSERT INTO customers(name,phone,email,created) VALUES(?,?,?,?)", (customer_name, phone, email, t.isoformat())).lastrowid
     bid = c.execute("INSERT INTO bookings(unit_id,customer_id,lead_id,plan,price,status,created,expires,broker_id,list_price) VALUES(?,?,?,?,?,?,?,?,?,?)",
                     (unit["id"], cid, lead_id, plan, agreed, "pending", t.isoformat(), (t + dt.timedelta(days=3)).isoformat(), broker_id, unit["price"])).lastrowid
     sched = schedule(plan, agreed, t, dt.date.fromisoformat(unit["handover"]))

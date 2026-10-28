@@ -403,6 +403,21 @@ def test_view_is_off_plan_published_data_only(cl):
     # no price ⟵ a clear refusal, not a 500; the assistant answers an availability question on a portfolio without prices
     r = cl.post("/api/quotes", json={"unit_code": "VHT-O-20", "customer_name": "عميل", "phone": "+968 90000000", "plan": "milestone"})
     assert r.status_code == 400 and "سعر" in r.text
+    # priced but the project has no published handover date ⟵ also a clear refusal (0.19.1), never a 500
+    tok = TENANT.set(V)
+    try:
+        d = connect()
+        d.execute("UPDATE units SET price=50000 WHERE code='VHT-O-20'")
+        d.commit()
+        r = cl.post("/api/quotes", json={"unit_code": "VHT-O-20", "customer_name": "عميل", "phone": "+968 90000000", "plan": "milestone"})
+        assert r.status_code == 400 and "تسليم" in r.text, r.text
+        r = cl.post("/api/bookings", json={"unit_code": "VHT-O-20", "customer_name": "عميل", "phone": "+968 90000000", "plan": "milestone"})
+        assert r.status_code == 400 and "تسليم" in r.text, r.text
+        d.execute("UPDATE units SET price=NULL, status='a' WHERE code='VHT-O-20'")
+        d.commit()
+        d.close()
+    finally:
+        TENANT.reset(tok)
     a = cl.post("/api/assistant", json={"q": "كم وحدة متاحة؟"})
     assert a.status_code == 200 and "غير مزوَّد" in a.json()["answer"] and "65" in a.json()["answer"], a.text
     assert cl.get("/api/units/VHT-O-20").json()["status"] == "a" and cl.get("/api/units/VHT-O-01").json()["status"] == "s"

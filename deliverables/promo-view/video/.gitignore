@@ -1,0 +1,16 @@
+gen/
+rec/
+seg/
+out/
+audio/
+audio_omar/
+audio_mohammad/
+base.mp4
+overlay.mov
+ov/
+qc/
+qc2/
+demo-state.video.json
+ov_en/
+qc5/
+cards/en/

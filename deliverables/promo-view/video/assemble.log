@@ -1,0 +1,28 @@
+S 1 @   0.00  dur   9.9  say n1 0.3→9.2  still:3.0 + still:2.6 + card:4.3
+S 2 @   9.92  dur  10.7  say n2 10.2→19.9  real:10.7
+S 3 @  20.62  dur  17.9  say n3 20.9→37.8  real:17.9
+S 4 @  38.53  dur  13.8  say n4 38.8→51.6  card:6.2 + real:7.6
+S 5 @  52.34  dur   9.0  say n5 52.6→60.7  real:9.0
+S 6 @  61.38  dur  14.9  say n6 61.7→75.6  real:14.9
+S 7 @  76.26  dur  12.7  say n7 76.6→88.3  real:12.7
+S 8 @  89.01  dur   8.4  say n8 89.3→96.7  real:8.4
+S 9 @  97.44  dur  10.0  say n9 97.7→106.8  card:3.6 + real:6.4
+S10 @ 107.45  dur   8.6  say n10 107.8→113.3  card:8.6
+المجموع 116.1 ث
+▶ seg_00_s1_still.mp4 3.3s
+▶ seg_01_s1_still.mp4 2.9s
+▶ seg_02_s1_card.mp4 4.6s
+▶ seg_03_s2_real.mp4 11.0s
+▶ seg_04_s3_real.mp4 18.2s
+▶ seg_05_s4_card.mp4 6.5s
+▶ seg_06_s4_real.mp4 7.9s
+▶ seg_07_s5_real.mp4 9.3s
+▶ seg_08_s6_real.mp4 15.2s
+▶ seg_09_s7_real.mp4 13.0s
+▶ seg_10_s8_real.mp4 8.7s
+▶ seg_11_s9_card.mp4 3.9s
+▶ seg_12_s9_real.mp4 6.7s
+▶ seg_13_s10_card.mp4 8.6s
+▶ base 116.083333
+▶ overlay 116.083333
+✔ C:\mabaniq\deliverables\promo-view\video\out\view-promo.mp4 116.083333
