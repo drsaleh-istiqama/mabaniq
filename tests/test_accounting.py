@@ -76,7 +76,8 @@ def _wipe_acc():
         pg = getattr(c, "dialect", "sqlite") == "postgres"
         sc = " AND org_id = current_setting('app.org_id', true)" if pg else ""
         c.maintenance()
-        for t in ("acc_lines", "acc_journals", "acc_source_state", "acc_periods", "acc_cost_centers", "acc_accounts"):
+        for t in ("fin_installments", "fin_contracts", "acc_budgets", "depreciation_runs", "fixed_assets", "vat_returns", "bank_recons", "bank_stmt_lines", "payment_orders", "ap_payments", "ap_bill_lines", "ap_bills", "bank_accounts",
+                  "acc_lines", "acc_journals", "acc_source_state", "acc_periods", "acc_cost_centers", "acc_accounts"):
             c.execute(c.wipe_sql(t))
         c.execute(f"DELETE FROM settings WHERE k IN ('acc_start','acc_attach_over'){sc}")
         c.execute(f"DELETE FROM counters WHERE k LIKE 'jv:%'{sc}")

@@ -51,4 +51,20 @@ test.describe.serial('المحاسبة', () => {
     await expect(page.locator('#ib [data-call="EXT.accAct"]')).toHaveCount(1);   // only «عكس القيد»: a posted journal is never edited
     await expect(page.locator('#ib')).toContainText('عكس القيد');
   });
+
+  test('the payables, banks and statements tabs open and the balance sheet proves itself', async () => {
+    await page.click('#ix');   // close the journal inspector left open by the previous test
+    await page.locator('.subt button', {hasText: 'الذمم الدائنة'}).click();
+    await expect(page.locator('#accB')).toContainText('فواتير الموردين');
+    await expect(page.locator('#accB')).toContainText('أوامر الدفع');
+    await page.locator('.subt button', {hasText: 'البنوك والمطابقة'}).click();
+    await expect(page.locator('#accB')).toContainText('إسلامية فقط');
+    await expect(page.locator('#accB')).toContainText('الشيكات الصادرة');
+    await page.locator('.subt button', {hasText: 'القوائم المالية'}).click();
+    await expect(page.locator('#accB')).toContainText('مطابِقة لحساباتها');
+    await page.selectOption('#spK', 'cash_flow');
+    await expect(page.locator('#accB')).toContainText('الأنشطة التشغيلية');
+    await page.locator('.subt button', {hasText: 'الأصول والتمويل والضريبة'}).click();
+    await expect(page.locator('#accB')).toContainText('لا فائدة');
+  });
 });

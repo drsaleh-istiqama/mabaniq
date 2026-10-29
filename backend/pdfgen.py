@@ -27,7 +27,7 @@ MUTED = (110, 120, 135)
 LINE = (210, 214, 222)
 
 KIND_TITLES = {"quote": "عرض سعر", "contract": "عقد بيع وحدة عقارية", "invoice": "فاتورة", "tax_invoice": "فاتورة ضريبية", "receipt": "إيصال استلام", "lease": "عقد إيجار", "rent_receipt": "إيصال استلام إيجار", "cheque_receipt": "إيصال استلام شيك",
-               "handover_report": "محضر تسليم واستلام", "arrears_notice": "إنذار متأخرات إيجار", "owner_statement": "كشف حساب مالك"}
+               "handover_report": "محضر تسليم واستلام", "arrears_notice": "إنذار متأخرات إيجار", "owner_statement": "كشف حساب مالك", "financial_statements": "قائمة مالية"}
 
 
 def hijri(d: dt.date | str | None) -> str:

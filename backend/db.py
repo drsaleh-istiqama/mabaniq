@@ -304,7 +304,7 @@ CREATE TABLE IF NOT EXISTS arrears_notices(
 CREATE TABLE IF NOT EXISTS payment_plans(
   id INTEGER PRIMARY KEY, lease_id INTEGER REFERENCES leases(id), agreed_on TEXT, status TEXT DEFAULT 'active', note TEXT, approved_by TEXT, total REAL, original TEXT);
 CREATE TABLE IF NOT EXISTS vendors(
-  id INTEGER PRIMARY KEY, name TEXT NOT NULL, cr_number TEXT, phone TEXT, email TEXT, trade TEXT, iban TEXT, active INTEGER DEFAULT 1);
+  id INTEGER PRIMARY KEY, name TEXT NOT NULL, cr_number TEXT, phone TEXT, email TEXT, trade TEXT, iban TEXT, active INTEGER DEFAULT 1, tax_no TEXT);
 CREATE TABLE IF NOT EXISTS maint_requests(
   id INTEGER PRIMARY KEY, unit_id INTEGER REFERENCES units(id), lease_id INTEGER, source TEXT DEFAULT 'staff', requester TEXT, category TEXT, description TEXT,
   priority TEXT DEFAULT 'normal', status TEXT DEFAULT 'new', created TEXT, updated TEXT, sla_due TEXT, closed_at TEXT, created_by TEXT);
@@ -378,6 +378,62 @@ BEGIN SELECT RAISE(ABORT, 'a posted journal is immutable'); END;
 CREATE TRIGGER IF NOT EXISTS acc_lines_no_delete BEFORE DELETE ON acc_lines WHEN (SELECT status FROM acc_journals WHERE id = OLD.journal_id) IS NOT 'draft'
 BEGIN SELECT RAISE(ABORT, 'a posted journal is immutable'); END;
 
+-- 0.24.0 — المحاسبة (الاكتمال): الذمم الدائنة وأوامر الدفع، الحسابات البنكية والمطابقة، الضريبة، الأصول والإهلاك، الموازنات، التمويل الإسلامي (هامش معلوم لا فائدة).
+CREATE TABLE IF NOT EXISTS bank_accounts(
+  id INTEGER PRIMARY KEY, name TEXT NOT NULL, bank TEXT, iban TEXT, kind TEXT NOT NULL DEFAULT 'bank' CHECK (kind IN ('bank','cash','escrow','charity')),
+  account_id INTEGER NOT NULL REFERENCES acc_accounts(id), currency TEXT NOT NULL DEFAULT 'OMR', islamic INTEGER NOT NULL DEFAULT 1 CHECK (islamic = 1), project_id INTEGER,
+  active INTEGER NOT NULL DEFAULT 1, note TEXT);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_bank_accounts_gl ON bank_accounts(account_id);
+CREATE TABLE IF NOT EXISTS ap_bills(
+  id INTEGER PRIMARY KEY, number TEXT UNIQUE, vendor_id INTEGER NOT NULL REFERENCES vendors(id), bill_date TEXT NOT NULL, due_date TEXT, vendor_ref TEXT, description TEXT,
+  net REAL NOT NULL DEFAULT 0, vat_class TEXT NOT NULL DEFAULT 'out_of_scope', vat REAL NOT NULL DEFAULT 0, total REAL NOT NULL DEFAULT 0, paid REAL NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','approved','partly_paid','paid','void')), journal_id INTEGER, void_journal_id INTEGER,
+  created_by TEXT, approved_by TEXT, approved_at TEXT, void_reason TEXT);
+CREATE INDEX IF NOT EXISTS ix_ap_bills_vendor ON ap_bills(vendor_id);
+CREATE TABLE IF NOT EXISTS ap_bill_lines(
+  id INTEGER PRIMARY KEY, bill_id INTEGER NOT NULL REFERENCES ap_bills(id), line_no INTEGER NOT NULL, account_id INTEGER NOT NULL REFERENCES acc_accounts(id),
+  cost_center_id INTEGER REFERENCES acc_cost_centers(id), description TEXT, amount REAL NOT NULL CHECK (amount > 0));
+CREATE INDEX IF NOT EXISTS ix_ap_bill_lines_bill ON ap_bill_lines(bill_id);
+CREATE TABLE IF NOT EXISTS ap_payments(
+  id INTEGER PRIMARY KEY, bill_id INTEGER NOT NULL REFERENCES ap_bills(id), vendor_id INTEGER NOT NULL REFERENCES vendors(id), amount REAL NOT NULL, paid_on TEXT NOT NULL,
+  method TEXT NOT NULL, bank_account_id INTEGER REFERENCES bank_accounts(id), cheque_id INTEGER, reference TEXT, order_id INTEGER, journal_id INTEGER, reverses_id INTEGER, created_by TEXT);
+CREATE INDEX IF NOT EXISTS ix_ap_payments_bill ON ap_payments(bill_id);
+CREATE TABLE IF NOT EXISTS payment_orders(
+  id INTEGER PRIMARY KEY, number TEXT UNIQUE, bill_id INTEGER NOT NULL REFERENCES ap_bills(id), vendor_id INTEGER NOT NULL REFERENCES vendors(id), amount REAL NOT NULL CHECK (amount > 0),
+  method TEXT NOT NULL, bank_account_id INTEGER NOT NULL REFERENCES bank_accounts(id), reference TEXT, cheque_number TEXT, cheque_due TEXT,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','executed','rejected')), created_by TEXT, approver1 TEXT, approver1_at TEXT, approver2 TEXT, approver2_at TEXT,
+  reject_note TEXT, executed_at TEXT, payment_id INTEGER);
+CREATE TABLE IF NOT EXISTS bank_stmt_lines(
+  id INTEGER PRIMARY KEY, bank_account_id INTEGER NOT NULL REFERENCES bank_accounts(id), line_date TEXT NOT NULL, description TEXT, reference TEXT, amount REAL NOT NULL, balance REAL,
+  acc_line_id INTEGER, status TEXT NOT NULL DEFAULT 'unmatched' CHECK (status IN ('unmatched','matched','ignored')), import_key TEXT NOT NULL, file_sha TEXT, matched_by TEXT, matched_at TEXT, note TEXT,
+  UNIQUE(bank_account_id, import_key));
+CREATE UNIQUE INDEX IF NOT EXISTS ux_bank_stmt_acc_line ON bank_stmt_lines(acc_line_id) WHERE acc_line_id IS NOT NULL;
+CREATE TABLE IF NOT EXISTS bank_recons(
+  id INTEGER PRIMARY KEY, bank_account_id INTEGER NOT NULL REFERENCES bank_accounts(id), period_end TEXT NOT NULL, statement_balance REAL NOT NULL, book_balance REAL NOT NULL,
+  in_transit REAL NOT NULL DEFAULT 0, not_in_books REAL NOT NULL DEFAULT 0, difference REAL NOT NULL DEFAULT 0, closed_by TEXT, closed_at TEXT, UNIQUE(bank_account_id, period_end));
+CREATE TABLE IF NOT EXISTS vat_returns(
+  id INTEGER PRIMARY KEY, year INTEGER NOT NULL, quarter INTEGER NOT NULL CHECK (quarter BETWEEN 1 AND 4), output_vat REAL NOT NULL DEFAULT 0, input_vat REAL NOT NULL DEFAULT 0,
+  net REAL NOT NULL DEFAULT 0, box_values TEXT, status TEXT NOT NULL DEFAULT 'filed' CHECK (status IN ('draft','filed')), filed_on TEXT, ref TEXT, created_by TEXT, journal_id INTEGER,
+  UNIQUE(year, quarter));
+CREATE TABLE IF NOT EXISTS fixed_assets(
+  id INTEGER PRIMARY KEY, code TEXT NOT NULL UNIQUE, name TEXT NOT NULL, category TEXT, cost REAL NOT NULL CHECK (cost > 0), acquired TEXT NOT NULL, life_months INTEGER NOT NULL CHECK (life_months > 0),
+  salvage REAL NOT NULL DEFAULT 0, method TEXT NOT NULL DEFAULT 'straight_line' CHECK (method = 'straight_line'), cost_center_id INTEGER REFERENCES acc_cost_centers(id),
+  account_cost INTEGER NOT NULL REFERENCES acc_accounts(id), account_accum INTEGER NOT NULL REFERENCES acc_accounts(id), account_expense INTEGER NOT NULL REFERENCES acc_accounts(id),
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','disposed')), disposed_on TEXT, proceeds REAL, disposal_journal_id INTEGER, note TEXT, created_by TEXT);
+CREATE TABLE IF NOT EXISTS depreciation_runs(
+  id INTEGER PRIMARY KEY, period TEXT NOT NULL, asset_id INTEGER NOT NULL REFERENCES fixed_assets(id), amount REAL NOT NULL, journal_id INTEGER, UNIQUE(asset_id, period));
+CREATE TABLE IF NOT EXISTS acc_budgets(
+  id INTEGER PRIMARY KEY, year INTEGER NOT NULL, cost_center_id INTEGER REFERENCES acc_cost_centers(id), account_id INTEGER NOT NULL REFERENCES acc_accounts(id),
+  month INTEGER NOT NULL CHECK (month BETWEEN 1 AND 12), amount REAL NOT NULL);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_acc_budgets ON acc_budgets(year, COALESCE(cost_center_id, 0), account_id, month);
+CREATE TABLE IF NOT EXISTS fin_contracts(
+  id INTEGER PRIMARY KEY, kind TEXT NOT NULL CHECK (kind IN ('murabaha','ijara','installment','istisna')), counterparty TEXT NOT NULL, principal REAL NOT NULL CHECK (principal > 0),
+  markup_total REAL NOT NULL CHECK (markup_total >= 0), start_date TEXT NOT NULL, end_date TEXT, bank_account_id INTEGER REFERENCES bank_accounts(id),
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','closed')), drawdown_journal_id INTEGER, note TEXT, created_by TEXT);
+CREATE TABLE IF NOT EXISTS fin_installments(
+  id INTEGER PRIMARY KEY, contract_id INTEGER NOT NULL REFERENCES fin_contracts(id), no INTEGER NOT NULL, due TEXT NOT NULL, amount REAL NOT NULL, margin REAL NOT NULL, paid_on TEXT,
+  payment_journal_id INTEGER, UNIQUE(contract_id, no));
+
 CREATE INDEX IF NOT EXISTS ix_units_project ON units(project_id);
 CREATE INDEX IF NOT EXISTS ix_inst_booking ON installments(booking_id);
 CREATE INDEX IF NOT EXISTS ix_book_unit ON bookings(unit_id);
@@ -419,6 +475,7 @@ MIGRATIONS["leases"] += ["deposit_deducted REAL", "deposit_refund REAL", "deposi
 MIGRATIONS["rent_dues"] += ["plan_id INTEGER"]
 MIGRATIONS["units"] += ["source TEXT", "import_batch TEXT"]
 MIGRATIONS["tenants_l"] += ["source TEXT"]
+MIGRATIONS["vendors"] = ["tax_no TEXT"]  # 0.24.0
 MIGRATIONS["rent_payments"] = ["import_key TEXT"]
 MIGRATIONS["charity_dues"] = ["rent_due_id INTEGER", "lease_id INTEGER"]
 MIGRATIONS["customers"] += ["consent_version TEXT", "consent_source TEXT", "erased_at TEXT"]  # 0.5.0 — M5

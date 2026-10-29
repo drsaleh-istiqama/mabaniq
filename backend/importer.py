@@ -44,6 +44,11 @@ SPECS: dict[str, list[tuple[str, str, bool]]] = {
     "cheques": [("lease_number", "رقم العقد", True), ("number", "رقم الشيك", True), ("bank", "البنك", True), ("amount", "المبلغ", True), ("due_date", "تاريخ الاستحقاق", True),
                 ("received_on", "تاريخ الاستلام", False), ("drawer", "الساحب", False), ("status", "الحالة (محفوظ/مودَع)", False)],
 }
+# 0.24.0 — a bank statement is read by the same safe reader (no formulas, size limits) but is not one of the lease import kinds
+EXTRA_SPECS: dict[str, list[tuple[str, str, bool]]] = {
+    "bank_stmt": [("date", "التاريخ", True), ("description", "البيان", False), ("reference", "المرجع", False), ("debit", "مدين", False), ("credit", "دائن", False),
+                  ("amount", "المبلغ", False), ("balance", "الرصيد", False)],
+}
 KIND_LABEL = {"units": "الوحدات", "tenants": "المستأجرون", "leases": "العقود", "payments": "المدفوعات", "cheques": "الشيكات"}
 METHOD_WORDS = {"نقد": "cash", "نقدا": "cash", "نقدًا": "cash", "cash": "cash", "شيك": "cheque", "cheque": "cheque", "تحويل": "transfer", "transfer": "transfer",
                 "بطاقة": "card", "card": "card", "أخرى": "other", "other": "other"}
@@ -72,7 +77,7 @@ def read_table(filename: str, data: bytes, kind: str) -> list[tuple[int, dict]]:
     """→ [(row number in the sheet, {key: value})]; raises HTTPException for a file that cannot be read at all."""
     if len(data) > MAX_BYTES:
         raise HTTPException(413, "الملف أكبر من 5 ميغابايت")
-    spec = SPECS[kind]
+    spec = SPECS.get(kind) or EXTRA_SPECS[kind]
     names = {}
     for key, label, _req in spec:
         names[label.strip().lower()] = key

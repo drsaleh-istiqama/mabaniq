@@ -15,6 +15,7 @@
   {"code": "1220", "name": "ذمم المشترين", "name_en": "Buyer receivables", "type": "asset", "parent": "1100", "system_key": "ar_buyers"},
   {"code": "1230", "name": "ذمم مدينة أخرى", "name_en": "Other receivables", "type": "asset", "parent": "1100", "system_key": "ar_other"},
   {"code": "1240", "name": "ضريبة المدخلات", "name_en": "Input VAT", "type": "asset", "parent": "1100", "system_key": "vat_in"},
+  {"code": "1245", "name": "ضريبة مستردة من الهيئة", "name_en": "VAT refundable", "type": "asset", "parent": "1100", "system_key": "vat_refundable"},
   {"code": "1250", "name": "مدفوعات مقدمة", "name_en": "Prepayments", "type": "asset", "parent": "1100", "system_key": "prepaid"},
   {"code": "1260", "name": "مخزون عقاري", "name_en": "Real-estate inventory", "type": "asset", "parent": "1100", "system_key": "inventory_re"},
   {"code": "1270", "name": "أعمال قيد التنفيذ", "name_en": "Work in progress", "type": "asset", "parent": "1100", "system_key": "wip"},
@@ -31,9 +32,12 @@
   {"code": "2140", "name": "دفعات مقدمة من العملاء", "name_en": "Customer advances", "type": "liability", "parent": "2000", "system_key": "customer_advances"},
   {"code": "2150", "name": "أرصدة حسابات الضمان", "name_en": "Escrow balances", "type": "liability", "parent": "2000", "system_key": "escrow_liab"},
   {"code": "2160", "name": "ضريبة المخرجات", "name_en": "Output VAT", "type": "liability", "parent": "2000", "system_key": "vat_out"},
+  {"code": "2165", "name": "ضريبة مستحقة للهيئة", "name_en": "VAT payable", "type": "liability", "parent": "2000", "system_key": "vat_payable"},
   {"code": "2170", "name": "مستحقات الرواتب", "name_en": "Payroll payable", "type": "liability", "parent": "2000", "system_key": "payroll_payable"},
   {"code": "2175", "name": "تأمينات اجتماعية مستحقة", "name_en": "Social insurance payable", "type": "liability", "parent": "2000", "system_key": "pasi_payable"},
   {"code": "2180", "name": "التزامات التمويل الإسلامي", "name_en": "Islamic financing liabilities", "type": "liability", "parent": "2000", "system_key": "islamic_fin_liab", "cash_class": "financing"},
+  {"code": "2185", "name": "هامش تمويل مؤجَّل", "name_en": "Deferred financing margin", "type": "liability", "parent": "2000", "system_key": "fin_deferred_margin", "normal": "debit", "cash_class": "financing",
+   "note": "هامش المرابحة المعلوم سلفًا؛ يُطفأ مع الأقساط ولا فوائد متراكمة"},
   {"code": "2190", "name": "تبرعات تأخير مستحقة للجهات الخيرية", "name_en": "Late-payment charity payable", "type": "liability", "parent": "2000", "system_key": "charity_payable",
    "note": "التزام لا إيراد: يُصرف لجهة خيرية معتمدة ويُفصح عنه في القوائم"},
   {"code": "2195", "name": "مصروفات مستحقة", "name_en": "Accrued expenses", "type": "liability", "parent": "2000", "system_key": "accrued_exp"},
@@ -50,6 +54,7 @@
   {"code": "4130", "name": "عمولة إدارة الأملاك", "name_en": "Property management fees", "type": "revenue", "parent": "4000", "system_key": "rev_mgmt_fee"},
   {"code": "4140", "name": "استردادات من المستأجرين", "name_en": "Recoveries from tenants", "type": "revenue", "parent": "4000", "system_key": "rev_recoveries"},
   {"code": "4190", "name": "إيرادات أخرى", "name_en": "Other income", "type": "revenue", "parent": "4000", "system_key": "rev_other"},
+  {"code": "4195", "name": "أرباح بيع أصول ثابتة", "name_en": "Gain on disposal of assets", "type": "revenue", "parent": "4000", "system_key": "gain_disposal"},
 
   {"code": "5000", "name": "المصروفات", "name_en": "Expenses", "type": "expense", "postable": 0},
   {"code": "5110", "name": "صيانة وإصلاحات", "name_en": "Repairs and maintenance", "type": "expense", "parent": "5000", "system_key": "exp_maint"},
@@ -64,6 +69,7 @@
   {"code": "5240", "name": "إهلاك", "name_en": "Depreciation", "type": "expense", "parent": "5000", "system_key": "exp_depreciation"},
   {"code": "5250", "name": "أتعاب مهنية", "name_en": "Professional fees", "type": "expense", "parent": "5000", "system_key": "exp_prof"},
   {"code": "5260", "name": "هامش التمويل الإسلامي (كلفة تمويل)", "name_en": "Islamic finance margin", "type": "expense", "parent": "5000", "system_key": "exp_finance_margin",
-   "note": "هامش ربح معلوم مسبقًا؛ لا فوائد متراكمة"}
+   "note": "هامش ربح معلوم مسبقًا؛ لا فوائد متراكمة"},
+  {"code": "5270", "name": "خسائر بيع أصول ثابتة", "name_en": "Loss on disposal of assets", "type": "expense", "parent": "5000", "system_key": "loss_disposal"}
  ]
 }

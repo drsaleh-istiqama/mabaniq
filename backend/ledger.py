@@ -58,11 +58,24 @@ def active(c) -> str | None:
 
 
 def ensure_chart(c) -> int:
-    """Seed the Omani default chart once (an organisation that already has accounts keeps its own)."""
-    if c.execute("SELECT 1 FROM acc_accounts LIMIT 1").fetchone():
-        return 0
+    """Seed the Omani default chart once. An organisation that already has accounts keeps its own: only the accounts a newer release added (their code
+    and their system key both unused) are inserted, so a chart seeded by 0.23.0 gains the VAT / Islamic-finance / disposal accounts of 0.24.0 untouched otherwise."""
     data = json.loads(COA_FILE.read_text(encoding="utf-8"))
     ids: dict[str, int] = {}
+    if c.execute("SELECT 1 FROM acc_accounts LIMIT 1").fetchone():
+        added = 0
+        have_codes = {r["code"]: r["id"] for r in c.execute("SELECT id, code FROM acc_accounts").fetchall()}
+        have_keys = {r["system_key"] for r in c.execute("SELECT system_key FROM acc_accounts WHERE system_key IS NOT NULL").fetchall()}
+        for a in data["accounts"]:
+            if a["code"] in have_codes or (a.get("system_key") and a["system_key"] in have_keys):
+                continue
+            normal = a.get("normal") or ("debit" if a["type"] in ("asset", "expense") else "credit")
+            have_codes[a["code"]] = c.execute(
+                "INSERT INTO acc_accounts(code,name,name_en,type,parent_id,postable,normal,system_key,vat_class,cash_class,note) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                (a["code"], a["name"], a.get("name_en"), a["type"], have_codes.get(a.get("parent")), a.get("postable", 1), normal, a.get("system_key"), a.get("vat_class"),
+                 a.get("cash_class"), a.get("note"))).lastrowid
+            added += 1
+        return added
     for a in data["accounts"]:
         normal = a.get("normal") or ("debit" if a["type"] in ("asset", "expense") else "credit")
         ids[a["code"]] = c.execute(
