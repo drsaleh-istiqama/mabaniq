@@ -36,22 +36,24 @@ ROLES = {
     "investor": "مستثمر / ممول",
     "customer": "عميل",
     "property_manager": "مدير عقاري (خارجي)",
+    "accountant": "محاسب",
 }
 ALL_STAFF = {"view", "inventory", "book", "leads", "finance", "confirm", "decide", "construction", "approve_ipc",
              "service", "admin", "audit", "land", "permits", "kyc", "brokers", "invoices", "handover", "oa",
-             "leasing", "leasing_approve", "market", "reports", "notify", "users", "docs"}
+             "leasing", "leasing_approve", "market", "reports", "notify", "users", "docs", "accounting", "accounting_approve"}
 PERMS = {
     "admin": ALL_STAFF,
     "sales": {"view", "inventory", "book", "leads", "service", "kyc", "brokers", "market", "notify", "docs"},
     "finance": {"view", "inventory", "finance", "confirm", "decide", "construction", "service", "audit", "kyc",
-                "invoices", "oa", "leasing", "reports", "notify", "brokers", "land", "docs"},
+                "invoices", "oa", "leasing", "reports", "notify", "brokers", "land", "docs", "accounting"},
     "engineer": {"view", "construction", "permits", "handover", "docs"},
     "broker": {"broker_portal"},
     "investor": {"reports"},
     "customer": {"portal"},
     "property_manager": {"leasing_pm"},  # 0.22.0 — external manager: only /api/pm, only inside his user_scopes
+    "accountant": {"view", "finance", "invoices", "accounting", "docs", "reports", "audit"},  # 0.23.0 — books and statements; approval stays with the manager
 }
-TWO_FA_REQUIRED = {"admin", "finance"}
+TWO_FA_REQUIRED = {"admin", "finance", "accountant"}
 
 USERS_SQL = """
 CREATE TABLE IF NOT EXISTS users(

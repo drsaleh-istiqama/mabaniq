@@ -46,10 +46,10 @@ const scoreC = v => v >= 75 ? 'p-ok' : v >= 50 ? 'p-w' : 'p-b';
 
 /* ---------------- الحالة والتنقل ---------------- */
 const S = {screen: 'ov', projects: [], proj: null, bld: null, plan: 0, me: null};
-const SCREEN_PERM = {pmg: 'leasing_pm', lea: 'leasing', ov: 'view', inv: 'inventory', crm: 'leads', fin: 'finance', con: 'construction', svc: 'service', log: 'audit', pre: 'permits', sal: 'kyc', bill: 'invoices', post: 'handover', rep: 'reports', mk: 'leads', adm: 'view'};
+const SCREEN_PERM = {acc: 'accounting', pmg: 'leasing_pm', lea: 'leasing', ov: 'view', inv: 'inventory', crm: 'leads', fin: 'finance', con: 'construction', svc: 'service', log: 'audit', pre: 'permits', sal: 'kyc', bill: 'invoices', post: 'handover', rep: 'reports', mk: 'leads', adm: 'view'};
 const SCREEN_ANY = {pre: ['permits', 'land'], post: ['handover', 'oa', 'leasing', 'service'], sal: ['kyc', 'brokers', 'market'], rep: ['reports', 'finance', 'view'], mk: ['leads', 'inventory', 'reports']};  // Unit 7: reports for every staff role (the API filters by permission), marketing for sales/inventory/reports
 const can = p => S.me?.perms.includes(p);
-const SCREEN_MOD = {pmg: ['leasing'], lea: ['leasing'], pre: ['land'], inv: [], crm: ['sales'], mk: ['marketing'], sal: ['sales'], con: ['construction'], post: ['handover', 'leasing'], svc: ['handover'], fin: ['finance'], bill: ['finance'], rep: ['reports']};  // 0.20.0: a screen needs one of its modules (none listed = core)
+const SCREEN_MOD = {acc: ['accounting'], pmg: ['leasing'], lea: ['leasing'], pre: ['land'], inv: [], crm: ['sales'], mk: ['marketing'], sal: ['sales'], con: ['construction'], post: ['handover', 'leasing'], svc: ['handover'], fin: ['finance'], bill: ['finance'], rep: ['reports']};  // 0.20.0: a screen needs one of its modules (none listed = core)
 const modOn = m => (S.me?.modules || []).includes(m);
 const canS = s => (SCREEN_ANY[s] || [SCREEN_PERM[s]]).some(can) && (!(SCREEN_MOD[s] || []).length || SCREEN_MOD[s].some(modOn));
 function go(s) {
@@ -59,7 +59,7 @@ function go(s) {
   $$('.scr').forEach(x => x.classList.toggle('on', x.id === s));
   localStorage.setItem('mbq-screen', s);
   ({ov: loadOverview, inv: loadInventory, crm: loadCRM, fin: loadFinance, con: () => { loadIPC(); EXT.l_conx(); }, svc: loadService, log: loadAudit,
-    pmg: () => EXT.l_pm(), lea: () => EXT.l_lea(), pre: () => EXT.l_pre(), sal: () => EXT.l_sal(), bill: () => EXT.l_bill(), post: () => EXT.l_post(), rep: () => EXT.l_rep(), mk: () => EXT.l_mk(), adm: () => EXT.l_adm()})[s]?.()?.catch?.(e => toast(e.message, 1));
+    acc: () => EXT.l_acc(), pmg: () => EXT.l_pm(), lea: () => EXT.l_lea(), pre: () => EXT.l_pre(), sal: () => EXT.l_sal(), bill: () => EXT.l_bill(), post: () => EXT.l_post(), rep: () => EXT.l_rep(), mk: () => EXT.l_mk(), adm: () => EXT.l_adm()})[s]?.()?.catch?.(e => toast(e.message, 1));
   crumb(); shell(s);
 }
 $$('[data-s]').forEach(b => b.onclick = e => { e.preventDefault(); document.body.classList.remove('nav-open'); go(b.dataset.s); });
@@ -72,6 +72,7 @@ const META = {
   con: ['2 · البيع والإنشاء', 'الإنشاء والمستخلصات', 'التحقق من نسب الإنجاز قبل الصرف، والجدول الزمني، وأوامر التغيير وتقارير الموقع.'],
   fin: ['عبر الدورة · المالية', 'السيولة والتعثر', 'أرصدة حسابات الضمان المتوقعة لاثني عشر شهرًا، والعملاء المعرّضون للتعثر.'],
   bill: ['عبر الدورة · المالية', 'الفواتير والضمان', 'الفواتير والضريبة، والغرامات والفسخ، والمطابقة البنكية وحساب الضمان والتصدير المحاسبي.'],
+  acc: ['عبر الدورة · المالية', 'المحاسبة', 'دليل الحسابات والقيود المزدوجة وميزان المراجعة ودفتر الأستاذ، مع ترحيل أحداث التأجير تلقائيًا.'],
   pmg: ['3 · التسليم والتشغيل', 'محفظتي (مدير عقاري)', 'العقود والتحصيل داخل نطاقك فقط.'],
   lea: ['3 · التسليم والتشغيل', 'الإيجارات', 'المحفظة والعقود والمستأجرون والتحصيل والشيكات والمتأخرات.'],
   post: ['3 · التسليم والتشغيل', 'التسليم والأملاك', 'التسليم وملاحظات الفحص، ونقل الملكية، والمرافق واتحاد الملاك والتأجير.'],
@@ -1606,4 +1607,131 @@ EXT.mkAlerts = async (B) => {
   B.innerHTML = `<div class="toolbar">${can('notify') ? '<button class="btn p" id="mkRun">تسجيل التنبيهات في الإشعارات الآن</button>' : ''}<span class="muted">تُحسب حيًّا من حركة السوق: الوتيرة، الطلب النسبي، تدفق العملاء، أعمار المخزون، العروض، الحملات — ويُسجَّلها النظام يوميًا في الإشعارات.</span></div>`
     + BOX(`التنبيهات التسويقية <span class="muted">${N(A_.length)}</span>`, T(['الخطورة', 'المشروع', 'التنبيه', 'التفاصيل', 'الإجراء المقترح'], A_.map(a => `<tr><td>${pill(...sev[a.severity])}</td><td>${esc(a.project)}</td><td><b>${esc(a.title)}</b></td><td>${esc(a.detail)}</td><td>${esc(a.action)}</td></tr>`), 'لا تنبيهات الآن — حركة المشاريع ضمن المخطط.'));
   if ($('#mkRun')) $('#mkRun').onclick = async () => { const r = await tryDo(() => api('/marketing/alerts/run', {method: 'POST'})); toast(`سُجّل ${N(r.created)} تنبيهًا جديدًا`); };
+};
+
+/* ================================================================ المحاسبة — النواة المحاسبية (0.23.0) */
+EXT.cur.acc = 'ov';
+const ACC_TYPE = {asset: 'أصول', liability: 'التزامات', equity: 'حقوق ملكية', revenue: 'إيرادات', expense: 'مصروفات'};
+const ACC_JST = {draft: ['مسودة', 'p-w'], pending: ['بانتظار الاعتماد', 'p-bl'], posted: ['مرحَّل', 'p-ok'], reversed: ['معكوس', 'p-b']};
+const A3 = v => new Intl.NumberFormat('ar-OM-u-nu-latn', {minimumFractionDigits: 3, maximumFractionDigits: 3}).format(+v || 0);
+const ACCAP = () => can('accounting_approve');
+const accToday = () => new Date().toISOString().slice(0, 10);
+
+EXT.l_acc = async function () {
+  const tabs = [['ov', 'نظرة عامة'], ['tb', 'ميزان المراجعة'], ['jr', 'القيود'], ['gl', 'دفتر الأستاذ'], ['ch', 'دليل الحسابات'], ['st', 'الافتتاحي والفترات']], el = $('#acc'), k = this.cur.acc;
+  el.innerHTML = SUB0('acc', tabs, k) + '<div id="accB">…</div>';
+  const B = $('#accB');
+  if (k === 'ov') {
+    const s = await api('/acc/status');
+    if (!s.active) {
+      B.innerHTML = BOX('تفعيل المحاسبة', `<p>لم تُفعَّل المحاسبة بعد، ولا يُرحَّل أي حدث إلى الدفاتر قبل التفعيل. عند التفعيل يُبذر الدليل العُماني الافتراضي، وتبدأ الدفاتر من التاريخ الذي تختاره: <b>الأحداث السابقة له لا تُرحَّل</b> — تدخل في رصيد افتتاحي واحد من ميزان مراجعة موثَّق.</p>`
+        + (ACCAP() ? '<div class="btns"><button class="btn p" data-call="EXT.accActivate">تفعيل المحاسبة…</button></div>' : '<p class="muted">يفعّلها المدير العام.</p>'));
+      return;
+    }
+    const u = s.unposted, bad = Math.abs(s.ledger_diff) > 0.0005, jc = s.journals;
+    B.innerHTML = KP([['بدء المحاسبة', fmtDate(s.start)], ['الحسابات', N(s.accounts)], ['قيود مرحَّلة', N((jc.posted || 0) + (jc.reversed || 0))], ['بانتظار الاعتماد', N(jc.pending || 0)], ['مسودات', N(jc.draft || 0)],
+        ['توازن الدفتر', bad ? pill('مختل ' + A3(s.ledger_diff), 'p-b') : pill('متوازن', 'p-ok')]])
+      + BOX('أحداث لم تُرحَّل بعد', u.total ? T(['النوع', 'العدد'], Object.entries(u.counts).filter(([, v]) => v).map(([a, v]) => `<tr><td>${esc({dues: 'استحقاقات مستحقة', payments: 'حركات تحصيل', charity: 'تبرعات التأخير', expenses: 'مصروفات عقارات', statements: 'كشوف الملاك', deposits: 'تسويات التأمين'}[a])}</td><td>${pill(N(v), 'p-w')}</td></tr>`))
+        : '<p class="muted">كل أحداث التأجير مرحَّلة إلى الدفاتر.</p>', can('accounting') ? '<button class="btn p" data-call="EXT.accSync">ترحيل الآن</button>' : '')
+      + BOX('الرصيد الافتتاحي', s.opening ? `<p>مرحَّل بالقيد <span class="num">${esc(s.opening.number)}</span> بتاريخ ${fmtDate(s.opening.jdate)}.</p>` : '<p class="muted">لم يُدخل بعد — من تبويب «الافتتاحي والفترات».</p>');
+  } else if (k === 'tb') {
+    const to = this.accTo || accToday(), frm = this.accFrm || to.slice(0, 4) + '-01-01', tb = await api(`/acc/trial-balance?frm=${frm}&to=${to}`);
+    B.innerHTML = `<div class="toolbar"><label>من</label> <input id="tbf" type="date" value="${frm}"> <label>إلى</label> <input id="tbt" type="date" value="${to}"> <a class="btn" href="/api/acc/trial-balance?csv=1&frm=${frm}&to=${to}">تصدير CSV</a></div>`
+      + BOX('ميزان المراجعة ' + (tb.balanced ? pill('متوازن', 'p-ok') : pill('غير متوازن', 'p-b')), T(['الرمز', 'الحساب', 'افتتاحي', 'مدين', 'دائن', 'ختامي'],
+        tb.accounts.map(a => `<tr data-id="${a.id}" style="${a.postable ? '' : 'font-weight:700'}"><td><span class="num">${esc(a.code)}</span></td><td>${esc(a.name)}</td><td>${A3(a.opening)}</td><td>${A3(a.debit)}</td><td>${A3(a.credit)}</td><td><b>${A3(a.closing)}</b></td></tr>`)
+        .concat([`<tr style="font-weight:700"><td></td><td>الإجمالي</td><td>${A3(tb.totals.opening)}</td><td>${A3(tb.totals.debit)}</td><td>${A3(tb.totals.credit)}</td><td>${A3(tb.totals.closing)}</td></tr>`]), 'لا حركات في المدة.'));
+    $('#tbf').onchange = e => { EXT.accFrm = e.target.value; EXT.l_acc(); }; $('#tbt').onchange = e => { EXT.accTo = e.target.value; EXT.l_acc(); };
+    $$('#accB tr[data-id]').forEach(tr => tr.onclick = () => { EXT.accGl = +tr.dataset.id; EXT.cur.acc = 'gl'; EXT.l_acc(); });
+  } else if (k === 'jr') {
+    const st = this.accSt || '', R = await api(`/acc/journals?limit=200${st ? '&status=' + st : ''}`);
+    B.innerHTML = `<div class="toolbar"><select id="jst"><option value="">كل الحالات</option>${Object.entries(ACC_JST).map(([a, [b]]) => `<option value="${a}" ${a === st ? 'selected' : ''}>${b}</option>`).join('')}</select></div>`
+      + BOX(`القيود <span class="muted">${N(R.total)}</span>`, T(['الرقم', 'التاريخ', 'البيان', 'النوع', 'المبلغ', 'الحالة'], R.items.map(j => `<tr data-id="${j.id}"><td><span class="num">${esc(j.number || 'مسودة #' + j.id)}</span></td><td>${fmtDate(j.jdate)}</td><td>${esc(j.memo || '')}</td><td>${esc({manual: 'يدوي', auto: 'تلقائي', opening: 'افتتاحي', reversal: 'عكسي'}[j.kind])}</td><td>${A3(j.total)}</td><td>${pill(...ACC_JST[j.status])}</td></tr>`), 'لا قيود.'),
+        can('accounting') ? '<button class="btn p" data-call="EXT.accNew">+ قيد يدوي</button>' : '');
+    $('#jst').onchange = e => { EXT.accSt = e.target.value; EXT.l_acc(); };
+    $$('#accB tr[data-id]').forEach(tr => tr.onclick = () => { sel(tr); EXT.accJ(+tr.dataset.id); });
+  } else if (k === 'gl') {
+    const A = await api('/acc/accounts'), id = this.accGl || (A.find(a => a.postable) || {}).id, to = this.accGlTo || accToday(), frm = this.accGlFrm || to.slice(0, 4) + '-01-01';
+    const g = id ? await api(`/acc/ledger/${id}?frm=${frm}&to=${to}`) : null;
+    B.innerHTML = `<div class="toolbar"><select id="glA">${A.map(a => `<option value="${a.id}" ${a.id === id ? 'selected' : ''}>${esc(a.code)} — ${esc(a.name)}</option>`).join('')}</select> <label>من</label> <input id="glf" type="date" value="${frm}"> <label>إلى</label> <input id="glt" type="date" value="${to}">${id ? ` <a class="btn" href="/api/acc/ledger/${id}?csv=1&frm=${frm}&to=${to}">تصدير CSV</a>` : ''}</div>`
+      + (g ? BOX(`${esc(g.account.name)} — رصيد افتتاحي ${A3(g.opening)}`, T(['التاريخ', 'القيد', 'البيان', 'مدين', 'دائن', 'الرصيد'], g.lines.map(l => `<tr data-id="${l.journal_id}"><td>${fmtDate(l.jdate)}</td><td><span class="num">${esc(l.number)}</span></td><td>${esc(l.memo || l.journal_memo || '')}</td><td>${l.debit ? A3(l.debit) : ''}</td><td>${l.credit ? A3(l.credit) : ''}</td><td><b>${A3(l.balance)}</b></td></tr>`), 'لا حركات في المدة.')
+        + `<p class="muted">الرصيد الختامي <b>${A3(g.closing)}</b> (موجب = مدين).</p>`) : '');
+    const re = () => { EXT.accGl = +$('#glA').value; EXT.accGlFrm = $('#glf').value; EXT.accGlTo = $('#glt').value; EXT.l_acc(); };
+    ['#glA', '#glf', '#glt'].forEach(s => $(s).onchange = re);
+    $$('#accB tr[data-id]').forEach(tr => tr.onclick = () => EXT.accJ(+tr.dataset.id));
+  } else if (k === 'ch') {
+    const [A, M] = await Promise.all([api('/acc/accounts?balances=1'), api('/acc/mapping')]);
+    B.innerHTML = BOX('دليل الحسابات', T(['الرمز', 'الحساب', 'النوع', 'الرصيد', 'الربط', ''], A.map(a => `<tr style="${a.postable ? '' : 'font-weight:700'}${a.active ? '' : ';opacity:.5'}"><td><span class="num">${esc(a.code)}</span></td><td>${esc(a.name)}</td><td>${esc(ACC_TYPE[a.type])}</td><td>${a.postable ? A3(a.balance) : ''}</td><td>${a.system_key ? `<span class="muted">${esc(a.system_key)}</span>` : ''}</td><td>${ACCAP() && a.postable ? `<button class="btn" data-call="EXT.accRebind" data-args="${J([a.id, a.system_key || ''])}">ربط حدث</button>` : ''}</td></tr>`)),
+        ACCAP() ? '<button class="btn p" data-call="EXT.accNewAcc">+ حساب</button>' : '')
+      + BOX('ما تُرحَّل إليه الأحداث', T(['الحدث / الغرض', 'الحساب المربوط'], M.map(m => `<tr><td>${esc(m.purpose)}<br><span class="muted">${esc(m.key)}</span></td><td>${m.account ? `<span class="num">${esc(m.account.code)}</span> ${esc(m.account.name)}` : pill('غير مربوط', 'p-b')}</td></tr>`)));
+  } else if (k === 'st') {
+    const [s, P] = await Promise.all([api('/acc/status'), api('/acc/periods')]);
+    B.innerHTML = BOX('الرصيد الافتتاحي', s.opening ? `<p>مرحَّل بالقيد <span class="num">${esc(s.opening.number)}</span> بتاريخ ${fmtDate(s.opening.jdate)}. لتصحيحه اعكس القيد من تبويب القيود ثم أدخله من جديد.</p>`
+        : !s.active ? '<p class="muted">فعّل المحاسبة أولًا.</p>' : ACCAP() ? `<p>يُدخل من <b>ميزان مراجعة موثَّق</b> في يوم قبل بدء المحاسبة (${fmtDate(s.start)}). اكتب سطرًا لكل حساب: <span class="num">رمز الحساب, مدين, دائن</span>. لا تُخمَّن الأرقام.</p><label>مصدر الأرقام (مثال: ميزان المراجعة المدقق 2025)</label><input id="opS"><label>الأسطر</label><textarea id="opL" rows="8" placeholder="1121,5000,0&#10;3100,0,5000" style="direction:ltr;width:100%"></textarea><div class="err" id="opE"></div><div class="btns" style="margin-top:10px"><button class="btn p" data-call="EXT.accOpen">ترحيل الرصيد الافتتاحي</button></div>` : '<p class="muted">يدخله المدير العام.</p>')
+      + BOX('الفترات المحاسبية', T(['الفترة', 'الحالة', 'قيود مرحَّلة', 'مسودات', ''], P.map(p => `<tr><td>${p.year}-${String(p.month).padStart(2, '0')}</td><td>${p.status === 'closed' ? pill('مقفلة', 'p-b') : pill('مفتوحة', 'p-ok')}</td><td>${N(p.journals)}</td><td>${N(p.open_journals)}</td><td>${ACCAP() ? `<button class="btn" data-call="EXT.accPeriod" data-args="${J([p.year, p.month, p.status === 'closed' ? 'reopen' : 'close'])}">${p.status === 'closed' ? 'إعادة فتح' : 'إقفال'}</button>` : ''}</td></tr>`), 'لا فترات بعد — تُنشأ مع أول قيد.'));
+  }
+};
+
+EXT.accActivate = () => {
+  modal(`<h3>تفعيل المحاسبة</h3><label>تاريخ بدء المحاسبة</label><input id="acS" type="date" max="${accToday()}" value="${accToday().slice(0, 4)}-01-01">
+   <p class="muted">كل ما قبل هذا التاريخ يدخل في الرصيد الافتتاحي ولا يُرحَّل. لا يُغيَّر التاريخ بعد ترحيل أول قيد.</p><label><input id="acC" type="checkbox"> أؤكد التفعيل بهذا التاريخ</label>
+   <div class="err" id="acE"></div><div class="btns" style="margin-top:12px"><button class="btn p" id="acGo">تفعيل</button> <button class="btn" data-call="closeModal">إلغاء</button></div>`);
+  $('#acGo').onclick = async () => { try { await api('/acc/activate', {method: 'POST', body: {start: $('#acS').value, confirm: $('#acC').checked}}); closeModal(); toast('فُعّلت المحاسبة'); EXT.l_acc(); } catch (e) { $('#acE').textContent = e.message; } };
+};
+EXT.accSync = async () => { const r = await tryDo(() => api('/acc/sync', {method: 'POST'})); toast(`رُحّل ${N(Object.values(r.posted).reduce((a, b) => a + b, 0))} قيدًا${r.errors.length ? ' — ' + r.errors.length + ' خطأ: ' + r.errors[0] : ''}`, !!r.errors.length); EXT.l_acc(); };
+
+EXT.accNew = async () => {
+  const A = (await api('/acc/accounts')).filter(a => a.postable && a.active), opts = '<option value="">— الحساب —</option>' + A.map(a => `<option value="${a.id}">${esc(a.code)} — ${esc(a.name)}</option>`).join('');
+  const row = () => `<tr><td><select class="jlA">${opts}</select></td><td><input class="jlD" inputmode="decimal" placeholder="0.000"></td><td><input class="jlC" inputmode="decimal" placeholder="0.000"></td><td><input class="jlM"></td></tr>`;
+  modal(`<h3>قيد يدوي</h3><label>التاريخ</label><input id="jd" type="date" max="${accToday()}" value="${accToday()}"><label>البيان</label><input id="jm" maxlength="300">
+   <div class="tw"><table><thead><tr><th>الحساب</th><th>مدين</th><th>دائن</th><th>ملاحظة</th></tr></thead><tbody id="jl">${row()}${row()}</tbody></table></div>
+   <div class="btns"><button class="btn" id="jAdd">+ سطر</button> <span id="jT" class="muted"></span></div><div class="err" id="jE"></div>
+   <div class="btns" style="margin-top:12px"><button class="btn p" id="jGo">حفظ مسودة</button> <button class="btn" data-call="closeModal">إلغاء</button></div>`);
+  const tot = () => { const d = $$('.jlD').reduce((a, x) => a + (+x.value || 0), 0), c = $$('.jlC').reduce((a, x) => a + (+x.value || 0), 0); $('#jT').textContent = `مدين ${A3(d)} · دائن ${A3(c)} · الفرق ${A3(d - c)}`; };
+  $('#jl').oninput = tot; $('#jAdd').onclick = () => { $('#jl').insertAdjacentHTML('beforeend', row()); };
+  $('#jGo').onclick = async () => {
+    const lines = $$('#jl tr').map(tr => ({account: +tr.querySelector('.jlA').value, debit: +tr.querySelector('.jlD').value || 0, credit: +tr.querySelector('.jlC').value || 0, memo: tr.querySelector('.jlM').value})).filter(l => l.account);
+    try { const r = await post('/acc/journals', {date: $('#jd').value, memo: $('#jm').value.trim(), lines}); closeModal(); toast('حُفظت المسودة'); EXT.cur.acc = 'jr'; await EXT.l_acc(); EXT.accJ(r.id); } catch (e) { $('#jE').textContent = e.message; }
+  };
+};
+
+EXT.accJ = async id => {
+  const j = await api('/acc/journals/' + id), me = S.me, W = can('accounting'), AP = ACCAP();
+  const btn = (act, label, cls = '') => `<button class="btn ${cls}" data-call="EXT.accAct" data-args="${J([id, act])}">${label}</button>`;
+  insp(j.number || `مسودة #${j.id}`, `<div class="btns" style="margin-bottom:10px">${pill(...ACC_JST[j.status])} <span class="muted">${esc({manual: 'قيد يدوي', auto: 'قيد تلقائي', opening: 'رصيد افتتاحي', reversal: 'قيد عكسي'}[j.kind])}</span></div>
+   <dl class="kv"><dt>التاريخ</dt><dd>${fmtDate(j.jdate)}</dd><dt>البيان</dt><dd>${esc(j.memo || '')}</dd><dt>أنشأه</dt><dd>${esc(j.created_by || '—')}</dd><dt>اعتمده</dt><dd>${esc(j.approved_by || '—')}</dd>${j.reject_note ? `<dt>سبب الرفض</dt><dd>${esc(j.reject_note)}</dd>` : ''}${j.reversal_of ? `<dt>يعكس القيد</dt><dd>#${j.reversal_of}</dd>` : ''}${j.reversed_by ? `<dt>عُكس بالقيد</dt><dd>#${j.reversed_by}</dd>` : ''}</dl>`
+   + T(['الحساب', 'مدين', 'دائن', 'الطرف'], j.lines.map(l => `<tr><td><span class="num">${esc(l.account_code)}</span> ${esc(l.account_name)}${l.cc_code ? `<br><span class="muted">${esc(l.cc_code)}</span>` : ''}</td><td>${l.debit ? A3(l.debit) : ''}</td><td>${l.credit ? A3(l.credit) : ''}</td><td>${esc(l.party_name || '')}</td></tr>`))
+   + (j.attachments.length ? `<p>المرفقات: ${j.attachments.map(a => esc(a.title)).join('، ')}</p>` : '')
+   + `<div class="btns" style="margin-top:10px">${j.status === 'draft' && j.kind === 'manual' && W ? btn('submit', 'تقديم للاعتماد', 'p') + ' ' + btn('delete', 'حذف المسودة') + ` <button class="btn" data-call="EXT.accAttach" data-args="${J([id])}">إرفاق مستند</button>` : ''}
+   ${(j.status === 'pending' || (j.status === 'draft' && me.role === 'admin')) && j.kind === 'manual' && AP ? btn('approve', 'اعتماد وترحيل', 'p') : ''}${j.status === 'pending' && AP ? ' ' + btn('reject', 'رفض') : ''}
+   ${j.status === 'posted' && ['manual', 'opening'].includes(j.kind) && AP ? btn('reverse', 'عكس القيد') : ''}</div>`);
+};
+EXT.accAct = async (id, act) => {
+  const o = {submit: ['/submit', null, 'قُدّم للاعتماد'], approve: ['/approve', null, 'اعتُمد ورُحّل'], delete: ['', 'DELETE', 'حُذفت المسودة'], reject: ['/reject', 'note', 'رُفض'], reverse: ['/reverse', 'reason', 'عُكس القيد']}[act];
+  let body; if (o[1] === 'note') { const note = prompt('سبب الرفض:'); if (!note) return; body = {note}; } else if (o[1] === 'reason') { const reason = prompt('سبب عكس القيد (يُسجَّل):'); if (!reason) return; body = {reason}; }
+  await tryDo(() => api('/acc/journals/' + id + o[0], {method: o[1] === 'DELETE' ? 'DELETE' : 'POST', body}), o[2]); EXT.l_acc(); if (act !== 'delete') EXT.accJ(id);
+};
+EXT.accAttach = id => {
+  modal(`<h3>إرفاق مستند بالقيد</h3><input id="atF" type="file"><label>العنوان</label><input id="atT" value="مستند قيد"><div class="err" id="atE"></div><div class="btns" style="margin-top:12px"><button class="btn p" id="atGo">رفع</button> <button class="btn" data-call="closeModal">إلغاء</button></div>`);
+  $('#atGo').onclick = async () => {
+    const f = $('#atF').files[0]; if (!f) { $('#atE').textContent = 'اختر ملفًا'; return; }
+    const fd = new FormData(); fd.append('ref_type', 'journal'); fd.append('ref_id', id); fd.append('title', $('#atT').value || 'مستند قيد'); fd.append('category', 'محاسبة'); fd.append('file', f);
+    try { const r = await fetch('/api/documents', {method: 'POST', headers: {'X-CSRF-Token': csrf()}, body: fd}); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.detail || 'تعذّر الرفع'); closeModal(); toast('رُفع المستند'); EXT.accJ(id); } catch (e) { $('#atE').textContent = e.message; }
+  };
+};
+EXT.accNewAcc = () => {
+  modal(`<h3>حساب جديد</h3><label>الرمز</label><input id="naC"><label>الاسم</label><input id="naN"><label>النوع</label><select id="naT">${Object.entries(ACC_TYPE).map(([a, b]) => `<option value="${a}">${b}</option>`).join('')}</select>
+   <label><input id="naP" type="checkbox" checked> قابل للترحيل (حساب تفصيلي)</label><div class="err" id="naE"></div><div class="btns" style="margin-top:12px"><button class="btn p" id="naGo">إضافة</button> <button class="btn" data-call="closeModal">إلغاء</button></div>`);
+  $('#naGo').onclick = async () => { try { await post('/acc/accounts', {code: $('#naC').value.trim(), name: $('#naN').value.trim(), type: $('#naT').value, postable: $('#naP').checked}); closeModal(); toast('أُضيف الحساب'); EXT.l_acc(); } catch (e) { $('#naE').textContent = e.message; } };
+};
+EXT.accRebind = async (id, cur) => {
+  const key = prompt('مفتاح الحدث الذي يُرحَّل إلى هذا الحساب (اتركه فارغًا لفك الربط)، مثل bank_main أو rev_rent:', cur); if (key == null) return;
+  await tryDo(() => api('/acc/accounts/' + id, {method: 'PATCH', body: {system_key: key.trim()}}), 'حُدّث الربط'); EXT.l_acc();
+};
+EXT.accOpen = async () => {
+  const lines = $('#opL').value.split('\n').map(s => s.trim()).filter(Boolean).map(s => { const [code, d, c] = s.split(/[,\t;]/).map(x => x.trim()); return {code, debit: +d || 0, credit: +c || 0}; });
+  try { const r = await post('/acc/opening', {lines, source: $('#opS').value.trim()}); toast('رُحّل الرصيد الافتتاحي ' + r.number); EXT.l_acc(); } catch (e) { $('#opE').textContent = e.message; }
+};
+EXT.accPeriod = async (y, m, act) => {
+  const body = act === 'reopen' ? {reason: prompt('سبب إعادة فتح الفترة (يُدقَّق):') || ''} : undefined; if (act === 'reopen' && !body.reason) return;
+  await tryDo(() => api(`/acc/periods/${y}/${m}/${act}`, {method: 'POST', body}), act === 'close' ? 'أُقفلت الفترة' : 'أُعيد فتحها'); EXT.l_acc();
 };

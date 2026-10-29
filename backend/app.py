@@ -918,6 +918,9 @@ app.include_router(leasing_router)  # 0.21.0: الإيجارات المتكام�
 app.include_router(leasing_ops_router)  # 0.22.0: عمليات الإيجار
 app.include_router(leasing_mgmt_router)  # 0.22.0: الصيانة والملاك والمدير العقاري
 app.include_router(importer_router)  # 0.22.0: استيراد Excel/CSV
+from .accounting import router as accounting_router  # noqa: E402
+
+app.include_router(accounting_router)  # 0.23.0: النواة المحاسبية
 from .appearance import router as appearance_router  # noqa: E402
 from .assistant import router as assistant_router  # noqa: E402
 from .identity import router as identity_router  # noqa: E402

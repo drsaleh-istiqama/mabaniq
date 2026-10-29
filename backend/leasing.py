@@ -20,7 +20,7 @@ from fractions import Fraction
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from . import pii
+from . import ledger, pii
 from .auth import need
 from .common import ACTOR, act_as, audit, db, now_s, rows, today
 from .db import TENANT, connect, tenants
@@ -177,6 +177,7 @@ def apply_payment(c, lease_id: int, amount: float, paid_on: dt.date, method: str
         from .leasing_ops import charity_accrue  # late-payment charity, only when the lease carries the clause (phase 2b)
         charity_accrue(c, lease, did, due_date, dkind, take, paid_on)
     audit(c, "تحصيل إيجار", f"{receipt or 'بلا إيصال (استيراد)'} · عقد {lease['number'] or lease_id} · {amount:,.3f} ر.ع · {METHOD_LABEL.get(method, 'طريقة غير موثَّقة')}")
+    ledger.autopost_quiet(c, lease_id, only={"dues", "payments"})  # 0.23.0: the receipt reaches the books in the same transaction (a no-op until accounting is activated)
     return {"receipt_no": receipt, "payment_ids": ids, "first_id": ids[0], "applied": [{"due_id": d[0], "amount": d[1]} for d in plan], "amount": amount}
 
 
@@ -192,6 +193,7 @@ def reverse_payment(c, payment_id: int, reason: str, by: str) -> dict:
     from .leasing_ops import charity_reverse
     charity_reverse(c, p)
     audit(c, "عكس حركة تحصيل", f"{p['receipt_no'] or payment_id} · {p['amount']:,.3f} ر.ع · {reason}")
+    ledger.autopost_quiet(c, p["lease_id"], only={"payments"})
     return {"id": rid}
 
 
@@ -1002,6 +1004,7 @@ def reminders_due_all() -> int:
                     n += reminders(c)
                     from .leasing_ops import daily
                     daily(c)
+                    ledger.autopost_quiet(c)  # 0.23.0: dues that fell due today become receivable + revenue
                     c.execute("INSERT OR REPLACE INTO settings VALUES(?,?)", ("lea:reminders_last_run", now_s()))
                     c.commit()
             finally:

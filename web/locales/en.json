@@ -85,5 +85,9 @@
   "meta.pmg.d": "Leases and collections inside your scope only.",
   "meta.lea.g": "3 · Handover & operations",
   "meta.lea.t": "Leasing",
-  "meta.lea.d": "Portfolio, leases, lessees, collections, post-dated cheques and arrears."
+  "meta.lea.d": "Portfolio, leases, lessees, collections, post-dated cheques and arrears.",
+  "nav.acc": "Accounting",
+  "meta.acc.g": "Across the cycle · Finance",
+  "meta.acc.t": "Accounting",
+  "meta.acc.d": "Chart of accounts, double-entry journals, trial balance and general ledger, with leasing events posted automatically."
 }

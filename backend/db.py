@@ -331,6 +331,53 @@ CREATE INDEX IF NOT EXISTS ix_maint_unit ON maint_requests(unit_id);
 CREATE INDEX IF NOT EXISTS ix_expenses_owner ON property_expenses(owner_id, spent_on);
 CREATE INDEX IF NOT EXISTS ix_scopes_user ON user_scopes(user_id);
 
+-- 0.23.0 — النواة المحاسبية (backend/ledger.py، backend/accounting.py): دليل الحسابات ومراكز الكلفة والفترات والقيود المزدوجة. القيد المرحَّل لا يُعدَّل ولا يُحذف.
+CREATE TABLE IF NOT EXISTS acc_accounts(
+  id INTEGER PRIMARY KEY, code TEXT NOT NULL UNIQUE, name TEXT NOT NULL, name_en TEXT, type TEXT NOT NULL CHECK (type IN ('asset','liability','equity','revenue','expense')),
+  parent_id INTEGER REFERENCES acc_accounts(id), postable INTEGER NOT NULL DEFAULT 1, normal TEXT NOT NULL CHECK (normal IN ('debit','credit')), system_key TEXT,
+  active INTEGER NOT NULL DEFAULT 1, vat_class TEXT, cash_class TEXT, note TEXT);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_acc_accounts_key ON acc_accounts(system_key) WHERE system_key IS NOT NULL;
+CREATE TABLE IF NOT EXISTS acc_cost_centers(
+  id INTEGER PRIMARY KEY, code TEXT NOT NULL UNIQUE, name TEXT NOT NULL, kind TEXT NOT NULL DEFAULT 'other' CHECK (kind IN ('property','project','dept','other')),
+  ref_id INTEGER, parent_id INTEGER REFERENCES acc_cost_centers(id), active INTEGER NOT NULL DEFAULT 1);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_acc_cc_ref ON acc_cost_centers(kind, ref_id) WHERE ref_id IS NOT NULL;
+CREATE TABLE IF NOT EXISTS acc_periods(
+  id INTEGER PRIMARY KEY, year INTEGER NOT NULL, month INTEGER NOT NULL CHECK (month BETWEEN 1 AND 12), status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','closed')),
+  closed_by TEXT, closed_at TEXT, reopened_by TEXT, reopened_at TEXT, reopen_reason TEXT, UNIQUE(year, month));
+CREATE TABLE IF NOT EXISTS acc_journals(
+  id INTEGER PRIMARY KEY, number TEXT UNIQUE, jdate TEXT NOT NULL, period_id INTEGER REFERENCES acc_periods(id), memo TEXT,
+  kind TEXT NOT NULL DEFAULT 'manual' CHECK (kind IN ('manual','auto','opening','reversal')), source_kind TEXT, source_ref TEXT, source_key TEXT,
+  status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','pending','posted','reversed')),
+  created_by TEXT, submitted_by TEXT, approved_by TEXT, posted_by TEXT, posted_at TEXT, reversal_of INTEGER, reversed_by INTEGER, reject_note TEXT, total REAL NOT NULL DEFAULT 0);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_acc_journals_source ON acc_journals(source_key) WHERE source_key IS NOT NULL;
+CREATE INDEX IF NOT EXISTS ix_acc_journals_date ON acc_journals(jdate);
+CREATE TABLE IF NOT EXISTS acc_lines(
+  id INTEGER PRIMARY KEY, journal_id INTEGER NOT NULL REFERENCES acc_journals(id), line_no INTEGER NOT NULL, account_id INTEGER NOT NULL REFERENCES acc_accounts(id),
+  cost_center_id INTEGER REFERENCES acc_cost_centers(id), debit REAL NOT NULL DEFAULT 0, credit REAL NOT NULL DEFAULT 0, party_type TEXT, party_id INTEGER, vat_class TEXT, memo TEXT,
+  CHECK (debit >= 0 AND credit >= 0 AND ((debit > 0) <> (credit > 0))));
+CREATE INDEX IF NOT EXISTS ix_acc_lines_journal ON acc_lines(journal_id);
+CREATE INDEX IF NOT EXISTS ix_acc_lines_account ON acc_lines(account_id);
+CREATE INDEX IF NOT EXISTS ix_acc_lines_party ON acc_lines(party_type, party_id);
+CREATE TABLE IF NOT EXISTS acc_source_state(
+  id INTEGER PRIMARY KEY, source_kind TEXT NOT NULL, source_ref TEXT NOT NULL, posted REAL NOT NULL DEFAULT 0, n INTEGER NOT NULL DEFAULT 0, UNIQUE(source_kind, source_ref));
+-- حرّاس القيد (مرآة mabaniq_acc_journal_guard / mabaniq_acc_lines_guard على PostgreSQL)
+CREATE TRIGGER IF NOT EXISTS acc_journal_no_delete BEFORE DELETE ON acc_journals WHEN OLD.status <> 'draft'
+BEGIN SELECT RAISE(ABORT, 'a posted journal is immutable'); END;
+CREATE TRIGGER IF NOT EXISTS acc_journal_frozen BEFORE UPDATE ON acc_journals
+WHEN OLD.status IN ('posted','reversed') AND NOT (OLD.status = 'posted' AND NEW.status = 'reversed' AND NEW.number IS OLD.number AND NEW.jdate = OLD.jdate
+     AND NEW.total = OLD.total AND NEW.memo IS OLD.memo AND NEW.source_key IS OLD.source_key AND NEW.kind = OLD.kind)
+BEGIN SELECT RAISE(ABORT, 'a posted journal is immutable'); END;
+CREATE TRIGGER IF NOT EXISTS acc_journal_balance BEFORE UPDATE OF status ON acc_journals WHEN NEW.status = 'posted' AND OLD.status <> 'posted'
+BEGIN SELECT RAISE(ABORT, 'journal is not balanced')
+  WHERE (SELECT COUNT(*) FROM acc_lines WHERE journal_id = NEW.id) < 2
+     OR ABS((SELECT COALESCE(SUM(debit),0) - COALESCE(SUM(credit),0) FROM acc_lines WHERE journal_id = NEW.id)) > 0.0005; END;
+CREATE TRIGGER IF NOT EXISTS acc_lines_no_insert BEFORE INSERT ON acc_lines WHEN (SELECT status FROM acc_journals WHERE id = NEW.journal_id) IS NOT 'draft'
+BEGIN SELECT RAISE(ABORT, 'a posted journal is immutable'); END;
+CREATE TRIGGER IF NOT EXISTS acc_lines_no_update BEFORE UPDATE ON acc_lines WHEN (SELECT status FROM acc_journals WHERE id = OLD.journal_id) IS NOT 'draft'
+BEGIN SELECT RAISE(ABORT, 'a posted journal is immutable'); END;
+CREATE TRIGGER IF NOT EXISTS acc_lines_no_delete BEFORE DELETE ON acc_lines WHEN (SELECT status FROM acc_journals WHERE id = OLD.journal_id) IS NOT 'draft'
+BEGIN SELECT RAISE(ABORT, 'a posted journal is immutable'); END;
+
 CREATE INDEX IF NOT EXISTS ix_units_project ON units(project_id);
 CREATE INDEX IF NOT EXISTS ix_inst_booking ON installments(booking_id);
 CREATE INDEX IF NOT EXISTS ix_book_unit ON bookings(unit_id);

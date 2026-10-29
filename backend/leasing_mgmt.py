@@ -20,7 +20,7 @@ import re
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from . import pii
+from . import ledger, pii
 from .auth import need
 from .common import act_as, audit, db, now_s, rows, today
 from .leasing import EPS, METHOD_LABEL, PayIn, apply_payment, event, lease_detail, next_no, r3
@@ -75,6 +75,7 @@ def add_expense(c, *, unit_id: int | None, project_id: int | None, owner_id: int
                        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""", (project_id, unit_id, owner_id, category, r3(amount), spent_on.isoformat(), vendor_id, order_id, int(charge_owner),
                                                               int(charge_tenant), description, doc_ref, by)).lastrowid
     audit(c, "مصروف عقار", f"{category} · {r3(amount):,.3f} ر.ع" + (" · على المالك" if charge_owner else " · على الشركة"))
+    ledger.autopost_quiet(c, only={"expenses"})
     return eid
 
 
@@ -323,6 +324,7 @@ def api_statement_issue(oid: int, b: StatementIn, u=Depends(act_as("leasing_appr
                     (oid, b.period, seq, "adjustment" if prev else "statement", number, d["collected"], d["expenses"], d["commission"], d["net"], "issued", now_s(), u["name"],
                      json.dumps({k: cur[k] for k in ("units", "expense_rows", "commission_base", "invoiced")} | {"pct": cur["owner"]["pct"], "basis": cur["owner"]["basis"]}, ensure_ascii=False))).lastrowid
     audit(c, "كشف مالك", f"{number} · {cur['owner']['name']} · {b.period} · الصافي {d['net']:,.3f} ر.ع" + (" (تعديلي)" if prev else ""))
+    ledger.autopost_quiet(c, only={"statements"})
     c.commit()
     return {"id": sid, "number": number, "net": d["net"], "kind": "adjustment" if prev else "statement"}
 
@@ -348,6 +350,7 @@ def api_statement_transferred(sid: int, b: TransferIn, u=Depends(act_as("leasing
         raise HTTPException(409, "لا صافٍ موجب للتحويل في هذا الكشف")
     c.execute("UPDATE owner_statements SET status='transferred', transferred_on=?, transfer_ref=? WHERE id=?", ((b.on or today()).isoformat(), b.ref, sid))
     audit(c, "تحويل صافي كشف مالك", f"{s['number']} · {s['net']:,.3f} ر.ع · {b.ref}")
+    ledger.autopost_quiet(c, only={"statements"})
     c.commit()
     return {"ok": True}
 

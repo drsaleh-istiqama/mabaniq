@@ -36,7 +36,7 @@ MODULES: OrderedDict[str, dict] = OrderedDict([
                      prefixes=("/api/cash", "/api/escrow", "/api/bank", "/api/invoices", "/api/charity", "/api/penalties", "/api/risk",
                                "/api/export"))),
     ("accounting", dict(title="المحاسبة", desc="دليل الحسابات والقيود المزدوجة والذمم والبنوك والضريبة والأصول والموازنات والقوائم المالية",
-                        deps=("finance",), perms=(), prefixes=(), available=False)),
+                        deps=("finance",), perms=("accounting", "accounting_approve"), prefixes=("/api/acc",))),
     ("hr", dict(title="الموارد البشرية", desc="الموظفون والإجازات والحضور والرواتب والتأمينات ونهاية الخدمة والتوظيف والتقييم",
                 deps=(), perms=(), prefixes=(), available=False)),
     ("land", dict(title="الأراضي والتراخيص", desc="دراسات الجدوى للأراضي وتراخيص الجهات",

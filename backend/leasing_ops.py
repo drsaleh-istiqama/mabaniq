@@ -20,6 +20,7 @@ import json
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from . import ledger
 from .auth import need
 from .common import act_as, audit, db, now_s, rows, today
 from .db import setting, setting_f
@@ -280,6 +281,7 @@ def api_deposit_settle(lid: int, b: SettleIn, u=Depends(act_as("leasing"))):
               (state, deducted, refund, now_s(), u["name"], lid))
     event(c, lid, "deposit_settle", json.dumps({"basis": basis, "deducted": deducted, "refund": refund, "deductions": [d.model_dump() for d in deds], "note": b.note}, ensure_ascii=False), u["name"])
     audit(c, "تسوية تأمين إيجار", f"{l['number']} · التأمين {basis:,.3f} − خصومات {deducted:,.3f} = المردود {refund:,.3f} ر.ع")
+    ledger.autopost_quiet(c, only={"deposits"})
     c.commit()
     return {"state": state, "basis": basis, "deducted": deducted, "refund": refund}
 
@@ -470,6 +472,7 @@ def api_charity_collect(did: int, r: CharityRef, u=Depends(act_as("leasing"))):
     d = one(c, "SELECT * FROM charity_dues WHERE id=? AND rent_due_id IS NOT NULL AND status='due'", (did,), "المبلغ ليس مستحقًا", 409)
     c.execute("UPDATE charity_dues SET status='collected', collected_at=?, collected_ref=? WHERE id=?", (now_s(), r.reference, did))
     audit(c, "تحصيل تبرع تأخير إيجار", f"{d['amount']:,.3f} ر.ع · {r.reference}")
+    ledger.autopost_quiet(c, only={"charity"})
     c.commit()
     return {"ok": True}
 
@@ -482,6 +485,7 @@ def api_charity_disburse(did: int, r: CharityRef, u=Depends(act_as("leasing_appr
     d = one(c, "SELECT * FROM charity_dues WHERE id=? AND rent_due_id IS NOT NULL AND status='collected'", (did,), "المبلغ غير محصَّل بعد", 409)
     c.execute("UPDATE charity_dues SET status='disbursed', disbursed_at=?, beneficiary=?, disbursed_ref=? WHERE id=?", (now_s(), r.beneficiary, r.reference, did))
     audit(c, "صرف تبرع تأخير إيجار", f"{d['amount']:,.3f} ر.ع إلى {r.beneficiary} · {r.reference}")
+    ledger.autopost_quiet(c, only={"charity"})
     c.commit()
     return {"ok": True}
 

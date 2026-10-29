@@ -146,13 +146,13 @@ def test_admin_toggles_with_dependencies_audit_and_no_data_loss(cl):
     after = cl.get("/api/units", params={"project_id": cl.get("/api/projects").json()[0]["id"]}).json()
     assert before == after and cl.get("/api/leasing").status_code == 200
     assert cl.post("/api/modules", json={"modules": ["nonsense"]}).status_code == 400
-    assert cl.post("/api/modules", json={"modules": ["accounting"]}).status_code == 400  # not shipped yet
+    assert cl.post("/api/modules", json={"modules": ["hr"]}).status_code == 400  # not shipped yet
 
 
 def test_licence_bounds_the_administrator(cl):
     login_as(cl, "admin", LEASE)
     mods = {m["key"]: m for m in cl.get("/api/modules").json()["modules"]}
-    assert mods["leasing"]["enabled"] and mods["sales"]["licensed"] is False and mods["accounting"]["available"] is False
+    assert mods["leasing"]["enabled"] and mods["sales"]["licensed"] is False and mods["hr"]["available"] is False
     r = cl.post("/api/modules", json={"modules": ["sales", "finance"]})
     assert r.status_code == 403 and "ترخيص" in r.json()["detail"]
     os.environ["MABANIQ_LICENSES"] = f"{LEASE}:sales+leasing+finance+reports"
