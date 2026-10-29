@@ -38,5 +38,6 @@
   "client.svc": "الصيانة",
   "client.sell": "إعادة البيع",
   "client.more": "المزيد",
-  "client.logout": "خروج"
+  "client.logout": "خروج",
+  "nav.lea": "الإيجارات"
 }

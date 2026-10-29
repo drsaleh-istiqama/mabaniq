@@ -307,7 +307,7 @@ def leasing(_=Depends(need("leasing"))):
                          JOIN tenants_l t ON t.id=l.tenant_id ORDER BY l."end" """):
         x = dict(l)
         x["dues"] = rows(c.execute("SELECT * FROM rent_dues WHERE lease_id=? ORDER BY due", (l["id"],)))
-        x["arrears"] = round(sum(d["amount"] - d["paid"] for d in x["dues"] if d["due"] <= t.isoformat()))
+        x["arrears"] = round(sum(d["amount"] - d["paid"] for d in x["dues"] if d["due"] <= t.isoformat() and (d.get("kind") or "rent") != "deposit"))
         days = (dt.date.fromisoformat(l["end"]) - t).days
         x["renewal_alert"] = f"ينتهي خلال {days} يومًا" if 0 <= days <= 90 else None
         leases.append(x)
@@ -329,34 +329,31 @@ class LeaseIn(BaseModel):
 
 
 @router.post("/api/leases")
-def lease_create(l: LeaseIn, _=Depends(act_as("leasing"))):
+def lease_create(l: LeaseIn, u=Depends(act_as("leasing"))):
+    """Compatibility entry (pre-0.21 screens and API clients): a signed lease at once, deposit = one month — now built by the leasing engine
+    (lease number, yearly terms, ledger-ready dues). The richer flow is POST /api/lea/leases."""
+    from . import leasing as L
     c = db()
     one(c, "SELECT 1 FROM units WHERE id=? AND retained=1", (l.unit_id,), "الوحدة ليست ضمن محفظة التأجير")
-    if c.execute("SELECT 1 FROM leases WHERE unit_id=? AND status='active' AND \"end\">=?", (l.unit_id, l.start.isoformat())).fetchone():
-        raise HTTPException(409, "يوجد عقد إيجار ساري على الوحدة")
     if 12 % l.frequency:
         raise HTTPException(400, "عدد الدفعات السنوية يجب أن يقسم 12")
-    tid = c.execute("INSERT INTO tenants_l(name,phone,id_number) VALUES(?,?,?)", (l.tenant_name, l.tenant_phone, pii.enc(l.tenant_id_number))).lastrowid
-    end = _add_months(l.start, l.months)
-    lid = c.execute("INSERT INTO leases(unit_id,tenant_id,start,\"end\",annual_rent,frequency,deposit,status) VALUES(?,?,?,?,?,?,?,?)",
-                    (l.unit_id, tid, l.start.isoformat(), end.isoformat(), l.annual_rent, l.frequency, round(l.annual_rent / 12), "active")).lastrowid
-    step = 12 // l.frequency
-    for k in range(0, l.months, step):
-        period = min(step, l.months - k)  # 0.5.0 — M9: الدفعة الأخيرة بنسبة ما تبقى من المدة لا دفعة كاملة
-        c.execute("INSERT INTO rent_dues(lease_id,due,amount) VALUES(?,?,?)", (lid, _add_months(l.start, k).isoformat(), round(l.annual_rent / 12 * period, 1)))
-    audit(c, "عقد إيجار جديد", f"وحدة {l.unit_id} · {l.tenant_name} · {l.annual_rent:,.0f} ر.ع سنويًا (يلزم توثيقه لدى البلدية)")
+    body = L.LeaseNew(unit_id=l.unit_id, tenant=L.TenantIn(name=l.tenant_name, phone=l.tenant_phone, id_number=l.tenant_id_number), start=l.start, months=l.months,
+                      annual_rent=l.annual_rent, frequency=l.frequency, deposit=round(l.annual_rent / 12))
+    lid = L.create_lease(c, body, u, bill_deposit=False)  # the old API only recorded the deposit figure; it never billed it
+    L.sign_lease(c, lid, u)
     c.commit()
     return {"id": lid}
 
 
 @router.post("/api/rent-dues/{did}/pay")
-def rent_pay(did: int, _=Depends(act_as("leasing"))):
+def rent_pay(did: int, u=Depends(act_as("leasing"))):
+    """Compatibility entry: collects the whole balance of one due today (method not stated) and issues the invoice as before."""
+    from . import leasing as L
     c = db()
     d = one(c, "SELECT * FROM rent_dues WHERE id=? AND paid<amount", (did,), "الدفعة مسددة", 409)
-    c.execute("UPDATE rent_dues SET paid=amount, paid_date=? WHERE id=?", (today().isoformat(), did))
+    L.apply_payment(c, d["lease_id"], L.r3(d["amount"] - d["paid"]), today(), None, None, u["name"], did)
     t = c.execute("SELECT t.name FROM leases l JOIN tenants_l t ON t.id=l.tenant_id WHERE l.id=?", (d["lease_id"],)).fetchone()
     issue_invoice(c, "rent", "rent", did, t["name"], d["amount"], X.vat_rate(c, "residential"), "إيجار")
-    audit(c, "تحصيل إيجار", f"دفعة {did} · {d['amount']:,.0f} ر.ع")
     c.commit()
     return {"ok": True}
 

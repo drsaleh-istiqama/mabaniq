@@ -107,7 +107,7 @@ def lease_summary(c) -> dict:
     leased = c.execute("""SELECT COUNT(DISTINCT l.unit_id) FROM leases l JOIN units u ON u.id=l.unit_id
                           WHERE l.status='active' AND u.retained=1""").fetchone()[0]
     annual = c.execute("SELECT COALESCE(SUM(annual_rent),0) FROM leases WHERE status='active'").fetchone()[0]
-    arrears = c.execute("SELECT COALESCE(SUM(amount-paid),0) FROM rent_dues WHERE due<=? AND paid<amount", (t,)).fetchone()[0]
+    arrears = c.execute("SELECT COALESCE(SUM(amount-paid),0) FROM rent_dues WHERE due<=? AND paid<amount AND COALESCE(kind,'rent')<>'deposit'", (t,)).fetchone()[0]
     soon = (today() + dt.timedelta(days=90)).isoformat()
     expiring = c.execute("SELECT COUNT(*) FROM leases WHERE status='active' AND \"end\">=? AND \"end\"<=?", (t, soon)).fetchone()[0]
     return {"units": units, "leased": leased, "occupancy": round(leased / units * 100) if units else 0,
@@ -122,7 +122,7 @@ def lease_properties(c) -> list[dict]:
         leased = c.execute("""SELECT COUNT(DISTINCT l.unit_id), COALESCE(SUM(l.annual_rent),0) FROM leases l JOIN units u ON u.id=l.unit_id
                               WHERE u.project_id=? AND l.status='active'""", (p["id"],)).fetchone()
         arrears = c.execute("""SELECT COALESCE(SUM(d.amount-d.paid),0) FROM rent_dues d JOIN leases l ON l.id=d.lease_id
-                               JOIN units u ON u.id=l.unit_id WHERE u.project_id=? AND d.due<=? AND d.paid<d.amount""", (p["id"], t)).fetchone()[0]
+                               JOIN units u ON u.id=l.unit_id WHERE u.project_id=? AND d.due<=? AND d.paid<d.amount AND COALESCE(d.kind,'rent')<>'deposit'""", (p["id"], t)).fetchone()[0]
         out.append({"id": p["id"], "name": p["name"], "location": p["location"], "units": p["units"], "leased": leased[0],
                     "occupancy": round(leased[0] / p["units"] * 100) if p["units"] else 0,
                     "annual_rent": round(leased[1]), "arrears": round(arrears)})

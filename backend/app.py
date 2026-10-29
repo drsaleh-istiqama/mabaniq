@@ -909,6 +909,9 @@ from .orgmodules import dashboard, visible_decisions
 from .orgmodules import router as orgmodules_router  # noqa: E402
 
 app.include_router(orgmodules_router)
+from .leasing import router as leasing_router  # noqa: E402
+
+app.include_router(leasing_router)  # 0.21.0: الإيجارات المتكاملة
 from .appearance import router as appearance_router  # noqa: E402
 from .assistant import router as assistant_router  # noqa: E402
 from .identity import router as identity_router  # noqa: E402

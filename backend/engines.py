@@ -332,7 +332,7 @@ def decisions(c):
                             "title": f"عقد الوحدة {l['unit']} ({l['tenant']}) ينتهي خلال {days} يومًا — قرار التجديد",
                             "impact": round(l["annual_rent"]), "impact_label": "إيجار سنوي معرّض للشغور",
                             "why": f"ينتهي العقد في {l['end']}؛ التجديد المبكر يتجنّب فترة شغور.", "payload": {"lease_id": l["id"]}, "done": done.get(key)})
-        arrears = c.execute("SELECT COALESCE(SUM(amount-paid),0), COUNT(DISTINCT lease_id) FROM rent_dues WHERE due<=? AND paid<amount", (t0.isoformat(),)).fetchone()
+        arrears = c.execute("SELECT COALESCE(SUM(amount-paid),0), COUNT(DISTINCT lease_id) FROM rent_dues WHERE due<=? AND paid<amount AND COALESCE(kind,'rent')<>'deposit'", (t0.isoformat(),)).fetchone()
         if arrears[0] > 0:
             key = f"lease_arrears:{t0:%Y-%m}"
             out.append({"key": key, "kind": "lease_arrears", "priority": "عالية", "source": "تحصيل الإيجار",

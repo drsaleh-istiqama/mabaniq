@@ -37,7 +37,7 @@ def schedule(plan: str, price: float, start: dt.date, handover: dt.date):
     return [(lb, d, round(price * p, 0)) for lb, d, p in rows]
 
 
-ALL_TABLES = ["campaign_sends", "creatives", "campaigns", "plans", "quotes", "doc_sends", "share_links", "doc_issues", "charity_dues", "resale_settlements", "oa_votes", "oa_motions", "oa_charges", "oa_budget", "rent_dues", "leases", "tenants_l", "work_orders", "fm_assets",
+ALL_TABLES = ["rent_payments", "cheques", "lease_events", "lease_terms", "unit_meters", "common_facilities", "counters", "campaign_sends", "creatives", "campaigns", "plans", "quotes", "doc_sends", "share_links", "doc_issues", "charity_dues", "resale_settlements", "oa_votes", "oa_motions", "oa_charges", "oa_budget", "rent_dues", "leases", "tenants_l", "owners", "work_orders", "fm_assets",
               "titles", "handovers", "snags", "distributions", "bank_lines", "pay_intents", "refunds", "invoices", "wa_messages",
               "viewings", "resale_offers", "watchlist", "commissions", "brokers", "discount_requests", "sale_contracts", "budgets",
               "ncrs", "site_reports", "change_orders", "schedule_tasks", "contracts_c", "permits", "feasibility", "lands",
@@ -122,6 +122,8 @@ def _seed_body(c, force: bool, tenant: str) -> None:
             apply_demo_password(c)  # Unit 4: a persistent database keeps its data, but the declared demo password always applies
             ensure_assets(c, tenant)  # 0.13.0: bundled sample images are re-materialised after a redeploy (ephemeral storage)
             ensure_pilot_accounts(c, tenant)  # 0.14.0
+            from .leasing import ensure_core
+            ensure_core(c)  # 0.21.0: idempotent — owner, lease numbers / terms, payments carried into the ledger
             return
         # 0.13.0: projects without any account = a seed interrupted before `ensure_users` (nobody could have logged in yet) → rebuild
         force = True
@@ -338,6 +340,8 @@ def _seed_body(c, force: bool, tenant: str) -> None:
     c.commit()
     ensure_assets(c, tenant, pf)  # 0.13.0: bundled renders / plans / logo of a profiled developer
     ensure_pilot_accounts(c, tenant)  # 0.14.0: trial accounts of the profiled company (only with MABANIQ_PILOT_PASSWORD)
+    from .leasing import ensure_core
+    ensure_core(c)  # 0.21.0
 
 
 if __name__ == "__main__":

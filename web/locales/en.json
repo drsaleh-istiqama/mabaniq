@@ -77,5 +77,9 @@
   "client.svc": "Maintenance",
   "client.sell": "Resale",
   "client.more": "More",
-  "client.logout": "Sign out"
+  "client.logout": "Sign out",
+  "nav.lea": "Leasing",
+  "meta.lea.g": "3 · Handover & operations",
+  "meta.lea.t": "Leasing",
+  "meta.lea.d": "Portfolio, leases, lessees, collections, post-dated cheques and arrears."
 }

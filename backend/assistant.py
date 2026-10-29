@@ -392,7 +392,7 @@ def t_leasing(ctx, a):
     ls = [dict(r) for r in c.execute('SELECT id,"end",annual_rent,status FROM leases')]
     act = [r for r in ls if r["status"] == "active"]
     soon = [r for r in act if d(r["end"]) and d(r["end"]) <= t + dt.timedelta(days=90)]
-    od = c.execute("SELECT COUNT(*) n, COALESCE(SUM(amount-paid),0) v FROM rent_dues WHERE due<? AND paid<amount-1", (t.isoformat(),)).fetchone()
+    od = c.execute("SELECT COUNT(*) n, COALESCE(SUM(amount-paid),0) v FROM rent_dues WHERE due<? AND paid<amount-1 AND COALESCE(kind,'rent')<>'deposit'", (t.isoformat(),)).fetchone()
     vac = c.execute("SELECT COUNT(*) n FROM units WHERE COALESCE(retained,0)=1 AND status='a' AND id NOT IN (SELECT unit_id FROM leases WHERE status='active')").fetchone()["n"]
     lines = [f"عقود إيجار سارية {n(len(act))} بإجمالي إيجار سنوي {omr(sum(r['annual_rent'] or 0 for r in act))}.",
              f"تنتهي خلال 90 يومًا: {n(len(soon))}. إيجارات متأخرة: {n(od['n'])} بقيمة {omr(od['v'])}. وحدات تأجير شاغرة: {n(vac)}."]

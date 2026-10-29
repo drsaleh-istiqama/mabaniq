@@ -26,7 +26,7 @@ INK = (23, 32, 48)
 MUTED = (110, 120, 135)
 LINE = (210, 214, 222)
 
-KIND_TITLES = {"quote": "عرض سعر", "contract": "عقد بيع وحدة عقارية", "invoice": "فاتورة", "tax_invoice": "فاتورة ضريبية", "receipt": "إيصال استلام"}
+KIND_TITLES = {"quote": "عرض سعر", "contract": "عقد بيع وحدة عقارية", "invoice": "فاتورة", "tax_invoice": "فاتورة ضريبية", "receipt": "إيصال استلام", "lease": "عقد إيجار", "rent_receipt": "إيصال استلام إيجار", "cheque_receipt": "إيصال استلام شيك"}
 
 
 def hijri(d: dt.date | str | None) -> str:
@@ -318,6 +318,76 @@ def render_receipt(brand: dict, r: dict, verify_url: str) -> bytes:
         p.para(f"الفاتورة المرتبطة: {r['invoice_number']}", muted=True)
     p.para("أودع المبلغ في حساب الضمان الخاص بالمشروع. يصدر هذا الإيصال إلكترونيًا ويُعتد به مع رمز التحقق أدناه.", 8.5, muted=True)
     _common_end(p, ("المستلم", r.get("issued_by") or "المحاسب"), brand.get("name") or "المطوّر")
+    return bytes(p.output())
+
+
+def render_lease(brand: dict, d: dict, verify_url: str) -> bytes:
+    """0.21.0 — residential / commercial lease: parties, premises, term with the free preparation period, yearly rent, the payment schedule, deposit,
+    the optional late-payment charity clause and the standing clauses. A visible footer says the form still needs the legal / Sharia adviser's approval
+    until the owner records it (settings lea:template_approved)."""
+    p = Doc(brand, "lease", d["number"], verify_url, d["verify_code"])
+    p.add_page()
+    t = d["tenant"]
+    status = {"draft": "مسودة غير موقَّعة", "active": "ساري", "expired": "منتهٍ", "terminated": "مُنهى"}.get(d["status"], d["status"])
+    p.heading(f"عقد إيجار {d['number']}", f"تاريخ التوقيع: {hijri(d.get('signed_at') or d['start'])} · الحالة: {status}")
+    owner = (d.get("owner") or {}).get("name") or brand.get("name") or "المؤجِّر"
+    p.kv([("المؤجِّر", brand.get("name") or "المؤجِّر"), ("المالك", owner), ("المستأجر", t["name"]),
+          ("السجل التجاري" if t.get("kind") == "company" else "رقم الهوية", t.get("cr_number") if t.get("kind") == "company" else t.get("id_number")),
+          ("الممثل القانوني", t.get("rep_name")), ("هاتف المستأجر", t.get("phone"))])
+    p.kv([("الوحدة المؤجرة", d["unit"]), ("المشروع", d["project"]), ("الموقع", d.get("location")), ("النوع", d.get("unit_type")),
+          ("المساحة", f"{d['area']:g} م²" if d.get("area") else None), ("مواقف السيارات", d.get("parking"))])
+    if d.get("meters"):
+        names = {"water": "ماء", "electricity": "كهرباء", "gas": "غاز", "other": "أخرى"}
+        p.para("العدّادات: " + " · ".join(f"{names.get(m['kind'], m['kind'])} {m['number']}" + (" (مشترك)" if m.get("shared") else "") for m in d["meters"]), 9)
+    p.heading("مدة العقد", "")
+    p.kv([("بداية العقد", hijri(d["start"])), ("نهاية العقد", hijri(d["end"])), ("فترة التجهيز المجانية", f"{d['prep_free_days']} يومًا" if d.get("prep_free_days") else "لا توجد"),
+          ("بداية احتساب الإيجار", hijri(d.get("rent_start") or d["start"])), ("مرجع توثيق البلدية", d.get("municipality_ref") or "لم يُوثَّق بعد"),
+          ("التأمين", money(d.get("deposit")) if d.get("deposit") else "لا يوجد")])
+    p.grid(["السنة", "من", "إلى", "الإيجار السنوي"], [[f"السنة {x['year_no']}", x["from_date"], x["to_date"], money(x["annual_rent"])] for x in d["terms"]], widths=(2, 3, 3, 3))
+    p.heading("جدول الدفعات", "")
+    rows_ = [[x["label"] or "إيجار", f"{x['due']}", money(x["amount"])] for x in d["dues"] if (x.get("kind") or "rent") != "deposit"]
+    rows_.append(["الإجمالي", "", money(d["totals"]["billed"])])
+    p.grid(["الدفعة", "تاريخ الاستحقاق", "المبلغ"], rows_, widths=(4, 3, 3), bold_last=True)
+    clauses = [
+        "يلتزم المستأجر باستعمال العين المؤجرة في الغرض المتفق عليه فقط، ولا يؤجّرها من الباطن ولا يتنازل عنها إلا بموافقة كتابية من المؤجِّر.",
+        "يسدّد المستأجر الإيجار في مواعيد الاستحقاق الواردة في الجدول، وتُعدّ الدفعة مسدّدة بتاريخ قبض المؤجِّر لها فعليًا (والشيك حين يُصرف).",
+        "التأمين أمانة بيد المؤجِّر يُردّ عند انتهاء العقد وتسليم العين بعد خصم ما يثبت من تلف أو التزامات موثَّقة بمحضر الاستلام، ولا يُصادَر تقديريًا.",
+        "يتسلّم المستأجر العين بمحضر تسليم موقَّع يوثّق حالتها وقراءات العدّادات، ويعيدها عند الانتهاء بالحالة نفسها عدا الاستهلاك العادي.",
+        "يتحمّل المستأجر رسوم استهلاك الكهرباء والماء والغاز وفق العدّادات، ويتحمّل المؤجِّر الإصلاحات الإنشائية الأساسية ما لم يتفق على غير ذلك كتابةً.",
+        "يجري التجديد أو الإنهاء المبكر باتفاق كتابي بين الطرفين وفق الأنظمة المعمول بها في سلطنة عُمان، وتُوثَّق الأحكام ذات الصلة لدى الجهات المختصة.",
+    ]
+    if d.get("charity_clause"):
+        clauses.insert(2, "شرط التبرع بالتأخير: إن تأخّر المستأجر عن سداد دفعة بعد مهلة السماح، التزم بالتبرع بمبلغ يُحسب بنسبة معلنة لجهة خيرية معتمدة، ويُحفظ في حساب أمانة منفصل، ولا يُعدّ إيرادًا للمؤجِّر ولا فائدة.")
+    p.heading("الأحكام", "")
+    p.numbered(clauses)
+    if not d.get("approved"):
+        p.para("تنبيه: هذا النموذج يحتاج اعتماد المستشار الشرعي والقانوني قبل الاستعمال الرسمي.", 9, bold=True)
+    _common_end(p, ("المستأجر", t["name"]), brand.get("name") or "المؤجِّر")
+    return bytes(p.output())
+
+
+def render_rent_receipt(brand: dict, r: dict, verify_url: str) -> bytes:
+    p = Doc(brand, "rent_receipt", r["receipt"], verify_url, r["verify_code"])
+    p.add_page()
+    l = r["lease"]
+    p.heading(f"إيصال استلام إيجار {r['receipt']}", f"تاريخ الاستلام: {hijri(r['at'])}")
+    p.kv([("استلمنا من", l["tenant"]["name"]), ("مبلغًا وقدره", money(r["amount"])), ("طريقة السداد", r["method_label"]), ("المرجع", r.get("reference"))])
+    p.kv([("العقد", l["number"]), ("الوحدة", l["unit"]), ("المشروع", l["project"]), ("الرصيد المتبقي على العقد بعد هذه الدفعة", money(r["balance"]))])
+    p.grid(["البيان", "تاريخ الاستحقاق", "المبلغ"], [[x["label"] or "إيجار", x["due"], money(x["amount"])] for x in r["lines"]], widths=(4, 3, 3))
+    p.para("صدر هذا الإيصال إلكترونيًا ويُعتدّ به مع رمز التحقق أدناه. لا تُحتسب على هذه الدفعة أي فوائد أو رسوم.", 8.5, muted=True)
+    _common_end(p, ("المستلم", r.get("recorded_by") or "المحصِّل"), brand.get("name") or "المؤجِّر")
+    return bytes(p.output())
+
+
+def render_cheque_receipt(brand: dict, q: dict, verify_url: str) -> bytes:
+    p = Doc(brand, "cheque_receipt", q["receipt_no"], verify_url, q["verify_code"])
+    p.add_page()
+    l = q["lease"]
+    p.heading(f"إيصال استلام شيك {q['receipt_no']}", f"تاريخ الاستلام: {hijri(q['received_on'])}")
+    p.kv([("استلمنا من", q.get("drawer") or l["tenant"]["name"]), ("رقم الشيك", q["number"]), ("البنك", q["bank"]), ("الفرع", q.get("branch")),
+          ("قيمة الشيك", money(q["amount"])), ("تاريخ استحقاق الشيك", hijri(q["due_date"])), ("العقد", l["number"]), ("الوحدة", l["unit"])])
+    p.para("هذا الإيصال يثبت استلام الشيك فقط ولا يثبت السداد؛ تُحتسب الدفعة مسدّدة عند صرف الشيك فعليًا ويصدر عندها إيصال استلام إيجار.", 9, bold=True)
+    _common_end(p, ("المستلم", q.get("created_by") or "المحصِّل"), brand.get("name") or "المؤجِّر")
     return bytes(p.output())
 
 

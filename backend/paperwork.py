@@ -32,7 +32,7 @@ from .modules import PLAN_LABEL, booking_full, one, portal_owned
 from .seed import schedule
 
 router = APIRouter()
-KINDS = ("quote", "contract", "invoice", "receipt")
+KINDS = ("quote", "contract", "invoice", "receipt", "lease", "rent_receipt", "cheque_receipt")
 SHARE_DAYS = 30
 QUOTE_MAX_DISCOUNT_SALES = 0.02
 QUOTE_MAX_DISCOUNT_DECIDE = 0.15
@@ -201,6 +201,25 @@ def render(c, request: Request, kind: str, ref_id: int, by: str = "النظام"
         iss = _issue(c, kind, ref_id, d["receipt"], {k: d[k] for k in ("receipt", "amount", "at", "customer", "label")}, by)
         d.update(iss)
         return pdfgen.render_receipt(b, d, _verify_url(request, d["verify_code"])), f"{d['receipt']}.pdf", d
+    if kind == "lease":
+        from .leasing import lease_doc_row
+        d = lease_doc_row(c, ref_id)
+        label = d["number"] + (" (مسودة)" if d["status"] == "draft" else "")
+        iss = _issue(c, kind, ref_id, label, {k: d[k] for k in ("number", "status", "start", "end", "terms")} | {"tenant": d["tenant"]["name"], "dues": [(x["due"], x["amount"]) for x in d["dues"]]}, by)
+        d.update(iss)
+        return pdfgen.render_lease(b, d, _verify_url(request, d["verify_code"])), f"{d['number']}.pdf", d
+    if kind == "rent_receipt":
+        from .leasing import receipt_doc_row
+        d = receipt_doc_row(c, ref_id)
+        iss = _issue(c, kind, d["first_id"], d["receipt"], {"receipt": d["receipt"], "amount": d["amount"], "at": d["at"], "lines": [(x["due_id"], x["amount"]) for x in d["lines"]]}, by)
+        d.update(iss)  # one verification record per receipt, however many dues it settled
+        return pdfgen.render_rent_receipt(b, d, _verify_url(request, d["verify_code"])), f"{d['receipt']}.pdf", d
+    if kind == "cheque_receipt":
+        from .leasing import cheque_doc_row
+        d = cheque_doc_row(c, ref_id)
+        iss = _issue(c, kind, ref_id, d["receipt_no"], {k: d[k] for k in ("receipt_no", "number", "bank", "amount", "due_date", "received_on")}, by)
+        d.update(iss)
+        return pdfgen.render_cheque_receipt(b, d, _verify_url(request, d["verify_code"])), f"{d['receipt_no']}.pdf", d
     raise HTTPException(404, "نوع المستند غير معروف")
 
 
@@ -210,7 +229,8 @@ def _pdf_response(pdf: bytes, filename: str, download: bool = False) -> Response
                     headers={"Content-Disposition": f"{disp}; filename*=UTF-8''{urlquote(filename)}", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
 
 
-STAFF_PERMS = {"quote": ("book", "inventory", "finance"), "contract": ("book", "finance", "kyc"), "invoice": ("invoices", "finance", "book"), "receipt": ("invoices", "finance", "book")}
+STAFF_PERMS = {"quote": ("book", "inventory", "finance"), "contract": ("book", "finance", "kyc"), "invoice": ("invoices", "finance", "book"), "receipt": ("invoices", "finance", "book"),
+               "lease": ("leasing",), "rent_receipt": ("leasing",), "cheque_receipt": ("leasing",)}
 
 
 def _kind(kind: str) -> str:
@@ -220,7 +240,7 @@ def _kind(kind: str) -> str:
 
 
 @router.get("/api/docs/{kind}/{ref_id}.pdf")
-def doc_pdf(kind: str, ref_id: int, request: Request, download: int = 0, u=Depends(need_any("book", "inventory", "finance", "invoices", "kyc"))):
+def doc_pdf(kind: str, ref_id: int, request: Request, download: int = 0, u=Depends(need_any("book", "inventory", "finance", "invoices", "kyc", "leasing"))):
     kind = _kind(kind)
     if not set(STAFF_PERMS[kind]) & set(u["perms"]):
         raise HTTPException(403, "ليست لديك صلاحية لهذا المستند")
@@ -376,7 +396,7 @@ def verify_page(tenant: str, code: str):
     if row and row["kind"] == "contract":
         k = c.execute("SELECT customer_signed_at FROM sale_contracts WHERE booking_id=?", (row["ref_id"],)).fetchone()
         status = "موقَّع من العميل" if k and k["customer_signed_at"] else "غير موقَّع"
-    kind_ar = {"quote": "عرض سعر", "contract": "عقد بيع", "invoice": "فاتورة", "receipt": "إيصال استلام"}
+    kind_ar = {"quote": "عرض سعر", "contract": "عقد بيع", "invoice": "فاتورة", "receipt": "إيصال استلام", "lease": "عقد إيجار", "rent_receipt": "إيصال استلام إيجار", "cheque_receipt": "إيصال استلام شيك"}
     card = 'style="max-width:560px;margin:40px auto;background:#fff;border-radius:16px;padding:28px 26px;font-family:Tajawal,Segoe UI,Tahoma,sans-serif;color:#111827;direction:rtl;text-align:right"'
     if row:
         body = (f'<div style="color:#15803d;font-weight:700;font-size:18px">✓ مستند صادر من {_esc(name)} عبر منصة مبانيك</div>'
