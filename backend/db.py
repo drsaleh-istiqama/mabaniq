@@ -78,7 +78,7 @@ CREATE TABLE IF NOT EXISTS units(
   id INTEGER PRIMARY KEY, project_id INTEGER REFERENCES projects(id), code TEXT UNIQUE,
   building TEXT, floor INTEGER, pos INTEGER, type TEXT, area REAL, view TEXT,
   price REAL, status TEXT CHECK(status IN ('a','r','s')), retained INTEGER DEFAULT 0, use TEXT DEFAULT 'residential',
-  owner_id INTEGER, lease_state TEXT, parking_bays INTEGER);
+  owner_id INTEGER, lease_state TEXT, parking_bays INTEGER, source TEXT, import_batch TEXT);
 CREATE TABLE IF NOT EXISTS customers(
   id INTEGER PRIMARY KEY, name TEXT, phone TEXT, created TEXT, rescheduled INTEGER DEFAULT 0,
   id_type TEXT, id_number TEXT, nationality TEXT, id_expiry TEXT, dob TEXT, pep INTEGER DEFAULT 0,
@@ -204,14 +204,15 @@ CREATE TABLE IF NOT EXISTS oa_votes(
 CREATE TABLE IF NOT EXISTS tenants_l(
   id INTEGER PRIMARY KEY, name TEXT, phone TEXT, id_number TEXT, kind TEXT DEFAULT 'individual', cr_number TEXT, tax_no TEXT, rep_name TEXT,
   rep_title TEXT, rep_id_number TEXT, contact_name TEXT, email TEXT, address TEXT, nationality TEXT, id_expiry TEXT, rating TEXT, rating_note TEXT,
-  blacklisted INTEGER DEFAULT 0, blacklist_reason TEXT, blacklisted_by TEXT, blacklisted_at TEXT, import_batch TEXT);
+  blacklisted INTEGER DEFAULT 0, blacklist_reason TEXT, blacklisted_by TEXT, blacklisted_at TEXT, import_batch TEXT, source TEXT);
 CREATE TABLE IF NOT EXISTS leases(
   id INTEGER PRIMARY KEY, unit_id INTEGER, tenant_id INTEGER, start TEXT, end TEXT, annual_rent REAL,
   frequency INTEGER, deposit REAL, status TEXT, municipality_ref TEXT, number TEXT, kind TEXT, signed_at TEXT, prep_free_days INTEGER DEFAULT 0,
   rent_start TEXT, months INTEGER, deposit_state TEXT, charity_clause INTEGER DEFAULT 0, municipality_fee REAL, municipality_date TEXT,
-  renewed_from INTEGER, terminated_at TEXT, termination_kind TEXT, termination_note TEXT, source TEXT DEFAULT 'manual', created_by TEXT);
+  renewed_from INTEGER, terminated_at TEXT, termination_kind TEXT, termination_note TEXT, source TEXT DEFAULT 'manual', created_by TEXT,
+  deposit_deducted REAL, deposit_refund REAL, deposit_settled_at TEXT, deposit_settled_by TEXT);
 CREATE TABLE IF NOT EXISTS rent_dues(
-  id INTEGER PRIMARY KEY, lease_id INTEGER, due TEXT, amount REAL, paid REAL DEFAULT 0, paid_date TEXT, kind TEXT DEFAULT 'rent', year_no INTEGER, label TEXT);
+  id INTEGER PRIMARY KEY, lease_id INTEGER, due TEXT, amount REAL, paid REAL DEFAULT 0, paid_date TEXT, kind TEXT DEFAULT 'rent', year_no INTEGER, label TEXT, plan_id INTEGER);
 
 -- المؤسسية
 CREATE TABLE IF NOT EXISTS documents(
@@ -250,7 +251,7 @@ CREATE TABLE IF NOT EXISTS privacy_requests(
 CREATE TABLE IF NOT EXISTS charity_dues(
   id INTEGER PRIMARY KEY, installment_id INTEGER UNIQUE REFERENCES installments(id), customer_id INTEGER, amount REAL, rate REAL,
   late_days INTEGER, computed_at TEXT, status TEXT CHECK(status IN ('due','collected','disbursed','waived')) DEFAULT 'due',
-  collected_at TEXT, collected_ref TEXT, disbursed_at TEXT, beneficiary TEXT, disbursed_ref TEXT);
+  collected_at TEXT, collected_ref TEXT, disbursed_at TEXT, beneficiary TEXT, disbursed_ref TEXT, rent_due_id INTEGER, lease_id INTEGER);
 -- 0.5.0 — M8: تسوية التنازل في السوق الثانوي بين البائع والمشتري
 CREATE TABLE IF NOT EXISTS resale_settlements(
   id INTEGER PRIMARY KEY, resale_id INTEGER UNIQUE, booking_id INTEGER, seller_customer_id INTEGER, buyer_customer_id INTEGER,
@@ -286,11 +287,49 @@ CREATE TABLE IF NOT EXISTS cheques(
   drawer TEXT, payee TEXT, vendor_id INTEGER, journal_id INTEGER, receipt_no TEXT, created_by TEXT);
 CREATE TABLE IF NOT EXISTS rent_payments(
   id INTEGER PRIMARY KEY, due_id INTEGER REFERENCES rent_dues(id), lease_id INTEGER REFERENCES leases(id), amount REAL NOT NULL, paid_on TEXT NOT NULL,
-  method TEXT, reference TEXT, cheque_id INTEGER, receipt_no TEXT, recorded_by TEXT, reverses_id INTEGER, note TEXT, created TEXT);
+  method TEXT, reference TEXT, cheque_id INTEGER, receipt_no TEXT, recorded_by TEXT, reverses_id INTEGER, note TEXT, created TEXT, import_key TEXT);
 CREATE UNIQUE INDEX IF NOT EXISTS ux_leases_number ON leases(number);
 CREATE INDEX IF NOT EXISTS ix_rent_payments_due ON rent_payments(due_id);
 CREATE INDEX IF NOT EXISTS ix_rent_payments_receipt ON rent_payments(receipt_no);
 CREATE INDEX IF NOT EXISTS ix_cheques_lease ON cheques(lease_id);
+
+-- 0.22.0 — عمليات الإيجار (backend/leasing_ops.py، backend/importer.py): التسليم والإنذارات وخطط السداد والصيانة والمصاريف وكشوف الملاك والنطاقات والاستيراد.
+CREATE TABLE IF NOT EXISTS lease_handovers(
+  id INTEGER PRIMARY KEY, lease_id INTEGER REFERENCES leases(id), kind TEXT NOT NULL, at TEXT, by_user TEXT, condition TEXT, keys INTEGER, notes TEXT, deductions TEXT, created TEXT);
+CREATE TABLE IF NOT EXISTS meter_readings(
+  id INTEGER PRIMARY KEY, handover_id INTEGER REFERENCES lease_handovers(id), meter_id INTEGER, reading REAL NOT NULL);
+CREATE TABLE IF NOT EXISTS arrears_notices(
+  id INTEGER PRIMARY KEY, lease_id INTEGER REFERENCES leases(id), seq INTEGER, number TEXT NOT NULL UNIQUE, kind TEXT, issued TEXT, cure_by TEXT, amount REAL,
+  sent_via TEXT, sent_at TEXT, created_by TEXT, note TEXT);
+CREATE TABLE IF NOT EXISTS payment_plans(
+  id INTEGER PRIMARY KEY, lease_id INTEGER REFERENCES leases(id), agreed_on TEXT, status TEXT DEFAULT 'active', note TEXT, approved_by TEXT, total REAL, original TEXT);
+CREATE TABLE IF NOT EXISTS vendors(
+  id INTEGER PRIMARY KEY, name TEXT NOT NULL, cr_number TEXT, phone TEXT, email TEXT, trade TEXT, iban TEXT, active INTEGER DEFAULT 1);
+CREATE TABLE IF NOT EXISTS maint_requests(
+  id INTEGER PRIMARY KEY, unit_id INTEGER REFERENCES units(id), lease_id INTEGER, source TEXT DEFAULT 'staff', requester TEXT, category TEXT, description TEXT,
+  priority TEXT DEFAULT 'normal', status TEXT DEFAULT 'new', created TEXT, updated TEXT, sla_due TEXT, closed_at TEXT, created_by TEXT);
+CREATE TABLE IF NOT EXISTS maint_orders(
+  id INTEGER PRIMARY KEY, request_id INTEGER REFERENCES maint_requests(id), vendor_id INTEGER, scheduled TEXT, cost REAL, charge_to TEXT DEFAULT 'owner',
+  tenant_due_id INTEGER, basis TEXT, doc_ref TEXT, done_at TEXT, expense_id INTEGER, created_by TEXT);
+CREATE TABLE IF NOT EXISTS property_expenses(
+  id INTEGER PRIMARY KEY, project_id INTEGER, unit_id INTEGER, owner_id INTEGER, category TEXT, amount REAL NOT NULL, spent_on TEXT NOT NULL, vendor_id INTEGER,
+  order_id INTEGER, charge_owner INTEGER DEFAULT 1, charge_tenant INTEGER DEFAULT 0, description TEXT, status TEXT DEFAULT 'posted', doc_ref TEXT, created_by TEXT);
+CREATE TABLE IF NOT EXISTS owner_statements(
+  id INTEGER PRIMARY KEY, owner_id INTEGER REFERENCES owners(id), period TEXT NOT NULL, seq INTEGER DEFAULT 1, kind TEXT DEFAULT 'statement', number TEXT NOT NULL UNIQUE,
+  collected REAL, expenses REAL, commission REAL, net REAL, status TEXT DEFAULT 'issued', issued_at TEXT, issued_by TEXT, transferred_on TEXT, transfer_ref TEXT, detail TEXT,
+  UNIQUE(owner_id, period, seq));
+CREATE TABLE IF NOT EXISTS user_scopes(
+  id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, project_id INTEGER, owner_id INTEGER, created_by TEXT);
+CREATE TABLE IF NOT EXISTS import_batches(
+  id INTEGER PRIMARY KEY, kind TEXT NOT NULL, filename TEXT, sha256 TEXT, rows_ok INTEGER, rows_err INTEGER, rows_conflict INTEGER, by_user TEXT, at TEXT);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_charity_rent_due ON charity_dues(rent_due_id);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_rent_payments_import ON rent_payments(import_key);
+CREATE INDEX IF NOT EXISTS ix_handovers_lease ON lease_handovers(lease_id);
+CREATE INDEX IF NOT EXISTS ix_notices_lease ON arrears_notices(lease_id);
+CREATE INDEX IF NOT EXISTS ix_plans_lease ON payment_plans(lease_id);
+CREATE INDEX IF NOT EXISTS ix_maint_unit ON maint_requests(unit_id);
+CREATE INDEX IF NOT EXISTS ix_expenses_owner ON property_expenses(owner_id, spent_on);
+CREATE INDEX IF NOT EXISTS ix_scopes_user ON user_scopes(user_id);
 
 CREATE INDEX IF NOT EXISTS ix_units_project ON units(project_id);
 CREATE INDEX IF NOT EXISTS ix_inst_booking ON installments(booking_id);
@@ -329,6 +368,12 @@ MIGRATIONS.update({  # 0.21.0 — الإيجارات المتكاملة: توس�
                "termination_kind TEXT", "termination_note TEXT", "source TEXT DEFAULT 'manual'", "created_by TEXT"],
     "rent_dues": ["kind TEXT DEFAULT 'rent'", "year_no INTEGER", "label TEXT"],
 })
+MIGRATIONS["leases"] += ["deposit_deducted REAL", "deposit_refund REAL", "deposit_settled_at TEXT", "deposit_settled_by TEXT"]  # 0.22.0 — عمليات الإيجار
+MIGRATIONS["rent_dues"] += ["plan_id INTEGER"]
+MIGRATIONS["units"] += ["source TEXT", "import_batch TEXT"]
+MIGRATIONS["tenants_l"] += ["source TEXT"]
+MIGRATIONS["rent_payments"] = ["import_key TEXT"]
+MIGRATIONS["charity_dues"] = ["rent_due_id INTEGER", "lease_id INTEGER"]
 MIGRATIONS["customers"] += ["consent_version TEXT", "consent_source TEXT", "erased_at TEXT"]  # 0.5.0 — M5
 
 

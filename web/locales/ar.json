@@ -39,5 +39,6 @@
   "client.sell": "إعادة البيع",
   "client.more": "المزيد",
   "client.logout": "خروج",
-  "nav.lea": "الإيجارات"
+  "nav.lea": "الإيجارات",
+  "nav.pm": "محفظتي"
 }

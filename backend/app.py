@@ -866,7 +866,7 @@ async def _inner(request: Request, call_next):
         p = request.url.path
         if p.startswith("/api/") and p not in CSRF_EXEMPT and not p.startswith("/api/v1/") and request.cookies.get(A.COOKIE) and not A.csrf_ok(request):
             return JSONResponse({"detail": "رمز CSRF مفقود أو غير مطابق — أعد تسجيل الدخول"}, status_code=403)
-        upload = request.url.path in ("/api/documents", "/api/plans")  # multipart uploads (Unit 6: plans)
+        upload = request.url.path in ("/api/documents", "/api/plans") or request.url.path.startswith("/api/lea/import/")  # multipart uploads (Unit 6: plans; 0.22.0: the lease import)
         ctype = request.headers.get("content-type", "")
         ok_type = ctype.startswith("multipart/form-data") if upload else ctype.startswith("application/json")
         if not ok_type and request.url.path.startswith("/api/") and int(request.headers.get("content-length") or 0) > 0:
@@ -909,9 +909,15 @@ from .orgmodules import dashboard, visible_decisions
 from .orgmodules import router as orgmodules_router  # noqa: E402
 
 app.include_router(orgmodules_router)
+from .importer import router as importer_router  # noqa: E402
 from .leasing import router as leasing_router  # noqa: E402
+from .leasing_mgmt import router as leasing_mgmt_router  # noqa: E402
+from .leasing_ops import router as leasing_ops_router  # noqa: E402
 
 app.include_router(leasing_router)  # 0.21.0: الإيجارات المتكاملة
+app.include_router(leasing_ops_router)  # 0.22.0: عمليات الإيجار
+app.include_router(leasing_mgmt_router)  # 0.22.0: الصيانة والملاك والمدير العقاري
+app.include_router(importer_router)  # 0.22.0: استيراد Excel/CSV
 from .appearance import router as appearance_router  # noqa: E402
 from .assistant import router as assistant_router  # noqa: E402
 from .identity import router as identity_router  # noqa: E402

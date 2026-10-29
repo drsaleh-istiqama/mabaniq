@@ -79,6 +79,10 @@
   "client.more": "More",
   "client.logout": "Sign out",
   "nav.lea": "Leasing",
+  "nav.pm": "My portfolio",
+  "meta.pmg.g": "3 · Handover & operations",
+  "meta.pmg.t": "My portfolio (property manager)",
+  "meta.pmg.d": "Leases and collections inside your scope only.",
   "meta.lea.g": "3 · Handover & operations",
   "meta.lea.t": "Leasing",
   "meta.lea.d": "Portfolio, leases, lessees, collections, post-dated cheques and arrears."

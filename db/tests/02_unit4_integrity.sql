@@ -2,7 +2,7 @@
 BEGIN;
 SELECT plan(
   (SELECT count(*)::int FROM pg_tables WHERE schemaname='public' AND tablename NOT IN ('schema_migrations','audit')) * 2
-  + 17 + 3 + 3
+  + 21 + 3 + 3
 );
 
 -- 1) every application table (audit excepted) has updated_at and the trigger
@@ -16,7 +16,7 @@ SELECT is((SELECT count(*) FROM pg_trigger tr JOIN pg_class c ON c.oid = tr.tgre
 -- 2) no DELETE on the ledgers for mabaniq_app (16 tables, incl. the issued-document registry since 0005)
 SELECT ok(NOT has_table_privilege('mabaniq_app', x, 'DELETE'), format('mabaniq_app has no DELETE on %s', x))
   FROM unnest(ARRAY['payments','installments','invoices','refunds','charity_dues','bank_lines','distributions','commissions',
-                    'resale_settlements','rent_dues','oa_charges','pay_intents','ipcs','ipc_items','doc_issues','doc_sends','rent_payments']) AS x;
+                    'resale_settlements','rent_dues','oa_charges','pay_intents','ipcs','ipc_items','doc_issues','doc_sends','rent_payments','arrears_notices','owner_statements','import_batches']) AS x;
 -- 0.21.0: the rent payments ledger is also closed to UPDATE (a correction is a reversing row)
 SELECT ok(NOT has_table_privilege('mabaniq_app', 'rent_payments', 'UPDATE'), 'mabaniq_app has no UPDATE on rent_payments');
 
@@ -30,6 +30,8 @@ SELECT isnt((SELECT updated_at FROM settings WHERE k='u4'), NULL, 'updated_at se
 SELECT throws_like($$ DELETE FROM payments WHERE id = -1 $$, '%permission denied%', 'app role cannot DELETE from payments');
 SELECT throws_like($$ DELETE FROM rent_payments WHERE id = -1 $$, '%permission denied%', 'app role cannot DELETE from rent_payments');
 SELECT throws_like($$ UPDATE rent_payments SET amount = 0 WHERE id = -1 $$, '%permission denied%', 'app role cannot UPDATE rent_payments');
+-- 0.22.0: numbered notices and issued owner statements are never deleted (a correction is a new one)
+SELECT throws_like($$ DELETE FROM owner_statements WHERE id = -1 $$, '%permission denied%', 'app role cannot DELETE from owner_statements');
 RESET ROLE;
 
 SELECT * FROM finish();

@@ -24,7 +24,7 @@ MODULES: OrderedDict[str, dict] = OrderedDict([
                              "/api/discounts", "/api/resale", "/api/resale-settlements", "/api/installments", "/api/receipts", "/api/pricing",
                              "/api/leads", "/api/wa", "/api/pay"))),
     ("leasing", dict(title="الإيجارات", desc="العقود والمستأجرون والتحصيل والشيكات والمتأخرات والصيانة وكشوف الملاك",
-                     deps=("finance",), perms=("leasing",), prefixes=("/api/leasing", "/api/leases", "/api/rent-dues", "/api/lea"))),
+                     deps=("finance",), perms=("leasing", "leasing_approve", "leasing_pm"), prefixes=("/api/leasing", "/api/leases", "/api/rent-dues", "/api/lea", "/api/pm"))),
     ("construction", dict(title="الإنشاء", desc="المستخلصات والتحقق من الإنجاز وأوامر التغيير والجودة وتقارير الموقع",
                           deps=("finance",), perms=("construction", "approve_ipc"),
                           prefixes=("/api/ipcs", "/api/change-orders", "/api/ncrs", "/api/site-reports", "/api/construction"))),

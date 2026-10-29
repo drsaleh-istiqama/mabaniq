@@ -32,7 +32,7 @@ from .modules import PLAN_LABEL, booking_full, one, portal_owned
 from .seed import schedule
 
 router = APIRouter()
-KINDS = ("quote", "contract", "invoice", "receipt", "lease", "rent_receipt", "cheque_receipt")
+KINDS = ("quote", "contract", "invoice", "receipt", "lease", "rent_receipt", "cheque_receipt", "handover_report", "arrears_notice", "owner_statement")
 SHARE_DAYS = 30
 QUOTE_MAX_DISCOUNT_SALES = 0.02
 QUOTE_MAX_DISCOUNT_DECIDE = 0.15
@@ -220,6 +220,24 @@ def render(c, request: Request, kind: str, ref_id: int, by: str = "النظام"
         iss = _issue(c, kind, ref_id, d["receipt_no"], {k: d[k] for k in ("receipt_no", "number", "bank", "amount", "due_date", "received_on")}, by)
         d.update(iss)
         return pdfgen.render_cheque_receipt(b, d, _verify_url(request, d["verify_code"])), f"{d['receipt_no']}.pdf", d
+    if kind == "handover_report":
+        from .leasing_ops import handover_doc_row
+        d = handover_doc_row(c, ref_id)
+        iss = _issue(c, kind, ref_id, d["number"], {k: d[k] for k in ("number", "kind", "at", "keys", "condition", "deductions")} | {"readings": [(r["meter_id"], r["reading"]) for r in d["readings"]]}, by)
+        d.update(iss)
+        return pdfgen.render_handover(b, d, _verify_url(request, d["verify_code"])), f"{d['number']}.pdf", d
+    if kind == "arrears_notice":
+        from .leasing_ops import notice_doc_row
+        d = notice_doc_row(c, ref_id)
+        iss = _issue(c, kind, ref_id, d["number"], {k: d[k] for k in ("number", "kind", "issued", "cure_by", "amount")}, by)
+        d.update(iss)
+        return pdfgen.render_arrears_notice(b, d, _verify_url(request, d["verify_code"])), f"{d['number']}.pdf", d
+    if kind == "owner_statement":
+        from .leasing_mgmt import statement_doc_row
+        d = statement_doc_row(c, ref_id)
+        iss = _issue(c, kind, ref_id, d["number"], {k: d[k] for k in ("number", "period", "kind", "collected", "expenses", "commission", "net")}, by)
+        d.update(iss)
+        return pdfgen.render_owner_statement(b, d, _verify_url(request, d["verify_code"])), f"{d['number']}.pdf", d
     raise HTTPException(404, "نوع المستند غير معروف")
 
 
@@ -230,7 +248,7 @@ def _pdf_response(pdf: bytes, filename: str, download: bool = False) -> Response
 
 
 STAFF_PERMS = {"quote": ("book", "inventory", "finance"), "contract": ("book", "finance", "kyc"), "invoice": ("invoices", "finance", "book"), "receipt": ("invoices", "finance", "book"),
-               "lease": ("leasing",), "rent_receipt": ("leasing",), "cheque_receipt": ("leasing",)}
+               "lease": ("leasing",), "rent_receipt": ("leasing",), "cheque_receipt": ("leasing",), "handover_report": ("leasing",), "arrears_notice": ("leasing",), "owner_statement": ("leasing",)}
 
 
 def _kind(kind: str) -> str:
@@ -396,7 +414,8 @@ def verify_page(tenant: str, code: str):
     if row and row["kind"] == "contract":
         k = c.execute("SELECT customer_signed_at FROM sale_contracts WHERE booking_id=?", (row["ref_id"],)).fetchone()
         status = "موقَّع من العميل" if k and k["customer_signed_at"] else "غير موقَّع"
-    kind_ar = {"quote": "عرض سعر", "contract": "عقد بيع", "invoice": "فاتورة", "receipt": "إيصال استلام", "lease": "عقد إيجار", "rent_receipt": "إيصال استلام إيجار", "cheque_receipt": "إيصال استلام شيك"}
+    kind_ar = {"quote": "عرض سعر", "contract": "عقد بيع", "invoice": "فاتورة", "receipt": "إيصال استلام", "lease": "عقد إيجار", "rent_receipt": "إيصال استلام إيجار", "cheque_receipt": "إيصال استلام شيك",
+               "handover_report": "محضر تسليم واستلام", "arrears_notice": "إنذار متأخرات إيجار", "owner_statement": "كشف حساب مالك"}
     card = 'style="max-width:560px;margin:40px auto;background:#fff;border-radius:16px;padding:28px 26px;font-family:Tajawal,Segoe UI,Tahoma,sans-serif;color:#111827;direction:rtl;text-align:right"'
     if row:
         body = (f'<div style="color:#15803d;font-weight:700;font-size:18px">✓ مستند صادر من {_esc(name)} عبر منصة مبانيك</div>'

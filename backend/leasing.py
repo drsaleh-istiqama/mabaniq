@@ -138,7 +138,7 @@ def outstanding(c, lease_id: int) -> list[dict]:
 
 
 def apply_payment(c, lease_id: int, amount: float, paid_on: dt.date, method: str | None, reference: str | None, by: str, due_id: int | None = None,
-                  cheque_id: int | None = None, note: str | None = None) -> dict:
+                  cheque_id: int | None = None, note: str | None = None, import_key: str | None = None, receipted: bool = True) -> dict:
     """Record a receipt. With `due_id` the amount settles that due (partial allowed); without it, it is spread over the oldest unpaid dues first
     (an advance payment covers several). One receipt number for the whole movement."""
     amount = r3(amount)
@@ -162,20 +162,22 @@ def apply_payment(c, lease_id: int, amount: float, paid_on: dt.date, method: str
         if room <= EPS:
             continue
         take = r3(min(left, room))
-        plan.append((d["id"], take))
+        plan.append((d["id"], take, d["due"], d.get("kind")))
         left = r3(left - take)
         if left <= EPS:
             break
     if left > EPS or not plan:
         raise HTTPException(409, "المبلغ يتجاوز المتبقي على " + ("هذا الاستحقاق" if due_id is not None else "العقد"))
-    receipt = f"RC-{paid_on.year}-{next_no(c, f'receipt:{paid_on.year}'):05d}"
+    receipt = f"RC-{paid_on.year}-{next_no(c, f'receipt:{paid_on.year}'):05d}" if receipted else None
     ids = []
-    for did, take in plan:
-        ids.append(c.execute("INSERT INTO rent_payments(due_id,lease_id,amount,paid_on,method,reference,cheque_id,receipt_no,recorded_by,note,created) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
-                             (did, lease_id, take, paid_on.isoformat(), method, reference, cheque_id, receipt, by, note, now_s())).lastrowid)
+    for i, (did, take, due_date, dkind) in enumerate(plan):
+        ids.append(c.execute("INSERT INTO rent_payments(due_id,lease_id,amount,paid_on,method,reference,cheque_id,receipt_no,recorded_by,note,created,import_key) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+                             (did, lease_id, take, paid_on.isoformat(), method, reference, cheque_id, receipt, by, note, now_s(), f"{import_key}:{i}" if import_key else None)).lastrowid)
         refresh_due(c, did)
-    audit(c, "تحصيل إيجار", f"{receipt} · عقد {lease['number'] or lease_id} · {amount:,.3f} ر.ع · {METHOD_LABEL.get(method, 'طريقة غير موثَّقة')}")
-    return {"receipt_no": receipt, "payment_ids": ids, "first_id": ids[0], "applied": [{"due_id": d, "amount": a} for d, a in plan], "amount": amount}
+        from .leasing_ops import charity_accrue  # late-payment charity, only when the lease carries the clause (phase 2b)
+        charity_accrue(c, lease, did, due_date, dkind, take, paid_on)
+    audit(c, "تحصيل إيجار", f"{receipt or 'بلا إيصال (استيراد)'} · عقد {lease['number'] or lease_id} · {amount:,.3f} ر.ع · {METHOD_LABEL.get(method, 'طريقة غير موثَّقة')}")
+    return {"receipt_no": receipt, "payment_ids": ids, "first_id": ids[0], "applied": [{"due_id": d[0], "amount": d[1]} for d in plan], "amount": amount}
 
 
 def reverse_payment(c, payment_id: int, reason: str, by: str) -> dict:
@@ -187,6 +189,8 @@ def reverse_payment(c, payment_id: int, reason: str, by: str) -> dict:
     rid = c.execute("INSERT INTO rent_payments(due_id,lease_id,amount,paid_on,method,reference,cheque_id,receipt_no,recorded_by,reverses_id,note,created) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
                     (p["due_id"], p["lease_id"], -p["amount"], today().isoformat(), p["method"], p["reference"], p["cheque_id"], None, by, payment_id, reason, now_s())).lastrowid
     refresh_due(c, p["due_id"])
+    from .leasing_ops import charity_reverse
+    charity_reverse(c, p)
     audit(c, "عكس حركة تحصيل", f"{p['receipt_no'] or payment_id} · {p['amount']:,.3f} ر.ع · {reason}")
     return {"id": rid}
 
@@ -624,7 +628,7 @@ def _overlap(c, unit_id: int, start: dt.date, end: dt.date, skip: int | None = N
                           (unit_id, end.isoformat(), start.isoformat(), skip or 0)).fetchone())
 
 
-def create_lease(c, b: LeaseNew, u: dict, source="manual", bill_deposit=True) -> int:
+def create_lease(c, b: LeaseNew, u: dict, source="manual", bill_deposit=True, number: str | None = None) -> int:
     unit = one(c, "SELECT * FROM units WHERE id=? AND retained=1", (b.unit_id,), "الوحدة ليست ضمن محفظة التأجير")
     rents, sch = _plan(b)
     end = addm(b.start, b.months) - dt.timedelta(days=1)
@@ -644,7 +648,7 @@ def create_lease(c, b: LeaseNew, u: dict, source="manual", bill_deposit=True) ->
     if tid is None:
         tid = c.execute(f"INSERT INTO tenants_l({TENANT_SQL_COLS}) VALUES({','.join('?' * 16)})", _tenant_cols(b.tenant)).lastrowid
     year = b.start.year
-    number = f"LS-{year}-{next_no(c, f'lease:{year}'):04d}"
+    number = number or f"LS-{year}-{next_no(c, f'lease:{year}'):04d}"  # an imported lease keeps the number it already has
     lid = c.execute("""INSERT INTO leases(unit_id,tenant_id,start,"end",annual_rent,frequency,deposit,status,municipality_ref,number,kind,prep_free_days,rent_start,months,
                                            deposit_state,charity_clause,source,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                     (b.unit_id, tid, b.start.isoformat(), end.isoformat(), rents[0], b.frequency, r3(b.deposit), "draft", b.municipality_ref, number, b.kind or unit["use"],
@@ -679,6 +683,9 @@ def sign_lease(c, lid: int, u: dict, signed_at: dt.date | None = None) -> None:
         c.execute("INSERT INTO rent_dues(lease_id,due,amount,kind,year_no,label) VALUES(?,?,?,?,?,?)", (lid, l["start"], l["deposit"], "deposit", 1, "التأمين"))
     c.execute("UPDATE leases SET status='active', signed_at=? WHERE id=?", ((signed_at or today()).isoformat(), lid))
     event(c, lid, "sign", f"وُقِّع العقد · {len(sch)} دفعة", u["name"])
+    if l["renewed_from"]:  # a signed renewal closes the lease it continues; its deposit moves with the tenant (no second deposit due is billed)
+        c.execute("UPDATE leases SET status='renewed', deposit_state=CASE WHEN COALESCE(deposit,0)>0 THEN 'transferred' ELSE deposit_state END WHERE id=? AND status IN ('active','expired')", (l["renewed_from"],))
+        event(c, l["renewed_from"], "renewed", f"جُدِّد بالعقد {l['number']}", u["name"])
     audit(c, "توقيع عقد إيجار", f"{l['number']} · {len(sch)} دفعة")
 
 
@@ -993,6 +1000,8 @@ def reminders_due_all() -> int:
                 last = c.execute("SELECT v FROM settings WHERE k='lea:reminders_last_run'").fetchone()
                 if not last or last["v"][:10] < today().isoformat():
                     n += reminders(c)
+                    from .leasing_ops import daily
+                    daily(c)
                     c.execute("INSERT OR REPLACE INTO settings VALUES(?,?)", ("lea:reminders_last_run", now_s()))
                     c.commit()
             finally:

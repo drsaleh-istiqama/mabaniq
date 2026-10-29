@@ -83,7 +83,7 @@ def mask(value, keep: int = 4) -> str | None:
     return "•" * max(2, len(v) - keep) + v[-keep:]
 
 
-ENCRYPTED_COLUMNS = {"customers": ("id_number", "dob"), "tenants_l": ("id_number", "rep_id_number"), "owners": ("id_number", "iban")}
+ENCRYPTED_COLUMNS = {"customers": ("id_number", "dob"), "tenants_l": ("id_number", "rep_id_number"), "owners": ("id_number", "iban"), "vendors": ("iban",)}
 
 
 def encrypt_existing(c) -> int:

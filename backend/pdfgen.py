@@ -26,7 +26,8 @@ INK = (23, 32, 48)
 MUTED = (110, 120, 135)
 LINE = (210, 214, 222)
 
-KIND_TITLES = {"quote": "عرض سعر", "contract": "عقد بيع وحدة عقارية", "invoice": "فاتورة", "tax_invoice": "فاتورة ضريبية", "receipt": "إيصال استلام", "lease": "عقد إيجار", "rent_receipt": "إيصال استلام إيجار", "cheque_receipt": "إيصال استلام شيك"}
+KIND_TITLES = {"quote": "عرض سعر", "contract": "عقد بيع وحدة عقارية", "invoice": "فاتورة", "tax_invoice": "فاتورة ضريبية", "receipt": "إيصال استلام", "lease": "عقد إيجار", "rent_receipt": "إيصال استلام إيجار", "cheque_receipt": "إيصال استلام شيك",
+               "handover_report": "محضر تسليم واستلام", "arrears_notice": "إنذار متأخرات إيجار", "owner_statement": "كشف حساب مالك"}
 
 
 def hijri(d: dt.date | str | None) -> str:
@@ -388,6 +389,83 @@ def render_cheque_receipt(brand: dict, q: dict, verify_url: str) -> bytes:
           ("قيمة الشيك", money(q["amount"])), ("تاريخ استحقاق الشيك", hijri(q["due_date"])), ("العقد", l["number"]), ("الوحدة", l["unit"])])
     p.para("هذا الإيصال يثبت استلام الشيك فقط ولا يثبت السداد؛ تُحتسب الدفعة مسدّدة عند صرف الشيك فعليًا ويصدر عندها إيصال استلام إيجار.", 9, bold=True)
     _common_end(p, ("المستلم", q.get("created_by") or "المحصِّل"), brand.get("name") or "المؤجِّر")
+    return bytes(p.output())
+
+
+def render_handover(brand: dict, h: dict, verify_url: str) -> bytes:
+    """0.22.0 — hand-over (in) / take-back (out) report: condition, keys, meter readings with the consumption between the two reports and, for «out», the deductions
+    the deposit settlement may use (each with the document that proves it)."""
+    p = Doc(brand, "handover_report", h["number"], verify_url, h["verify_code"])
+    p.add_page()
+    l = h["lease"]
+    out = h["kind"] == "out"
+    p.heading(("محضر استلام العين من المستأجر " if out else "محضر تسليم العين للمستأجر ") + h["number"], f"التاريخ: {hijri(h['at'])}")
+    p.kv([("المستأجر", l["tenant"]["name"]), ("العقد", l["number"]), ("الوحدة", l["unit"]), ("المشروع", l["project"]), ("عدد المفاتيح", h.get("keys")), ("أعدّه", h.get("by_user"))])
+    if h["condition"]:
+        p.heading("حالة العين", "")
+        p.grid(["البند", "الحالة"], [[k, v] for k, v in h["condition"].items()], widths=(3, 6))
+    if h["readings"]:
+        names = {"water": "ماء", "electricity": "كهرباء", "gas": "غاز", "other": "أخرى"}
+        p.heading("قراءات العدّادات", "")
+        p.grid(["العدّاد", "الرقم", "القراءة", "الاستهلاك خلال العقد"],
+               [[names.get(r.get("kind"), r.get("kind") or "—"), r.get("number") or "—", f"{r['reading']:g}", f"{r['consumption']:g}" if r.get("consumption") is not None else "—"] for r in h["readings"]],
+               widths=(2, 3, 2, 3))
+    if out and h["deductions"]:
+        p.heading("الخصومات المقترحة من التأمين", "")
+        rows_ = [[d["label"], d["ref"], money(d["amount"])] for d in h["deductions"]]
+        rows_.append(["الإجمالي", "", money(sum(d["amount"] for d in h["deductions"]))])
+        p.grid(["البند", "المستند المثبت", "المبلغ"], rows_, widths=(4, 4, 2), bold_last=True)
+        p.para("لا تُخصم من التأمين إلا البنود الموثَّقة بمستند؛ والمتبقي يُردّ إلى المستأجر.", 8.5, muted=True)
+    if h.get("notes"):
+        p.para("ملاحظات: " + h["notes"])
+    if not h.get("approved"):
+        p.para("تنبيه: هذا النموذج يحتاج اعتماد المستشار الشرعي والقانوني قبل الاستعمال الرسمي.", 9, bold=True)
+    _common_end(p, ("المستأجر", l["tenant"]["name"]), brand.get("name") or "المؤجِّر")
+    return bytes(p.output())
+
+
+def render_arrears_notice(brand: dict, n: dict, verify_url: str) -> bytes:
+    """0.22.0 — numbered notice for rent arrears (reminder / formal / final). Money is stated as owed and nothing is added to it: no interest, no fee."""
+    p = Doc(brand, "arrears_notice", n["number"], verify_url, n["verify_code"])
+    p.add_page()
+    l = n["lease"]
+    p.heading(f"{n['kind_label']} {n['number']}", f"تاريخ الإصدار: {hijri(n['issued'])} · مهلة السداد حتى {hijri(n['cure_by'])}")
+    p.kv([("المستأجر", l["tenant"]["name"]), ("العقد", l["number"]), ("الوحدة", l["unit"]), ("المشروع", l["project"]), ("إجمالي المتأخرات", money(n["amount"])), ("مهلة السداد", hijri(n["cure_by"]))])
+    p.grid(["الدفعة", "تاريخ الاستحقاق", "المتأخر"], [[x["label"] or "إيجار", x["due"], money(x["balance"])] for x in n["late_dues"]] + [["الإجمالي", "", money(n["amount"])]], widths=(4, 3, 3), bold_last=True)
+    body = {"reminder": "نذكّركم بوجود دفعات إيجار مستحقة لم تُسدَّد، ونأمل المبادرة إلى سدادها في المهلة المذكورة.",
+            "formal": "ننذركم بسداد الدفعات المتأخرة المبيّنة أعلاه خلال المهلة المحددة، وإلا اتُّخذت بحقكم الإجراءات النظامية المقررة بموجب العقد والقانون.",
+            "final": "هذا إنذار نهائي: إن لم تُسدَّد المتأخرات كاملة خلال المهلة المحددة فللمؤجِّر الحق في إنهاء العقد وطلب الإخلاء واتخاذ ما يلزم نظامًا، دون إخلال بحقه في المطالبة بما يستحق."}[n["kind"]]
+    p.para(body)
+    p.para("لا تُحتسب على هذه المبالغ أي فوائد أو رسوم تأخير" + ("؛ ويسري شرط التبرع بالتأخير المنصوص عليه في العقد وحده." if l.get("charity_clause") else "."), 9, muted=True)
+    if n.get("note"):
+        p.para(n["note"])
+    if not n.get("approved"):
+        p.para("تنبيه: صيغة هذا الإنذار تحتاج اعتماد المستشار القانوني قبل الاستعمال الرسمي.", 9, bold=True)
+    _common_end(p, ("المستأجر (علم بالاستلام)", l["tenant"]["name"]), brand.get("name") or "المؤجِّر")
+    return bytes(p.output())
+
+
+def render_owner_statement(brand: dict, s: dict, verify_url: str) -> bytes:
+    """0.22.0 — monthly owner statement: collections of his units − the expenses charged to him − the management commission = the net transferred to him."""
+    p = Doc(brand, "owner_statement", s["number"], verify_url, s["verify_code"])
+    p.add_page()
+    o, d = s["owner"], s["detail"]
+    adj = s["kind"] == "adjustment"
+    p.heading(("كشف حساب مالك (تعديلي) " if adj else "كشف حساب مالك ") + s["number"], f"عن شهر {s['period']} · {hijri(s['period'] + '-01')} · صدر {hijri(s['issued_at'])}")
+    p.kv([("المالك", o["name"]), ("نسبة عمولة الإدارة", f"{o['mgmt_fee_pct']:g}٪ من " + ("المحصَّل" if (o["mgmt_basis"] or "collected") == "collected" else "المفوتر")), ("أصدره", s.get("issued_by"))])
+    if d.get("units"):
+        p.heading("المحصَّل من وحدات المالك", "")
+        p.grid(["الوحدة", "المستأجر", "المحصَّل"], [[x["unit"], x["tenant"], money(x["collected"])] for x in d["units"]], widths=(3, 5, 3))
+    if d.get("expense_rows"):
+        p.heading("المصاريف المحمَّلة على المالك", "")
+        p.grid(["التاريخ", "الوحدة", "البند", "المبلغ"], [[e["spent_on"], e.get("unit") or "—", e["category"], money(e["amount"])] for e in d["expense_rows"]], widths=(3, 2, 4, 3))
+    p.heading("الصافي", "")
+    p.grid(["البند", "المبلغ"], [["المحصَّل", money(s["collected"])], ["− المصاريف", money(s["expenses"])], ["− عمولة الإدارة", money(s["commission"])], ["الصافي المحوَّل إلى المالك", money(s["net"])]],
+           widths=(6, 3), bold_last=True)
+    if adj:
+        p.para("هذا كشف تعديلي: يبيّن الفرق عمّا صدر في الكشوف السابقة لهذا الشهر (" + "، ".join(x["number"] for x in s["prior"]) + ") ولا يلغيها.", 9, muted=True)
+    p.para("لا تدخل ودائع المستأجرين ضمن المحصَّل؛ فهي أمانة تُسوّى عند انتهاء العقد.", 8.5, muted=True)
+    _common_end(p, ("المالك", o["name"]), brand.get("name") or "المدير")
     return bytes(p.output())
 
 

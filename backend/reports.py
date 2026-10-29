@@ -556,6 +556,11 @@ DATASET_MODULE = {"bookings": "sales", "installments": "sales", "payments": "sal
                   "invoices": "finance", "charity": "finance", "service": "handover"}
 
 
+from .leasing_reports import register as _register_leasing  # noqa: E402 — 0.22.0: the leasing module's ready reports
+
+_register_leasing(READY, READY_MODULE)
+
+
 def _on(table: dict, key: str, c) -> bool:
     from . import registry
     m = table.get(key)

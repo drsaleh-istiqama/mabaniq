@@ -35,10 +35,11 @@ ROLES = {
     "broker": "وسيط عقاري",
     "investor": "مستثمر / ممول",
     "customer": "عميل",
+    "property_manager": "مدير عقاري (خارجي)",
 }
 ALL_STAFF = {"view", "inventory", "book", "leads", "finance", "confirm", "decide", "construction", "approve_ipc",
              "service", "admin", "audit", "land", "permits", "kyc", "brokers", "invoices", "handover", "oa",
-             "leasing", "market", "reports", "notify", "users", "docs"}
+             "leasing", "leasing_approve", "market", "reports", "notify", "users", "docs"}
 PERMS = {
     "admin": ALL_STAFF,
     "sales": {"view", "inventory", "book", "leads", "service", "kyc", "brokers", "market", "notify", "docs"},
@@ -48,6 +49,7 @@ PERMS = {
     "broker": {"broker_portal"},
     "investor": {"reports"},
     "customer": {"portal"},
+    "property_manager": {"leasing_pm"},  # 0.22.0 — external manager: only /api/pm, only inside his user_scopes
 }
 TWO_FA_REQUIRED = {"admin", "finance"}
 

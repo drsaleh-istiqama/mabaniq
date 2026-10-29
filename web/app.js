@@ -46,10 +46,10 @@ const scoreC = v => v >= 75 ? 'p-ok' : v >= 50 ? 'p-w' : 'p-b';
 
 /* ---------------- الحالة والتنقل ---------------- */
 const S = {screen: 'ov', projects: [], proj: null, bld: null, plan: 0, me: null};
-const SCREEN_PERM = {lea: 'leasing', ov: 'view', inv: 'inventory', crm: 'leads', fin: 'finance', con: 'construction', svc: 'service', log: 'audit', pre: 'permits', sal: 'kyc', bill: 'invoices', post: 'handover', rep: 'reports', mk: 'leads', adm: 'view'};
+const SCREEN_PERM = {pmg: 'leasing_pm', lea: 'leasing', ov: 'view', inv: 'inventory', crm: 'leads', fin: 'finance', con: 'construction', svc: 'service', log: 'audit', pre: 'permits', sal: 'kyc', bill: 'invoices', post: 'handover', rep: 'reports', mk: 'leads', adm: 'view'};
 const SCREEN_ANY = {pre: ['permits', 'land'], post: ['handover', 'oa', 'leasing', 'service'], sal: ['kyc', 'brokers', 'market'], rep: ['reports', 'finance', 'view'], mk: ['leads', 'inventory', 'reports']};  // Unit 7: reports for every staff role (the API filters by permission), marketing for sales/inventory/reports
 const can = p => S.me?.perms.includes(p);
-const SCREEN_MOD = {lea: ['leasing'], pre: ['land'], inv: [], crm: ['sales'], mk: ['marketing'], sal: ['sales'], con: ['construction'], post: ['handover', 'leasing'], svc: ['handover'], fin: ['finance'], bill: ['finance'], rep: ['reports']};  // 0.20.0: a screen needs one of its modules (none listed = core)
+const SCREEN_MOD = {pmg: ['leasing'], lea: ['leasing'], pre: ['land'], inv: [], crm: ['sales'], mk: ['marketing'], sal: ['sales'], con: ['construction'], post: ['handover', 'leasing'], svc: ['handover'], fin: ['finance'], bill: ['finance'], rep: ['reports']};  // 0.20.0: a screen needs one of its modules (none listed = core)
 const modOn = m => (S.me?.modules || []).includes(m);
 const canS = s => (SCREEN_ANY[s] || [SCREEN_PERM[s]]).some(can) && (!(SCREEN_MOD[s] || []).length || SCREEN_MOD[s].some(modOn));
 function go(s) {
@@ -59,7 +59,7 @@ function go(s) {
   $$('.scr').forEach(x => x.classList.toggle('on', x.id === s));
   localStorage.setItem('mbq-screen', s);
   ({ov: loadOverview, inv: loadInventory, crm: loadCRM, fin: loadFinance, con: () => { loadIPC(); EXT.l_conx(); }, svc: loadService, log: loadAudit,
-    lea: () => EXT.l_lea(), pre: () => EXT.l_pre(), sal: () => EXT.l_sal(), bill: () => EXT.l_bill(), post: () => EXT.l_post(), rep: () => EXT.l_rep(), mk: () => EXT.l_mk(), adm: () => EXT.l_adm()})[s]?.()?.catch?.(e => toast(e.message, 1));
+    pmg: () => EXT.l_pm(), lea: () => EXT.l_lea(), pre: () => EXT.l_pre(), sal: () => EXT.l_sal(), bill: () => EXT.l_bill(), post: () => EXT.l_post(), rep: () => EXT.l_rep(), mk: () => EXT.l_mk(), adm: () => EXT.l_adm()})[s]?.()?.catch?.(e => toast(e.message, 1));
   crumb(); shell(s);
 }
 $$('[data-s]').forEach(b => b.onclick = e => { e.preventDefault(); document.body.classList.remove('nav-open'); go(b.dataset.s); });
@@ -72,6 +72,7 @@ const META = {
   con: ['2 · البيع والإنشاء', 'الإنشاء والمستخلصات', 'التحقق من نسب الإنجاز قبل الصرف، والجدول الزمني، وأوامر التغيير وتقارير الموقع.'],
   fin: ['عبر الدورة · المالية', 'السيولة والتعثر', 'أرصدة حسابات الضمان المتوقعة لاثني عشر شهرًا، والعملاء المعرّضون للتعثر.'],
   bill: ['عبر الدورة · المالية', 'الفواتير والضمان', 'الفواتير والضريبة، والغرامات والفسخ، والمطابقة البنكية وحساب الضمان والتصدير المحاسبي.'],
+  pmg: ['3 · التسليم والتشغيل', 'محفظتي (مدير عقاري)', 'العقود والتحصيل داخل نطاقك فقط.'],
   lea: ['3 · التسليم والتشغيل', 'الإيجارات', 'المحفظة والعقود والمستأجرون والتحصيل والشيكات والمتأخرات.'],
   post: ['3 · التسليم والتشغيل', 'التسليم والأملاك', 'التسليم وملاحظات الفحص، ونقل الملكية، والمرافق واتحاد الملاك والتأجير.'],
   svc: ['3 · التسليم والتشغيل', 'خدمة العملاء', 'طلبات الصيانة وإعادة البيع الواردة من تطبيق العميل.'],
@@ -506,6 +507,7 @@ function groupsVis() { $$('.side .grp').forEach(g => { if (g.id === 'pfSec') ret
     $('#resetBtn').classList.toggle('hidden', !can('admin')); groupsVis();
     if (S.me.role === 'broker') { location.href = '/broker'; return; }
     if (S.me.role === 'investor') { S.screen = 'rep'; }
+    if (S.me.role === 'property_manager') { S.screen = 'pmg'; }
     if (S.me.must_change) { EXT.changePw(true); return; }
     if (S.me.needs_2fa) { await EXT.setup2fa(); $('#mbox').insertAdjacentHTML('afterbegin', '<div class="ai"><b class="k">مطلوب:</b> التحقق الثنائي إلزامي لدورك قبل الوصول إلى البيانات.</div>'); return; }
     await refreshAll(); } catch (e) { toast('تعذّر الاتصال بالخادم: ' + e.message, 1); }
@@ -800,7 +802,7 @@ const LDOC = (kind, id, label) => `<a class="btn" href="/api/docs/${kind}/${id}.
 const num = v => (v === '' || v == null) ? null : +v;
 
 EXT.l_lea = async function () {
-  const tabs = [['ov', 'نظرة عامة'], ['ls', 'العقود'], ['un', 'الوحدات'], ['tn', 'المستأجرون'], ['cq', 'الشيكات'], ['py', 'التحصيل'], ['ow', 'الملاك']], el = $('#lea'), k = this.cur.lea, W = can('leasing');
+  const tabs = [['ov', 'نظرة عامة'], ['ls', 'العقود'], ['un', 'الوحدات'], ['tn', 'المستأجرون'], ['cq', 'الشيكات'], ['py', 'التحصيل'], ['ar', 'المتأخرات والتبرع'], ['mt', 'الصيانة والمصاريف'], ['ow', 'الملاك والكشوف'], ...(can('leasing_approve') ? [['im', 'الاستيراد']] : [])], el = $('#lea'), k = this.cur.lea, W = can('leasing');
   el.innerHTML = SUB0('lea', tabs, k) + '<div id="leaB">…</div>';
   const B = $('#leaB');
   if (k === 'ov') {
@@ -843,21 +845,26 @@ EXT.l_lea = async function () {
   } else if (k === 'py') {
     const P = await api('/lea/payments?limit=200');
     B.innerHTML = BOX('دفتر التحصيل', T(['الإيصال', 'التاريخ', 'العقد', 'المستأجر', 'المبلغ', 'الطريقة', 'المرجع', ''], P.map(p => `<tr><td>${p.receipt_no ? `<span class="num">${esc(p.receipt_no)}</span>` : p.reverses_id ? pill('حركة عكسية', 'p-w') : '—'}</td><td>${fmtDate(p.paid_on)}</td><td>${esc(p.lease_no || '')}<br><span class="muted">${esc(p.unit)}</span></td><td>${esc(p.tenant)}</td><td>${p.amount < 0 ? pill(OMR(p.amount), 'p-b') : OMR(p.amount)}</td><td>${esc(p.method_label)}</td><td>${esc(p.reference || p.note || '')}</td><td>${p.receipt_no ? LDOC('rent_receipt', p.id, 'إيصال') : ''} ${W && p.amount > 0 ? `<button class="btn" data-call="EXT.leaReverse" data-args="${J([p.id])}">عكس</button>` : ''}</td></tr>`), 'لا حركات.'));
+  } else if (k === 'ar') {
+    await EXT.leaArrearsTab(B);
+  } else if (k === 'mt') {
+    await EXT.leaMaintTab(B);
   } else if (k === 'ow') {
-    const O = await api('/lea/owners');
-    B.innerHTML = BOX('الملاك', T(['المالك', 'النوع', 'الهاتف', 'الهوية', 'عمولة الإدارة', 'وحدات'], O.map(o => `<tr><td><b>${esc(o.name)}</b></td><td>${o.kind === 'own' ? 'الشركة (مملوك)' : 'مالك آخر'}</td><td>${esc(o.phone || '—')}</td><td><span class="num">${esc(o.id_number || '—')}</span></td><td>${o.kind === 'own' ? '—' : pct(o.mgmt_fee_pct) + ' من ' + (o.mgmt_basis === 'collected' ? 'المحصَّل' : 'المفوتَر')}</td><td>${N(o.units)}</td></tr>`)),
-      W ? '<button class="btn p" data-call="EXT.leaOwnerForm">+ مالك</button>' : '');
+    await EXT.leaOwnersTab(B);
+  } else if (k === 'im') {
+    await EXT.leaImportTab(B);
   }
 };
 
 EXT.leaRemind = async () => { await tryDo(() => api('/lea/reminders/run', {method: 'POST'}), r => `${N(r.created)} تنبيه جديد`); EXT.l_lea(); };
 
 EXT.leaOpen = async function (id) {
-  const d = await api('/lea/leases/' + id), W = can('leasing'), t = d.tenant;
+  const [d, ops] = await Promise.all([api('/lea/leases/' + id), api(`/lea/leases/${id}/ops`)]), W = can('leasing'), t = d.tenant;
   const dues = d.dues.map(x => `<tr><td>${fmtDate(x.due)}<br><span class="muted">${esc(x.label || '')}</span></td><td>${OMR(x.amount)}</td><td>${OMR(x.paid)}</td><td>${x.state === 'paid' ? pill('مسدد', 'p-ok') : x.state === 'late' ? pill('متأخر', 'p-b') : pill('قادم', 'p-bl')}${x.cheque ? '<br>' + pill('شيك ' + esc(x.cheque.number), 'p-w') : ''}</td><td>${x.balance > 0.0005 && W && d.status !== 'draft' ? `<button class="btn" data-call="EXT.leaPay" data-args="${J([d.id, x.id, x.balance])}">تحصيل</button>` : ''}</td></tr>`);
   insp(`${d.number} · ${d.unit}`, `<h3>${esc(t.name)}</h3><div class="btns" style="margin-bottom:10px">${pill(esc(d.status_label), LLSP[d.status] || 'p-w')} ${LDOC('lease', d.id, 'عقد الإيجار PDF')}${d.status === 'draft' && W ? ` <button class="btn p" data-call="EXT.leaSign" data-args="${J([d.id])}">توقيع العقد وتوليد الدفعات</button>` : ''}</div>
    <dl class="kv"><dt>الفترة</dt><dd>${fmtDate(d.start)} ← ${fmtDate(d.end)}</dd><dt>بداية احتساب الإيجار</dt><dd>${fmtDate(d.rent_start)}${d.prep_free_days ? ` (تجهيز ${N(d.prep_free_days)} يومًا)` : ''}</dd><dt>الإيجار السنوي</dt><dd>${d.terms.map(x => `س${x.year_no}: ${OMR(x.annual_rent)}`).join(' · ')}</dd><dt>التأمين</dt><dd>${d.deposit ? OMR(d.deposit) : '—'}</dd><dt>مرجع البلدية</dt><dd>${esc(d.municipality_ref || 'لم يُوثَّق بعد')}</dd><dt>الرصيد</dt><dd>مستحق ${OMR(d.totals.billed)} · مسدد ${OMR(d.totals.paid)} · متأخر ${d.totals.arrears ? pill(OMR(d.totals.arrears), 'p-b') : '—'}</dd></dl>
    ${W && d.status !== 'draft' ? `<div class="btns" style="margin:10px 0"><button class="btn p" data-call="EXT.leaPay" data-args="${J([d.id, null, d.totals.balance])}">تحصيل دفعة (تُوزَّع على الأقدم)</button> <button class="btn" data-call="EXT.leaCheque" data-args="${J([d.id])}">استلام شيك</button></div>` : ''}
+   ${EXT.leaOpsHtml(d, ops)}
    <b>جدول الدفعات</b>${T(['الاستحقاق', 'المبلغ', 'المسدد', 'الحالة', ''], dues)}
    <b>حركات التحصيل</b>${T(['الإيصال', 'التاريخ', 'المبلغ', 'الطريقة'], d.payments.map(p => `<tr><td>${p.receipt_no ? LDOC('rent_receipt', p.id, esc(p.receipt_no)) : pill(p.reverses_id ? 'عكسية' : 'مرحَّلة', 'p-w')}</td><td>${fmtDate(p.paid_on)}</td><td>${p.amount < 0 ? pill(OMR(p.amount), 'p-b') : OMR(p.amount)}</td><td>${esc(LMETH[p.method] || 'غير موثَّقة')}</td></tr>`), 'لا حركات.')}
    ${d.cheques.length ? `<b>الشيكات</b>${T(['الشيك', 'المبلغ', 'الاستحقاق', 'الحالة'], d.cheques.map(q => `<tr><td>${esc(q.number)} · ${esc(q.bank)}</td><td>${OMR(q.amount)}</td><td>${fmtDate(q.due_date)}</td><td>${pill(esc(q.status), LCQP[q.status])}</td></tr>`))}` : ''}
@@ -950,6 +957,217 @@ EXT.leaNew = async function () {
     $('#npv').innerHTML = `<p class="muted">النهاية ${fmtDate(r.end)} · بداية احتساب الإيجار ${fmtDate(r.rent_start)} · الإجمالي ${OMR(r.total)}</p>` + T(['الدفعة', 'الاستحقاق', 'المبلغ'], r.schedule.map(d => `<tr><td>${esc(d.label)}</td><td>${fmtDate(d.due)}</td><td>${OMR(d.amount)}</td></tr>`)); } catch (e) { $('#nerr').textContent = e.message; } };
   const save = sign => async () => { try { const r = await api('/lea/leases', {method: 'POST', body: body(sign)}); closeModal(); toast(sign ? 'وُقِّع العقد وولِّدت الدفعات' : 'حُفظت المسودة'); EXT.cur.lea = 'ls'; EXT.l_lea(); EXT.leaOpen(r.id); } catch (e) { $('#nerr').textContent = e.message; } };
   $('#ndr').onclick = save(false); $('#nsg').onclick = save(true);
+};
+
+/* ================================================================ عمليات الإيجار (0.22.0) */
+const tdy = () => new Date().toISOString().slice(0, 10);
+const A_ = () => can('leasing_approve');
+const NK = {reminder: 'تذكير', formal: 'إنذار رسمي', final: 'إنذار نهائي'};
+const lines = v => (v || '').split('\n').map(s => s.trim()).filter(Boolean);
+const errBox = id => `<div class="err" id="${id}"></div>`;
+const goBtns = (go, extra = '') => `<div class="btns" style="margin-top:12px"><button class="btn p" id="${go}">${extra || 'تنفيذ'}</button> <button class="btn" data-call="closeModal">إلغاء</button></div>`;
+const post = (path, body) => api(path, {method: 'POST', body});
+const after = (lid, msg) => { closeModal(); toast(msg); EXT.l_lea(); if (lid) EXT.leaOpen(lid); };
+
+/* أزرار العمليات داخل نافذة العقد + أقسام المحاضر والإنذارات والخطط */
+EXT.leaOpsHtml = (d, ops) => {
+  const W = can('leasing'), act = d.status === 'active', closed = ['expired', 'terminated', 'evicted'].includes(d.status);
+  const b = [];
+  if (W && (act || d.status === 'expired') && !ops.renewed_to) b.push(['leaRenew', 'تجديد العقد']);
+  if (W && act) b.push(['leaTerm', 'إنهاء مبكر']);
+  if (act && A_() && ops.arrears > 0.0005) b.push(['leaEvict', 'إخلاء']);
+  if (W && d.status !== 'draft' && !ops.handovers.some(h => h.kind === 'in')) b.push(['leaHand', 'محضر تسليم', 'in']);
+  if (W && (closed || (act && d.end < tdy())) && !ops.handovers.some(h => h.kind === 'out')) b.push(['leaHand', 'محضر استلام', 'out']);
+  if (W && closed && ['held', 'recorded'].includes(ops.deposit.state)) b.push(['leaSettle', 'تسوية التأمين']);
+  if (W && ops.arrears > 0.0005 && d.status !== 'draft') b.push(['leaNotice', 'إنذار متأخرات']);
+  if (A_() && ops.arrears > 0.0005 && d.status !== 'draft') b.push(['leaPlan', 'خطة سداد']);
+  const dep = ops.deposit.state ? `<dt>حالة التأمين</dt><dd>${esc({held: 'محفوظ', recorded: 'مسجَّل', carried: 'انتقل للعقد المجدِّد', transferred: 'انتقل للعقد المجدِّد', returned: 'رُدّ كاملًا', partly_settled: 'رُدّ بعد خصومات', settled: 'استُنفد بخصومات موثَّقة'}[ops.deposit.state] || ops.deposit.state)}${ops.deposit.refund != null ? ` · المردود ${OMR(ops.deposit.refund)} · الخصومات ${OMR(ops.deposit.deducted)}` : ''}</dd>` : '';
+  return `<dl class="kv">${dep}${ops.renewed_to ? `<dt>جُدِّد بـ</dt><dd><button class="link" data-call="EXT.leaOpen" data-args="${J([ops.renewed_to.id])}">${esc(ops.renewed_to.number)}</button></dd>` : ''}${d.renewed_from ? `<dt>تجديد لعقد سابق</dt><dd><button class="link" data-call="EXT.leaOpen" data-args="${J([d.renewed_from])}">عرض</button></dd>` : ''}</dl>`
+    + (b.length ? `<div class="btns" style="margin:10px 0">${b.map(([fn, l, k]) => `<button class="btn" data-call="EXT.${fn}" data-args="${J(k ? [d.id, k] : [d.id])}">${l}</button>`).join(' ')}</div>` : '')
+    + (ops.handovers.length ? `<b>محاضر التسليم والاستلام</b>${T(['المحضر', 'التاريخ', 'مفاتيح', 'قراءات'], ops.handovers.map(h => `<tr><td>${LDOC('handover_report', h.id, h.kind === 'in' ? 'تسليم' : 'استلام')}</td><td>${fmtDate(h.at)}</td><td>${h.keys ?? '—'}</td><td>${h.readings.map(r => `${esc(r.number || '')}: ${r.reading}${r.consumption != null ? ` (+${r.consumption})` : ''}`).join(' · ') || '—'}</td></tr>`))}` : '')
+    + (ops.notices.length ? `<b>الإنذارات</b>${T(['الإنذار', 'المبلغ', 'المهلة', 'التسليم'], ops.notices.map(n => `<tr><td>${LDOC('arrears_notice', n.id, esc(n.number))}<br><span class="muted">${esc(n.kind_label)}</span></td><td>${OMR(n.amount)}</td><td>${fmtDate(n.cure_by)}</td><td>${n.sent_at ? fmtDate(n.sent_at) : W ? `<button class="btn" data-call="EXT.leaSent" data-args="${J([n.id, d.id])}">سُلِّم</button>` : '—'}</td></tr>`))}` : '')
+    + (ops.plans.length ? `<b>خطط السداد</b>${T(['الخطة', 'المبلغ', 'المسدَّد', 'الحالة'], ops.plans.map(p => `<tr><td>#${p.id} · ${fmtDate(p.agreed_on)}</td><td>${OMR(p.total)}</td><td>${OMR(p.paid)}</td><td>${pill({active: 'جارية', completed: 'مكتملة', broken: 'متعثرة'}[p.state], {active: 'p-bl', completed: 'p-ok', broken: 'p-b'}[p.state])}</td></tr>`))}` : '')
+    + (ops.charity.length ? `<b>تبرعات التأخير (ليست إيرادًا)</b>${T(['المبلغ', 'أيام التأخر', 'الحالة'], ops.charity.map(c => `<tr><td>${OMR(c.amount)}</td><td>${N(c.late_days)}</td><td>${esc({due: 'مستحق', collected: 'محصَّل', disbursed: 'مصروف', waived: 'مُعفى'}[c.status] || c.status)}</td></tr>`))}` : '');
+};
+
+EXT.leaRenew = lid => {
+  modal(`<h3>تجديد العقد</h3><p class="muted">عقد جديد يبدأ في اليوم التالي لنهاية الحالي ويستمر عليه؛ ينتقل التأمين مع المستأجر ولا يُفوتَر تأمين ثانٍ.</p><label>المدة (شهرًا)</label><input id="rm" inputmode="numeric" value="12"><label>الإيجار السنوي للسنة الأولى (اتركه فارغًا ليبقى آخر إيجار)</label><input id="rr" inputmode="decimal">
+   <label>زيادة سنوية (٪)</label><input id="re" inputmode="decimal" value="0"><label>تجهيز مجاني (أيام)</label><input id="rp" inputmode="numeric" value="0"><label><input type="checkbox" id="rs" checked> توقيع العقد الجديد الآن</label>${errBox('rerr')}${goBtns('rgo', 'تجديد')}`);
+  $('#rgo').onclick = async () => { try { const r = await post(`/lea/leases/${lid}/renew`, {months: +$('#rm').value, annual_rent: num($('#rr').value), escalation_pct: +$('#re').value, prep_free_days: +$('#rp').value, sign: $('#rs').checked}); closeModal(); toast('جُدِّد العقد'); EXT.cur.lea = 'ls'; EXT.l_lea(); EXT.leaOpen(r.id); } catch (e) { $('#rerr').textContent = e.message; } };
+};
+
+EXT.leaTerm = lid => {
+  modal(`<h3>إنهاء العقد مبكرًا</h3><p class="muted">تُلغى الدفعات التي تستحق بعد تاريخ الإنهاء (يبقى ما سُدِّد منها)، وتُلغى الشيكات المحفوظة المرتبطة بها.</p><label>تاريخ الإنهاء</label><input id="tt" type="date" value="${tdy()}"><label>السبب (إلزامي)</label><input id="tn"><label><input type="checkbox" id="tp"> احتساب الفترة الجارية بالأيام المستعملة فقط</label>
+   ${A_() ? '<label>مبلغ إنهاء متفق عليه (اختياري — قرار مدير)</label><input id="tf" inputmode="decimal" value="0">' : ''}${errBox('terr')}${goBtns('tgo', 'إنهاء العقد')}`);
+  $('#tgo').onclick = async () => { try { const r = await post(`/lea/leases/${lid}/terminate`, {on: $('#tt').value, note: $('#tn').value, prorate_last: $('#tp').checked, fee: $('#tf') ? +$('#tf').value : 0}); after(lid, `أُنهي العقد · أُلغيت ${N(r.cancelled_dues)} دفعة (${OMR(r.cancelled_amount)})`); } catch (e) { $('#terr').textContent = e.message; } };
+};
+EXT.leaEvict = lid => {
+  modal(`<h3>إخلاء المستأجر</h3><p class="muted">لا يتم إلا بعد إنذار نهائي انقضت مهلته مع بقاء المتأخرات — قرارك مسجَّل في التدقيق.</p><label>التاريخ</label><input id="et" type="date" value="${tdy()}"><label>مبررات القرار</label><input id="en">${errBox('eerr')}${goBtns('ego', 'تأكيد الإخلاء')}`);
+  $('#ego').onclick = async () => { try { await post(`/lea/leases/${lid}/evict`, {on: $('#et').value, note: $('#en').value}); after(lid, 'سُجّل الإخلاء'); } catch (e) { $('#eerr').textContent = e.message; } };
+};
+
+EXT.leaHand = async (lid, kind) => {
+  const d = await api('/lea/leases/' + lid), U = (await api('/lea/units')).units.find(u => u.id === d.unit_id), ms = U ? U.meters : [];
+  modal(`<h3>${kind === 'in' ? 'محضر تسليم العين للمستأجر' : 'محضر استلام العين من المستأجر'}</h3><label>التاريخ</label><input id="hd" type="date" value="${tdy()}"><label>عدد المفاتيح</label><input id="hk" inputmode="numeric">
+   <label>حالة العين (سطر لكل بند: البند: الحالة)</label><textarea id="hc" rows="4" placeholder="الجدران: سليمة&#10;المكيفات: تعمل"></textarea>
+   ${ms.length ? '<b>قراءات العدّادات</b>' + ms.map(m => `<label>${esc({water: 'ماء', electricity: 'كهرباء', gas: 'غاز', other: 'أخرى'}[m.kind] || m.kind)} ${esc(m.number)}</label><input class="hr" data-m="${m.id}" inputmode="decimal">`).join('') : '<p class="muted">لا عدّادات مسجَّلة لهذه الوحدة (أضفها من تبويب الوحدات).</p>'}
+   ${kind === 'out' ? '<label>الخصومات المقترحة من التأمين (سطر لكل خصم: البند | المبلغ | المستند المثبت)</label><textarea id="hx" rows="3" placeholder="إصلاح باب | 50 | فاتورة 114"></textarea>' : ''}<label>ملاحظات</label><input id="hn">${errBox('herr')}${goBtns('hgo', 'حفظ المحضر')}`);
+  $('#hgo').onclick = async () => { try {
+    const condition = Object.fromEntries(lines($('#hc').value).map(l => { const i = l.indexOf(':'); return i > 0 ? [l.slice(0, i).trim(), l.slice(i + 1).trim()] : [l, '—']; }));
+    const readings = [...document.querySelectorAll('.hr')].filter(i => i.value !== '').map(i => ({meter_id: +i.dataset.m, reading: +i.value}));
+    const deductions = kind === 'out' ? lines($('#hx').value).map(l => { const p = l.split('|').map(s => s.trim()); return {label: p[0], amount: +p[1], ref: p[2] || ''}; }) : [];
+    const r = await post(`/lea/leases/${lid}/handover`, {kind, at: $('#hd').value, keys: num($('#hk').value), condition, readings, deductions, notes: $('#hn').value});
+    modal(`<h3>✓ سُجّل المحضر</h3><div class="btns">${LDOC('handover_report', r.id, 'فتح المحضر PDF')} <button class="btn" data-call="closeModal">إغلاق</button></div>`); EXT.leaOpen(lid); } catch (e) { $('#herr').textContent = e.message; } };
+};
+
+EXT.leaSettle = async lid => {
+  const ops = await api(`/lea/leases/${lid}/ops`), o = ops.deposit, ho = ops.handovers.find(h => h.kind === 'out');
+  modal(`<h3>تسوية التأمين</h3><p>التأمين المحصَّل: <b>${OMR(o.basis)}</b> — المردود = التأمين − خصومات موثَّقة بمستند. لا مصادرة تقديرية.</p>
+   ${ho && ho.deductions.length ? `<p class="muted">الخصومات المدوَّنة في محضر الاستلام تُطبَّق إن تركت الخانة فارغة:<br>${ho.deductions.map(x => `${esc(x.label)} ${OMR(x.amount)} (${esc(x.ref)})`).join('<br>')}</p>` : ''}
+   <label>خصومات جديدة (سطر لكل خصم: البند | المبلغ | المستند | رقم استحقاق متأخر لسداده من التأمين — اختياري)</label><textarea id="sx" rows="3"></textarea>${errBox('serr')}${goBtns('sgo', 'تسوية')}`);
+  $('#sgo').onclick = async () => { try {
+    const ded = lines($('#sx').value).map(l => { const p = l.split('|').map(s => s.trim()); return {label: p[0], amount: +p[1], ref: p[2] || '', due_id: p[3] ? +p[3] : null}; });
+    const r = await post(`/lea/leases/${lid}/deposit/settle`, {deductions: ded.length ? ded : null}); after(lid, `سُوّي التأمين · المردود ${OMR(r.refund)} · الخصومات ${OMR(r.deducted)}`); } catch (e) { $('#serr').textContent = e.message; } };
+};
+
+EXT.leaNotice = lid => {
+  modal(`<h3>إنذار متأخرات</h3><p class="muted">يصدر برقم متسلسل بمبلغ المتأخرات اليوم. الإنذار النهائي يسبقه إنذار رسمي. الصيغة تنتظر اعتماد المستشار القانوني.</p><label>النوع</label><select id="nk">${Object.entries(NK).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select><label>مهلة السداد (أيام — اتركها فارغة للافتراضي)</label><input id="nd" inputmode="numeric"><label>ملاحظة</label><input id="nn">${errBox('nerr2')}${goBtns('ngo', 'إصدار')}`);
+  $('#ngo').onclick = async () => { try { const r = await post(`/lea/leases/${lid}/notices`, {kind: $('#nk').value, cure_days: num($('#nd').value), note: $('#nn').value}); modal(`<h3>✓ صدر الإنذار ${esc(r.number)}</h3><div class="btns">${LDOC('arrears_notice', r.id, 'فتح الإنذار PDF')} <button class="btn" data-call="closeModal">إغلاق</button></div>`); EXT.leaOpen(lid); } catch (e) { $('#nerr2').textContent = e.message; } };
+};
+EXT.leaSent = async (nid, lid) => { const v = prompt('طريقة التسليم: hand (باليد) / registered (بريد مسجَّل) / email / whatsapp', 'hand'); if (!v) return; await tryDo(() => post(`/lea/notices/${nid}/sent`, {via: v}), 'سُجّل التسليم'); EXT.leaOpen(lid); };
+
+EXT.leaPlan = async lid => {
+  const d = await api('/lea/leases/' + lid), late = d.dues.filter(x => x.state === 'late' && x.balance > 0.0005 && x.kind !== 'deposit');
+  modal(`<h3>خطة سداد للمتأخرات</h3><p class="muted">يُعاد توزيع المتبقي نفسه على أقساط جديدة — بلا فوائد ولا رسوم؛ ومجموع الأقساط يساوي المتبقي تمامًا. تحتاج اعتماد المدير.</p>
+   ${late.map(x => `<label><input type="checkbox" class="pd" value="${x.id}" data-b="${x.balance}" checked> ${fmtDate(x.due)} — ${OMR(x.balance)}</label>`).join('')}
+   <div class="g2"><div><label>عدد الأقساط</label><input id="pc" inputmode="numeric" value="3"></div><div><label>تاريخ أول قسط</label><input id="pf" type="date" value="${tdy()}"></div></div><label>ملاحظة</label><input id="pn2"><div id="ppv" class="muted"></div>${errBox('perr')}${goBtns('pgo', 'اعتماد الخطة')}`);
+  const build = () => { const ids = [...document.querySelectorAll('.pd:checked')], tot = Math.round(ids.reduce((s, i) => s + +i.dataset.b, 0) * 1000), n = Math.max(1, +$('#pc').value || 1), base = Math.floor(tot / n), out = [];
+    for (let i = 0; i < n; i++) { const dt_ = new Date($('#pf').value || tdy()); dt_.setMonth(dt_.getMonth() + i); out.push({due: dt_.toISOString().slice(0, 10), amount: (i === n - 1 ? tot - base * (n - 1) : base) / 1000}); } return {ids: ids.map(i => +i.value), inst: out, tot: tot / 1000}; };
+  const show = () => { const b = build(); $('#ppv').textContent = `المجموع ${OMR(b.tot)} على ${b.inst.length} قسط، أولها ${OMR(b.inst[0].amount)}`; };
+  $$('.pd, #pc, #pf').forEach(e => e.onchange = show); show();
+  $('#pgo').onclick = async () => { try { const b = build(); await post(`/lea/leases/${lid}/plans`, {due_ids: b.ids, installments: b.inst, note: $('#pn2').value}); after(lid, 'اعتُمدت خطة السداد'); } catch (e) { $('#perr').textContent = e.message; } };
+};
+
+/* المتأخرات والتبرعات والخطط */
+EXT.leaArrearsTab = async B => {
+  const [ag, N_, P, C] = await Promise.all([api('/lea/aging'), api('/lea/notices'), api('/lea/plans'), api('/lea/charity')]);
+  B.innerHTML = BOX('العقود المتأخرة', T(['العقد', 'الوحدة', 'المستأجر', 'المتأخر', 'أقدم تأخير'], ag.leases.map(x => `<tr data-id="${x.lease_id}"><td><span class="num">${esc(x.number)}</span></td><td>${esc(x.unit)}</td><td>${esc(x.tenant)}</td><td>${pill(OMR(x.amount), 'p-b')}</td><td>${N(x.oldest_days)} يومًا</td></tr>`), 'لا متأخرات.'))
+    + BOX('الإنذارات الصادرة', T(['الإنذار', 'العقد', 'المستأجر', 'المبلغ', 'المهلة', 'الحالة', ''], N_.map(n => `<tr><td><span class="num">${esc(n.number)}</span><br><span class="muted">${esc(n.kind_label)}</span></td><td>${esc(n.lease_no)}<br><span class="muted">${esc(n.unit)}</span></td><td>${esc(n.tenant)}</td><td>${OMR(n.amount)}</td><td>${fmtDate(n.cure_by)}</td><td>${pill({cured: 'سُدِّد', expired: 'انقضت المهلة', running: 'جارية'}[n.state], {cured: 'p-ok', expired: 'p-b', running: 'p-w'}[n.state])}</td><td>${LDOC('arrears_notice', n.id, 'PDF')}</td></tr>`), 'لا إنذارات.'))
+    + BOX('خطط السداد', T(['الخطة', 'العقد', 'المستأجر', 'المبلغ', 'المسدَّد', 'الحالة'], P.map(p => `<tr><td>#${p.id}<br><span class="muted">${fmtDate(p.agreed_on)}</span></td><td>${esc(p.lease_no)}<br><span class="muted">${esc(p.unit)}</span></td><td>${esc(p.tenant)}</td><td>${OMR(p.total)}</td><td>${OMR(p.paid)}</td><td>${pill({active: 'جارية', completed: 'مكتملة', broken: 'متعثرة'}[p.state], {active: 'p-bl', completed: 'p-ok', broken: 'p-b'}[p.state])}</td></tr>`), 'لا خطط.'))
+    + BOX('تبرعات التأخير (التزام تعاقدي — ليست إيرادًا)', `<p class="muted">${esc(C.note)}</p>` + KP([['مستحقة', OMR(C.totals.due)], ['محصَّلة', OMR(C.totals.collected)], ['مصروفة', OMR(C.totals.disbursed)]])
+      + T(['العقد', 'المستأجر', 'المبلغ', 'أيام التأخر', 'الحالة', ''], C.items.map(c => `<tr><td>${esc(c.lease_no)}<br><span class="muted">${esc(c.unit)}</span></td><td>${esc(c.tenant)}</td><td>${OMR(c.amount)}</td><td>${N(c.late_days)}</td><td>${esc({due: 'مستحق', collected: 'محصَّل', disbursed: 'مصروف', waived: 'مُعفى'}[c.status] || c.status)}</td><td>${c.status === 'due' && can('leasing') && c.amount > 0 ? `<button class="btn" data-call="EXT.leaCharity" data-args="${J([c.id, 'collect'])}">تحصيل</button>` : ''}${c.status === 'collected' && A_() ? `<button class="btn" data-call="EXT.leaCharity" data-args="${J([c.id, 'disburse'])}">صرف للجهة الخيرية</button>` : ''}</td></tr>`), 'لا تبرعات.'));
+  $$('#leaB tr[data-id]').forEach(tr => tr.onclick = () => { sel(tr); EXT.leaOpen(+tr.dataset.id); });
+};
+EXT.leaCharity = async (id, act) => {
+  const reference = prompt(act === 'collect' ? 'مرجع التحصيل (رقم الإيصال/الحوالة):' : 'مرجع الصرف:'); if (!reference) return;
+  const beneficiary = act === 'disburse' ? prompt('الجهة الخيرية المستفيدة:') : ''; if (act === 'disburse' && !beneficiary) return;
+  await tryDo(() => post(`/lea/charity/${id}/${act}`, {reference, beneficiary: beneficiary || ''}), 'تم'); EXT.l_lea();
+};
+
+/* الصيانة والمصاريف */
+EXT.leaMaintTab = async B => {
+  const [M, E, V] = await Promise.all([api('/lea/maint'), api('/lea/expenses'), api('/lea/vendors')]), W = can('leasing');
+  B.innerHTML = BOX('طلبات الصيانة', T(['الطلب', 'الوحدة', 'الأولوية', 'الحالة', 'المهلة', 'أوامر العمل', ''], M.map(m => `<tr><td>#${m.id} · ${esc(m.category || '')}<br><span class="muted">${esc((m.description || '').slice(0, 60))}</span></td><td>${esc(m.unit)}</td><td>${esc(m.priority_label)}</td><td>${pill(esc(m.status_label), m.late ? 'p-b' : 'p-w')}</td><td>${fmtDate(m.sla_due)}${m.late ? ' ' + pill('متأخر', 'p-b') : ''}</td>
+      <td>${m.orders.map(o => `${esc(o.vendor || 'بلا مورّد')} · ${OMR(o.cost)} · ${esc(o.charge_label)}${o.done_at ? ' ✓' : W ? ` <button class="btn" data-call="EXT.leaDone" data-args="${J([o.id, o.cost])}">إنجاز</button>` : ''}`).join('<br>') || '—'}</td>
+      <td>${W && !['done', 'closed', 'rejected'].includes(m.status) ? `<button class="btn" data-call="EXT.leaOrder" data-args="${J([m.id])}">أمر عمل</button>` : ''}${W && m.status === 'done' ? `<button class="btn" data-call="EXT.leaMaintSt" data-args="${J([m.id, 'closed'])}">إغلاق</button>` : ''}${W && m.status === 'new' ? `<button class="btn" data-call="EXT.leaMaintSt" data-args="${J([m.id, 'rejected'])}">رفض</button>` : ''}</td></tr>`), 'لا طلبات.'),
+      W ? '<button class="btn p" data-call="EXT.leaMaintForm">+ طلب صيانة</button> <button class="btn" data-call="EXT.leaVendorForm">+ مورّد</button>' : '')
+    + BOX('المصاريف', T(['التاريخ', 'الوحدة', 'البند', 'المبلغ', 'على', 'المورّد'], E.map(e => `<tr><td>${fmtDate(e.spent_on)}</td><td>${esc(e.unit || '—')}</td><td>${esc(e.category)}<br><span class="muted">${esc(e.description || '')}</span></td><td>${OMR(e.amount)}</td><td>${e.charge_owner ? (e.charge_tenant ? 'المالك (يُسترد من المستأجر)' : 'المالك') : 'الشركة'}</td><td>${esc(e.vendor || '—')}</td></tr>`), 'لا مصاريف.'),
+      W ? '<button class="btn p" data-call="EXT.leaExpenseForm">+ مصروف</button>' : '')
+    + BOX('الموردون', T(['المورّد', 'التخصص', 'الهاتف', 'الآيبان'], V.map(v => `<tr><td>${esc(v.name)}</td><td>${esc(v.trade || '—')}</td><td>${esc(v.phone || '—')}</td><td><span class="num">${esc(v.iban || '—')}</span></td></tr>`), 'لا موردين.'));
+};
+EXT.leaMaintSt = async (id, st) => { const note = st === 'rejected' ? prompt('سبب الرفض:') : ''; if (st === 'rejected' && !note) return; await tryDo(() => post(`/lea/maint/${id}/status`, {status: st, note: note || ''}), 'تم'); EXT.l_lea(); };
+EXT.leaMaintForm = async () => {
+  const U = (await api('/lea/units')).units;
+  modal(`<h3>طلب صيانة</h3><label>الوحدة</label><select id="mu">${U.map(u => `<option value="${u.id}">${esc(u.code)}${u.lease ? ' · ' + esc(u.lease.tenant) : ''}</option>`).join('')}</select><label>التصنيف</label><input id="mc" placeholder="تكييف / سباكة / كهرباء …"><label>الوصف</label><input id="md"><label>الأولوية</label><select id="mp"><option value="normal">عادي</option><option value="urgent">عاجل (يوم)</option><option value="high">مرتفع (3 أيام)</option><option value="low">منخفض (14 يومًا)</option></select><label>مصدر الطلب</label><select id="ms"><option value="staff">الموظف</option><option value="tenant">المستأجر</option></select>${errBox('merr')}${goBtns('mgo', 'تسجيل')}`);
+  $('#mgo').onclick = async () => { try { await post('/lea/maint', {unit_id: +$('#mu').value, category: $('#mc').value, description: $('#md').value, priority: $('#mp').value, source: $('#ms').value}); after(0, 'سُجّل الطلب'); } catch (e) { $('#merr').textContent = e.message; } };
+};
+EXT.leaOrder = async mid => {
+  const V = await api('/lea/vendors');
+  modal(`<h3>أمر عمل</h3><label>المورّد</label><select id="ov"><option value="">—</option>${V.map(v => `<option value="${v.id}">${esc(v.name)}</option>`).join('')}</select><label>التكلفة المتوقعة (ر.ع)</label><input id="oc" inputmode="decimal" value="0"><label>التحميل</label><select id="ot"><option value="owner">على المالك</option><option value="company">على الشركة</option><option value="tenant">على المستأجر (يُسترد منه)</option></select><label>سند التحميل على المستأجر (بند العقد / محضر المعاينة)</label><input id="ob2">${errBox('oerr')}${goBtns('ogo2', 'إصدار الأمر')}`);
+  $('#ogo2').onclick = async () => { try { await post(`/lea/maint/${mid}/orders`, {vendor_id: num($('#ov').value), cost: +$('#oc').value, charge_to: $('#ot').value, basis: $('#ob2').value}); after(0, 'صدر أمر العمل'); } catch (e) { $('#oerr').textContent = e.message; } };
+};
+EXT.leaDone = (oid, cost) => {
+  modal(`<h3>إنجاز أمر العمل</h3><p class="muted">يُقيَّد المصروف، وإن كان على المستأجر يُفوتَر استحقاقًا (يحتاج اعتماد المدير).</p><label>التكلفة الفعلية (ر.ع)</label><input id="dc" inputmode="decimal" value="${cost || ''}"><label>مرجع المستند (فاتورة المورّد)</label><input id="dr">${errBox('derr')}${goBtns('dgo', 'إنجاز')}`);
+  $('#dgo').onclick = async () => { try { await post(`/lea/maint/orders/${oid}/done`, {cost: num($('#dc').value), doc_ref: $('#dr').value}); after(0, 'أُنجز الأمر وقُيّد المصروف'); } catch (e) { $('#derr').textContent = e.message; } };
+};
+EXT.leaVendorForm = () => {
+  modal(`<h3>مورّد جديد</h3><label>الاسم</label><input id="vn"><label>التخصص</label><input id="vt"><label>الهاتف</label><input id="vp"><label>الآيبان</label><input id="vi">${errBox('verr')}${goBtns('vgo', 'حفظ')}`);
+  $('#vgo').onclick = async () => { try { await post('/lea/vendors', {name: $('#vn').value, trade: $('#vt').value, phone: $('#vp').value, iban: $('#vi').value}); after(0, 'أُضيف المورّد'); } catch (e) { $('#verr').textContent = e.message; } };
+};
+EXT.leaExpenseForm = async () => {
+  const U = (await api('/lea/units')).units;
+  modal(`<h3>مصروف عقار</h3><label>الوحدة</label><select id="xu">${U.map(u => `<option value="${u.id}">${esc(u.code)}</option>`).join('')}</select><label>البند</label><input id="xc"><label>المبلغ (ر.ع)</label><input id="xa" inputmode="decimal"><label>التاريخ</label><input id="xd" type="date" value="${tdy()}"><label><input type="checkbox" id="xo" checked> يُحمَّل على المالك (وإلا فهو على الشركة)</label><label>المستند</label><input id="xr">${errBox('xerr')}${goBtns('xgo', 'قيد المصروف')}`);
+  $('#xgo').onclick = async () => { try { await post('/lea/expenses', {unit_id: +$('#xu').value, category: $('#xc').value, amount: +$('#xa').value, spent_on: $('#xd').value, charge_owner: $('#xo').checked, doc_ref: $('#xr').value}); after(0, 'قُيّد المصروف'); } catch (e) { $('#xerr').textContent = e.message; } };
+};
+
+/* الملاك وكشوفهم */
+EXT.leaOwnersTab = async B => {
+  const O = await api('/lea/owners'), W = can('leasing');
+  B.innerHTML = BOX('الملاك', T(['المالك', 'النوع', 'الهاتف', 'الهوية', 'عمولة الإدارة', 'وحدات', ''], O.map(o => `<tr><td><b>${esc(o.name)}</b></td><td>${o.kind === 'own' ? 'الشركة (مملوك)' : 'مالك آخر'}</td><td>${esc(o.phone || '—')}</td><td><span class="num">${esc(o.id_number || '—')}</span></td><td>${o.kind === 'own' ? '—' : pct(o.mgmt_fee_pct) + ' من ' + (o.mgmt_basis === 'collected' ? 'المحصَّل' : 'المفوتَر')}</td><td>${N(o.units)}</td><td><button class="btn" data-call="EXT.leaOwnerStmt" data-args="${J([o.id, o.name])}">كشف شهري</button></td></tr>`)),
+    W ? '<button class="btn p" data-call="EXT.leaOwnerForm">+ مالك</button>' : '');
+  if (A_()) { const S_ = await api('/lea/scopes'); B.insertAdjacentHTML('beforeend', BOX('نطاق المديرين العقاريين الخارجيين', `<p class="muted">المدير العقاري يرى ويحصّل داخل نطاقه فقط (مشروع و/أو مالك). أنشئ حسابه من «الإدارة ← المستخدمون» بدور «مدير عقاري».</p>` + T(['المستخدم', 'المشروع', 'المالك', ''], S_.map(s => `<tr><td>${esc(s.user)} <span class="muted">${esc(s.username)}</span></td><td>${esc(s.project || 'كل المشاريع')}</td><td>${esc(s.owner || 'كل الملاك')}</td><td><button class="btn" data-call="EXT.leaScopeDel" data-args="${J([s.id])}">إلغاء</button></td></tr>`), 'لا نطاقات.'), '<button class="btn p" data-call="EXT.leaScopeForm">+ نطاق</button>')); }
+};
+EXT.leaScopeDel = async id => { await tryDo(() => api('/lea/scopes/' + id, {method: 'DELETE'}), 'أُلغي النطاق'); EXT.l_lea(); };
+EXT.leaScopeForm = async () => {
+  const [us, O, P] = await Promise.all([api('/users'), api('/lea/owners'), api('/projects')]);
+  modal(`<h3>نطاق مدير عقاري</h3><label>المستخدم</label><select id="su">${us.filter(u => u.role === 'property_manager').map(u => `<option value="${u.id}">${esc(u.name)} (${esc(u.username)})</option>`).join('')}</select><label>المشروع (اختياري)</label><select id="sp"><option value="">كل المشاريع</option>${P.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select><label>المالك (اختياري)</label><select id="so"><option value="">كل الملاك</option>${O.map(o => `<option value="${o.id}">${esc(o.name)}</option>`).join('')}</select><p class="muted">يلزم اختيار مشروع أو مالك على الأقل.</p>${errBox('scerr')}${goBtns('scgo', 'حفظ')}`);
+  $('#scgo').onclick = async () => { try { await post('/lea/scopes', {user_id: +$('#su').value, project_id: num($('#sp').value), owner_id: num($('#so').value)}); after(0, 'حُفظ النطاق'); } catch (e) { $('#scerr').textContent = e.message; } };
+};
+EXT.leaOwnerStmt = async (oid, name, period) => {
+  period = period || tdy().slice(0, 7);
+  const s = await api(`/lea/owners/${oid}/statement?period=${period}`);
+  modal(`<h3>كشف ${esc(name)}</h3><label>الشهر</label><input id="sm" type="month" value="${period}">
+   ${KP([['المحصَّل', OMR(s.collected)], ['المصاريف', OMR(s.expenses)], ['العمولة ' + pct(s.owner.pct), OMR(s.commission)], ['الصافي', OMR(s.net)]])}
+   <p class="muted">الصافي = المحصَّل − المصاريف المحمَّلة على المالك − عمولة الإدارة. الودائع لا تدخل.</p>
+   ${T(['الوحدة', 'المستأجر', 'المحصَّل'], s.units.map(u => `<tr><td>${esc(u.unit)}</td><td>${esc(u.tenant)}</td><td>${OMR(u.collected)}</td></tr>`), 'لا تحصيل في هذا الشهر.')}
+   ${s.issued.length ? '<b>الكشوف الصادرة</b>' + T(['الكشف', 'الصافي', 'الحالة', ''], s.issued.map(x => `<tr><td>${LDOC('owner_statement', x.id, esc(x.number))}${x.kind === 'adjustment' ? ' <span class="muted">(تعديلي)</span>' : ''}</td><td>${OMR(x.net)}</td><td>${x.status === 'transferred' ? pill('حُوِّل', 'p-ok') : 'صادر'}</td><td>${x.status === 'issued' && x.net > 0 && A_() ? `<button class="btn" data-call="EXT.leaTransfer" data-args="${J([x.id, oid, name, period])}">تسجيل التحويل</button>` : ''}</td></tr>`)) : ''}
+   ${errBox('smerr')}<div class="btns" style="margin-top:12px">${A_() ? '<button class="btn p" id="smgo">إصدار الكشف</button>' : ''} <button class="btn" data-call="closeModal">إغلاق</button></div>`);
+  $('#sm').onchange = e => EXT.leaOwnerStmt(oid, name, e.target.value);
+  if ($('#smgo')) $('#smgo').onclick = async () => { try { await post(`/lea/owners/${oid}/statements`, {period}); toast('صدر الكشف'); EXT.leaOwnerStmt(oid, name, period); } catch (e) { $('#smerr').textContent = e.message; } };
+};
+EXT.leaTransfer = async (sid, oid, name, period) => { const ref = prompt('مرجع تحويل الصافي للمالك:'); if (!ref) return; await tryDo(() => post(`/lea/statements/${sid}/transferred`, {ref}), 'سُجّل التحويل'); EXT.leaOwnerStmt(oid, name, period); };
+
+/* الاستيراد */
+EXT.leaImportTab = async B => {
+  const kinds = [['units', 'الوحدات'], ['tenants', 'المستأجرون'], ['leases', 'العقود'], ['payments', 'المدفوعات'], ['cheques', 'الشيكات']], bt = await api('/lea/import/batches');
+  B.innerHTML = BOX('استيراد من Excel / CSV', `<p class="muted">الترتيب: الوحدات ← المستأجرون ← العقود ← المدفوعات والشيكات. الفحص المسبق لا يكتب شيئًا؛ ولا يُنفَّذ الاستيراد إلا بعد تأكيدك. الصيغ ممنوعة؛ 5000 صف و5 ميغابايت كحد أقصى. لا يُعدَّل ما أُدخل يدويًا — التعارض يُبلَّغ ولا يُطبَّق.</p>
+    <div class="toolbar"><select id="ik">${kinds.map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select> <a class="btn" id="itpl" href="/api/lea/import/units/template.xlsx">تنزيل القالب</a> <input type="file" id="if" accept=".xlsx,.csv"> <button class="btn p" id="idry">فحص مسبق</button></div><div id="irep"></div>`)
+    + BOX('الدفعات المنفَّذة', T(['#', 'النوع', 'الملف', 'جديد/محدَّث', 'تعارض', 'بواسطة', 'الوقت'], bt.map(x => `<tr><td>${x.id}</td><td>${esc(x.kind)}</td><td>${esc(x.filename || '')}</td><td>${N(x.rows_ok)}</td><td>${N(x.rows_conflict)}</td><td>${esc(x.by_user || '')}</td><td>${esc((x.at || '').slice(0, 16).replace('T', ' '))}</td></tr>`), 'لا دفعات.'));
+  $('#ik').onchange = e => { $('#itpl').href = `/api/lea/import/${e.target.value}/template.xlsx`; };
+  const send = async (confirm) => {
+    const f = $('#if').files[0]; if (!f) { toast('اختر ملفًا', 1); return null; }
+    const fd = new FormData(); fd.append('file', f); if (confirm) fd.append('confirm', confirm);
+    const r = await fetch(`/api/lea/import/${$('#ik').value}`, {method: 'POST', headers: {'X-CSRF-Token': csrf()}, body: fd}), j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(typeof j.detail === 'string' ? j.detail : 'تعذّر الاستيراد'); return j;
+  };
+  const show = j => {
+    const c = j.counts; $('#irep').innerHTML = `<hr style="border:0;border-top:1px solid var(--line);margin:12px 0">${KP([['صفوف', N(j.rows)], ['جديدة', N(c.insert)], ['محدَّثة', N(c.update)], ['متجاوَزة (موجودة)', N(c.skip)], ['تعارض', N(c.conflict)], ['أخطاء', N(j.errors.length)]])}
+      ${j.committed ? `<p>${pill('✓ نُفِّذ — الدفعة ' + j.batch, 'p-ok')}</p>` : j.mode === 'blocked' ? `<p>${pill('لم يُنفَّذ: أصلح الأخطاء أولًا', 'p-b')}</p>` : ''}
+      ${j.errors.length ? '<b>الأخطاء</b>' + T(['الصف', 'العمود', 'السبب'], j.errors.slice(0, 100).map(e => `<tr><td>${e.row}</td><td>${esc(e.col)}</td><td>${esc(e.reason)}</td></tr>`)) : ''}
+      ${j.conflicts.length ? '<b>تعارضات (لم تُطبَّق)</b>' + T(['الصف', 'السبب'], j.conflicts.slice(0, 100).map(e => `<tr><td>${e.row}</td><td>${esc(e.reason)}</td></tr>`)) : ''}
+      ${!j.committed && !j.errors.length ? `<div class="btns" style="margin-top:10px"><button class="btn p" id="icommit">تنفيذ الاستيراد (${N(c.insert + c.update)} صف)</button></div>` : ''}`;
+    if ($('#icommit')) $('#icommit').onclick = async () => { try { const r = await send(j.sha256); show(r); if (r.committed) toast('تم الاستيراد'); } catch (e) { toast(e.message, 1); } };
+  };
+  $('#idry').onclick = async () => { try { const j = await send(''); if (j) show(j); } catch (e) { toast(e.message, 1); } };
+};
+
+/* ================================================================ المدير العقاري الخارجي (/api/pm) */
+EXT.l_pm = async function () {
+  const [o, L] = await Promise.all([api('/pm/overview'), api('/pm/leases')]);
+  $('#pmg').innerHTML = KP([['وحدات في نطاقك', N(o.units)], ['مؤجَّرة', N(o.leased)], ['شاغرة', N(o.vacant)], ['المتأخرات', OMR(o.arrears)], ['محصَّل هذا الشهر', OMR(o.collected_month)]])
+    + BOX('عقودك', T(['العقد', 'الوحدة', 'المستأجر', 'الهاتف', 'المتأخر'], L.map(l => `<tr data-id="${l.id}"><td><span class="num">${esc(l.number)}</span></td><td>${esc(l.unit)}</td><td>${esc(l.tenant)}</td><td>${esc(l.phone || '—')}</td><td>${l.arrears ? pill(OMR(l.arrears), 'p-b') : '—'}</td></tr>`), 'لا عقود في نطاقك.'));
+  $$('#pmg tr[data-id]').forEach(tr => tr.onclick = () => { sel(tr); EXT.pmOpen(+tr.dataset.id); });
+};
+EXT.pmOpen = async id => {
+  const d = await api('/pm/leases/' + id);
+  insp(`${d.number} · ${d.unit}`, `<h3>${esc(d.tenant.name)}</h3><p class="muted">${esc(d.tenant.phone || '')}</p><dl class="kv"><dt>الفترة</dt><dd>${fmtDate(d.start)} ← ${fmtDate(d.end)}</dd><dt>الرصيد</dt><dd>مستحق ${OMR(d.totals.billed)} · مسدد ${OMR(d.totals.paid)} · متأخر ${d.totals.arrears ? pill(OMR(d.totals.arrears), 'p-b') : '—'}</dd></dl>
+   <div class="btns" style="margin:10px 0"><button class="btn p" data-call="EXT.pmPay" data-args="${J([d.id, d.totals.balance])}">تسجيل مبلغ استلمته</button></div>
+   <b>الدفعات</b>${T(['الاستحقاق', 'المبلغ', 'المسدد', 'الحالة'], d.dues.map(x => `<tr><td>${fmtDate(x.due)}</td><td>${OMR(x.amount)}</td><td>${OMR(x.paid)}</td><td>${x.state === 'paid' ? pill('مسدد', 'p-ok') : x.state === 'late' ? pill('متأخر', 'p-b') : pill('قادم', 'p-bl')}</td></tr>`))}
+   <b>حركات التحصيل</b>${T(['الإيصال', 'التاريخ', 'المبلغ', 'الطريقة'], d.payments.map(p => `<tr><td>${esc(p.receipt_no || '—')}</td><td>${fmtDate(p.paid_on)}</td><td>${OMR(p.amount)}</td><td>${esc(LMETH[p.method] || 'غير موثَّقة')}</td></tr>`), 'لا حركات.')}`);
+};
+EXT.pmPay = (lid, bal) => {
+  modal(`<h3>تسجيل مبلغ استلمته</h3><p class="muted">الشيكات لا تُسجَّل هنا؛ تسلّمها للمكتب فيدير دورتها (إيداع ثم صرف).</p><label>المبلغ (ر.ع) — المتبقي ${OMR(bal)}</label><input id="mpa" inputmode="decimal"><label>طريقة السداد</label><select id="mpm"><option value="cash">نقدًا</option><option value="transfer">تحويل بنكي</option><option value="card">بطاقة</option><option value="other">أخرى</option></select><label>تاريخ الاستلام</label><input id="mpd" type="date" max="${tdy()}" value="${tdy()}"><label>المرجع</label><input id="mpr">${errBox('mpe')}${goBtns('mpgo', 'تسجيل')}`);
+  $('#mpgo').onclick = async () => { try { const r = await post('/pm/payments', {lease_id: lid, amount: +$('#mpa').value, method: $('#mpm').value, paid_on: $('#mpd').value, reference: $('#mpr').value}); closeModal(); toast(`سُجّل · الإيصال ${r.receipt_no}`); EXT.l_pm(); EXT.pmOpen(lid); } catch (e) { $('#mpe').textContent = e.message; } };
 };
 
 /* ================================================================ التقارير */
