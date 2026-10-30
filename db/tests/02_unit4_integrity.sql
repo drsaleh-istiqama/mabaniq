@@ -2,7 +2,7 @@
 BEGIN;
 SELECT plan(
   (SELECT count(*)::int FROM pg_tables WHERE schemaname='public' AND tablename NOT IN ('schema_migrations','audit')) * 2
-  + 45 + 3 + 3 + 7 + 2 + 3 + 6 + 3
+  + 45 + 3 + 3 + 7 + 2 + 3 + 6 + 3 + 3
 );
 
 -- 1) every application table (audit excepted) has updated_at and the trigger
@@ -77,6 +77,12 @@ INSERT INTO appraisals(cycle_id, employee_id) SELECT k.id, e.id FROM appraisal_c
 SELECT throws_like($$ INSERT INTO candidates(opening_id, name, rating) SELECT id, 'x', 6 FROM job_openings WHERE title = 'tap-opening' $$, '%check constraint%', 'a candidate rating is 1 to 5');
 SELECT throws_like($$ INSERT INTO appraisals(cycle_id, employee_id) SELECT k.id, e.id FROM appraisal_cycles k, employees e WHERE k.name = 'tap-cycle' AND e.number = 'T-1' $$, '%duplicate key%', 'one appraisal per employee per cycle');
 SELECT throws_like($$ INSERT INTO penalty_rules(code, name, kind, source, status) VALUES ('t', 't', 'warning', 'src', 'secret') $$, '%check constraint%', 'a bylaw article has a known status');
+-- 0.28.0: portals — one login per tenant file; the tenant's acknowledgement of the privacy notice is a column of their own file
+INSERT INTO tenants_l(name) VALUES ('tap-tenant');
+INSERT INTO users(username, name, role, pw, lessee_id) SELECT 'tap-l1', 'x', 'lessee', 'x', id FROM tenants_l WHERE name = 'tap-tenant';
+SELECT throws_like($$ INSERT INTO users(username, name, role, pw, lessee_id) SELECT 'tap-l2', 'x', 'lessee', 'x', id FROM tenants_l WHERE name = 'tap-tenant' $$, '%duplicate key%', 'one login per tenant file');
+SELECT has_column('public', 'users', 'lessee_id', 'users.lessee_id links a login to a tenant file');
+SELECT has_column('public', 'tenants_l', 'consent_at', 'tenants_l.consent_at holds the tenant''s own acknowledgement');
 RESET ROLE;
 
 SELECT * FROM finish();

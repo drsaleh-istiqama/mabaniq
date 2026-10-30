@@ -32,7 +32,7 @@ from .db import TENANT, connect, tenants
 from .modules import PLAN_LABEL, one
 
 router = APIRouter()
-PERM = ("reports", "finance", "view")  # every staff role may read; writes need `reports` or `finance`
+PERM = ("reports", "finance", "view", "hr_payroll")  # every staff role may read; writes need `reports` or `finance`; 0.28.0: the payroll officer reads the payroll report (and only that)
 MAX_ROWS = 5000
 
 # ---------------------------------------------------------------- datasets (whitelist)
@@ -560,6 +560,10 @@ from .leasing_reports import register as _register_leasing  # noqa: E402 — 0.2
 
 _register_leasing(READY, READY_MODULE)
 
+from . import reports_ext  # noqa: E402 — 0.28.0: accounting and people reports + leasing/accounting/HR datasets for the builder
+
+reports_ext.register(READY, READY_MODULE, DATASETS, DATASET_MODULE)
+
 
 def _on(table: dict, key: str, c) -> bool:
     from . import registry
@@ -568,6 +572,8 @@ def _on(table: dict, key: str, c) -> bool:
 
 
 def _perm_ok(perm: str, perms: set) -> bool:
+    if perm in reports_ext.STRICT:   # 0.28.0: the books and the people file are not opened by the broad `reports` permission
+        return perm in perms or "admin" in perms
     return perm in perms or "admin" in perms or "reports" in perms
 
 
@@ -750,7 +756,10 @@ def schedules(u=Depends(need_any(*PERM))):
 def schedule_create(body: ScheduleIn, u=Depends(act_as("reports"))):
     from .identity import EMAIL_RE
     c = db()
-    one(c, "SELECT id FROM report_defs WHERE id=?", (body.report_id,), "التقرير غير موجود")
+    d = one(c, "SELECT * FROM report_defs WHERE id=?", (body.report_id,), "التقرير غير موجود")
+    if reports_ext.mail_blocked(d["kind"], d["ref"], json.loads(d["spec"]) if d["spec"] else None):
+        raise HTTPException(409, "لا تُرسل بيانات الرواتب بالبريد — اعرض التقرير من الشاشة")
+    run_saved(c, body.report_id, set(u["perms"]))   # the person scheduling it must be able to read it himself (403/404 here, not at 07:00 the next day)
     rcpts = [x.strip().lower() for x in body.recipients.split(",") if x.strip()]
     if not rcpts or any(not EMAIL_RE.match(x) for x in rcpts):
         raise HTTPException(400, "عناوين البريد غير صالحة (افصل بينها بفاصلة)")
@@ -772,6 +781,16 @@ def schedule_remove(sid: int, u=Depends(act_as("reports"))):
     return {"ok": True}
 
 
+def _owner_perms(c, username) -> set:
+    """What the person who scheduled the report can read *today* — a schedule never outlives its owner's access (0.28.0; before, every schedule ran as the administrator)."""
+    from . import auth as A
+    from . import registry
+    u = c.execute("SELECT * FROM users WHERE username=? AND active=1", (username,)).fetchone()
+    if not u:
+        raise HTTPException(403, "صاحب الجدولة لم يعد مفعَّلًا")
+    return set(A.public(u, registry.enabled_modules(c))["perms"])
+
+
 def run_due_schedules(c, now: dt.datetime | None = None) -> int:
     """Called by the background tick: renders and e-mails every schedule whose next_run has passed."""
     from .paperwork import brand
@@ -779,7 +798,7 @@ def run_due_schedules(c, now: dt.datetime | None = None) -> int:
     sent = 0
     for s in rows(c.execute("SELECT * FROM report_schedules WHERE active=1 AND next_run<=?", (now.isoformat(timespec="minutes"),))):
         try:
-            doc = run_saved(c, s["report_id"], {"admin"})
+            doc = run_saved(c, s["report_id"], _owner_perms(c, s["created_by"]))
             if s["format"] == "csv":
                 blob, mime, ext = to_csv(doc), "text/csv", "csv"
             else:

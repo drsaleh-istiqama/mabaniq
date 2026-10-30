@@ -204,7 +204,7 @@ CREATE TABLE IF NOT EXISTS oa_votes(
 CREATE TABLE IF NOT EXISTS tenants_l(
   id INTEGER PRIMARY KEY, name TEXT, phone TEXT, id_number TEXT, kind TEXT DEFAULT 'individual', cr_number TEXT, tax_no TEXT, rep_name TEXT,
   rep_title TEXT, rep_id_number TEXT, contact_name TEXT, email TEXT, address TEXT, nationality TEXT, id_expiry TEXT, rating TEXT, rating_note TEXT,
-  blacklisted INTEGER DEFAULT 0, blacklist_reason TEXT, blacklisted_by TEXT, blacklisted_at TEXT, import_batch TEXT, source TEXT);
+  blacklisted INTEGER DEFAULT 0, blacklist_reason TEXT, blacklisted_by TEXT, blacklisted_at TEXT, import_batch TEXT, source TEXT, consent_at TEXT, consent_version TEXT);
 CREATE TABLE IF NOT EXISTS leases(
   id INTEGER PRIMARY KEY, unit_id INTEGER, tenant_id INTEGER, start TEXT, end TEXT, annual_rent REAL,
   frequency INTEGER, deposit REAL, status TEXT, municipality_ref TEXT, number TEXT, kind TEXT, signed_at TEXT, prep_free_days INTEGER DEFAULT 0,
@@ -610,7 +610,7 @@ MIGRATIONS.update({  # 0.21.0 — الإيجارات المتكاملة: توس�
 MIGRATIONS["leases"] += ["deposit_deducted REAL", "deposit_refund REAL", "deposit_settled_at TEXT", "deposit_settled_by TEXT"]  # 0.22.0 — عمليات الإيجار
 MIGRATIONS["rent_dues"] += ["plan_id INTEGER"]
 MIGRATIONS["units"] += ["source TEXT", "import_batch TEXT"]
-MIGRATIONS["tenants_l"] += ["source TEXT"]
+MIGRATIONS["tenants_l"] += ["source TEXT", "consent_at TEXT", "consent_version TEXT"]   # 0.28.0: the tenant's own acknowledgement of the privacy notice
 MIGRATIONS["vendors"] = ["tax_no TEXT"]  # 0.24.0
 MIGRATIONS["rent_payments"] = ["import_key TEXT"]
 MIGRATIONS["charity_dues"] = ["rent_due_id INTEGER", "lease_id INTEGER"]

@@ -129,6 +129,8 @@ def _seed_body(c, force: bool, tenant: str) -> None:
         force = True
     if c.has_table("users") and "employee_id" in c.columns("users"):  # 0.25.0: the people file is wiped with the rest, so the links that point into it go first
         c.execute("UPDATE users SET employee_id=NULL")
+    if c.has_table("users") and "lessee_id" in c.columns("users"):   # 0.28.0: the tenant files are wiped too
+        c.execute("UPDATE users SET lessee_id=NULL")
     if c.has_table("departments"):
         c.execute("UPDATE departments SET head_employee_id=NULL")
         c.commit()

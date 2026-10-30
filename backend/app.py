@@ -236,9 +236,12 @@ def decisions(_=Depends(need("view"))):
 
 
 @app.get("/api/dashboard")
-def dashboard_ep(_=Depends(need("view"))):
-    """0.20.0 — widgets of the modules that are on (tiles, decisions, leasing properties, cash) — replaces the sales-only overview."""
-    return _cached_json("dashboard", lambda: dashboard(db()))
+def dashboard_ep(u=Depends(need("view"))):
+    """0.20.0 — widgets of the modules that are on (tiles, decisions, leasing properties, cash) — replaces the sales-only overview.
+    0.28.0 — built from the widgets registry; the per-organisation result is cached and each viewer gets only the tiles their permissions allow."""
+    from .orgmodules import for_viewer
+    d = json.loads(_cached_json("dashboard", lambda: dashboard(db())).body)
+    return for_viewer(d, u["perms"])
 
 
 @app.get("/api/audit")
@@ -933,6 +936,7 @@ from .hr_payroll import router as hr_payroll_router  # noqa: E402
 from .hr_perf import router as hr_perf_router  # noqa: E402
 from .hr_recruit import router as hr_recruit_router  # noqa: E402
 from .hr_self import router as hr_self_router  # noqa: E402
+from .lessee import router as lessee_router  # noqa: E402
 
 app.include_router(acc_ap_router)  # 0.24.0: الذمم الدائنة والبنوك
 app.include_router(acc_bank_router)  # 0.24.0: المطابقة البنكية والشيكات الصادرة
@@ -946,6 +950,7 @@ app.include_router(hr_end_router)  # 0.26.0: مكافأة نهاية الخدم�
 app.include_router(hr_recruit_router)  # 0.27.0: التوظيف
 app.include_router(hr_perf_router)  # 0.27.0: التقييم السنوي والتدريب
 app.include_router(hr_disc_router)  # 0.27.0: الجزاءات
+app.include_router(lessee_router)  # 0.28.0: بوابة المستأجر
 from .appearance import router as appearance_router  # noqa: E402
 from .assistant import router as assistant_router  # noqa: E402
 from .identity import router as identity_router  # noqa: E402

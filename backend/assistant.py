@@ -25,7 +25,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from . import engines as E
-from .auth import need
+from .auth import need, need_any
 from .common import act_as, audit, db
 from .db import setting
 
@@ -525,6 +525,11 @@ def _allowed(u, name) -> bool:
     return not perms or bool(set(perms) & set(u["perms"]))
 
 
+def _module_on(u, name) -> bool:
+    mod = TOOL_MODULE.get(name)
+    return not mod or mod in u.get("modules", ())
+
+
 def run_tool(ctx, name, args):
     if name not in TOOLS or not _allowed(ctx.u, name):
         return {"data": None, "text": "", "source": ""}
@@ -574,6 +579,11 @@ FOLLOW = {
 DEFAULT_SUGG = ["ما ملخص المحفظة؟", "كم وحدة متاحة؟", "من الأعلى احتمالًا للشراء؟", "ما المتأخرات؟", "كيف أحجز وحدة؟"]
 
 
+from . import assistant_ext as _ext  # noqa: E402 — 0.28.0: leasing (extended), accounting and HR tools register into the tables above
+
+_ext.register(__import__("sys").modules[__name__])
+
+
 def _score(nq):
     sc = defaultdict(int)
     for tool, kws in RULES:
@@ -616,7 +626,7 @@ def local_answer(ctx, q, last_intent=None):
     if (not sc or max(sc.values()) < 2) and last_intent in TOOLS and (p or args.get("type") or args.get("status")) and len(nq.split()) <= 7:
         sc = {last_intent: 3}
     ranked = [t for t, v in sorted(sc.items(), key=lambda kv: -kv[1]) if v >= 2 and _allowed(ctx.u, t)]
-    denied = [t for t, v in sorted(sc.items(), key=lambda kv: -kv[1]) if v >= 4 and not _allowed(ctx.u, t)]
+    denied = [t for t, v in sorted(sc.items(), key=lambda kv: -kv[1]) if v >= 4 and not _allowed(ctx.u, t) and _module_on(ctx.u, t)]   # 0.28.0: a tool whose module is off is "not applicable", not "not permitted"
     if denied and (not ranked or sc[denied[0]] >= sc[ranked[0]]):
         return {"answer": "هذا الموضوع خارج صلاحيات دورك الحالي. يمكنك طلبه من المدير العام أو المالية.", "source": "الصلاحيات", "intent": None}
     if ranked:
@@ -773,7 +783,7 @@ class AskIn(BaseModel):
 
 
 @router.post("/api/assistant")
-def ask(a: AskIn, u=Depends(need("view"))):
+def ask(a: AskIn, u=Depends(need_any("view", "hr_self"))):   # 0.28.0: an employee may ask about their own leave
     return answer(db(), u, a.q, [t.model_dump() for t in a.history], a.intent)
 
 

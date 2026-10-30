@@ -820,10 +820,16 @@ def api_aging(_=Depends(need("leasing"))):
 
 @router.get("/api/lea/tenants/{tid}/statement")
 def api_statement(tid: int, _=Depends(need("leasing"))):
-    c = db()
+    return tenant_statement(db(), tid)
+
+
+def tenant_statement(c, tid: int, drafts: bool = True) -> dict:
+    """The account of one tenant across his leases — shared by the office (`/api/lea/tenants/{tid}/statement`) and the tenant's own portal (his own id only)."""
     t = one(c, "SELECT * FROM tenants_l WHERE id=?", (tid,), "المستأجر غير موجود")
     out = []
     for l in c.execute("SELECT id, number, status, start, \"end\" FROM leases WHERE tenant_id=? ORDER BY start", (tid,)).fetchall():
+        if not drafts and l["status"] == "draft":
+            continue
         d = lease_detail(c, l["id"])
         out.append({"lease_id": l["id"], "number": l["number"], "unit": d["unit"], "status": l["status"], "totals": d["totals"],
                     "entries": sorted([{"date": x["due"], "kind": "due", "label": x["label"] or "إيجار", "debit": x["amount"], "credit": 0} for x in d["dues"]]

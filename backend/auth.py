@@ -40,6 +40,7 @@ ROLES = {
     "hr": "موارد بشرية",
     "employee": "موظف",
     "payroll": "مسؤول رواتب",
+    "lessee": "مستأجر",
 }
 ALL_STAFF = {"view", "inventory", "book", "leads", "finance", "confirm", "decide", "construction", "approve_ipc",
              "service", "admin", "audit", "land", "permits", "kyc", "brokers", "invoices", "handover", "oa",
@@ -59,6 +60,7 @@ PERMS = {
     # 0.25.0 — HR officer: the whole people file but no payroll (`hr_payroll` is the manager's, and the employee's own payslip is `hr_self`); every HR user may also be an employee
     "hr": {"view", "hr", "hr_manager", "hr_self", "docs", "reports", "audit", "notify"},
     "payroll": {"hr_payroll", "hr_self", "hr_manager"},  # 0.26.0 — the payroll officer: salaries, payroll runs, loans and settlements; no people file
+    "lessee": {"lessee"},  # 0.28.0 — the tenant's portal: only /api/lessee, only the leases of the file the login is linked to
     "employee": {"hr_self", "hr_manager"},  # the employee portal: own file, own leave; `hr_manager` only matters for someone who has direct reports (checked per request)
 }
 TWO_FA_REQUIRED = {"admin", "finance", "accountant", "hr", "payroll"}
@@ -67,7 +69,7 @@ USERS_SQL = """
 CREATE TABLE IF NOT EXISTS users(
   id INTEGER PRIMARY KEY, username TEXT UNIQUE, name TEXT, role TEXT, pw TEXT, customer_id INTEGER, broker_id INTEGER,
   active INTEGER DEFAULT 1, must_change INTEGER DEFAULT 0, totp_secret TEXT, totp_enabled INTEGER DEFAULT 0,
-  totp_last INTEGER DEFAULT 0, pw_changed TEXT, employee_id INTEGER);
+  totp_last INTEGER DEFAULT 0, pw_changed TEXT, employee_id INTEGER, lessee_id INTEGER);
 CREATE TABLE IF NOT EXISTS sessions(token_hash TEXT PRIMARY KEY, user_id INTEGER REFERENCES users(id), expires REAL,
   created REAL, last_seen REAL, ip TEXT, ua TEXT, label TEXT);
 CREATE TABLE IF NOT EXISTS auth_failures(k TEXT, at REAL);
@@ -79,7 +81,7 @@ CREATE INDEX IF NOT EXISTS ix_auth_tokens_user ON auth_tokens(user_id, kind);
 """
 USER_MIGR = ["broker_id INTEGER", "must_change INTEGER DEFAULT 0", "totp_secret TEXT", "totp_enabled INTEGER DEFAULT 0",
              "totp_last INTEGER DEFAULT 0", "pw_changed TEXT", "recovery_codes TEXT",
-             "email TEXT", "email_verified INTEGER DEFAULT 0", "google_sub TEXT", "employee_id INTEGER"]  # 0.10.0 external identity · 0.25.0 employee link
+             "email TEXT", "email_verified INTEGER DEFAULT 0", "google_sub TEXT", "employee_id INTEGER", "lessee_id INTEGER"]  # 0.10.0 external identity · 0.25.0 employee link · 0.28.0 tenant link
 SESSION_MIGR = ["created REAL", "last_seen REAL", "ip TEXT", "ua TEXT", "label TEXT"]  # Unit 2
 IDLE_MINUTES = 60          # Unit 2: a session unused for an hour is over (absolute life stays SESSION_HOURS)
 LOGIN_WINDOW = (int(os.environ.get("MABANIQ_LOGIN_BUDGET", "10")), 60)  # Unit 2: per-ip login attempts kept in the database (shared by every instance); the e2e server raises it (many sign-ins from one address)
@@ -181,6 +183,8 @@ def ensure_schema(c) -> None:
     c.executescript(USERS_SQL)
     if "employee_id" in c.columns("users"):
         c.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_users_employee ON users(employee_id) WHERE employee_id IS NOT NULL")  # one login per employee file
+    if "lessee_id" in c.columns("users"):
+        c.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_users_lessee ON users(lessee_id) WHERE lessee_id IS NOT NULL")  # one login per tenant file
 
 
 def ensure_users(c, customers: list[tuple[int, str]], brokers: list[tuple[int, str]] = ()) -> None:
@@ -440,6 +444,7 @@ def public(u, mods=None) -> dict:
     perms = sorted(PERMS[u["role"]]) if mods is None else registry.effective_perms(PERMS[u["role"]], mods)
     return {"id": u["id"], "username": u["username"], "name": u["name"], "role": u["role"],
             "role_label": ROLES[u["role"]], "perms": perms, "customer_id": u["customer_id"], "employee_id": u["employee_id"] if "employee_id" in u.keys() else None,
+            "lessee_id": u["lessee_id"] if "lessee_id" in u.keys() else None,
             "modules": sorted(mods) if mods is not None else [],
             "broker_id": u["broker_id"], "must_change": bool(u["must_change"]), "totp_enabled": bool(u["totp_enabled"]),
             "needs_2fa": needs_2fa, "tenant": TENANT.get()}

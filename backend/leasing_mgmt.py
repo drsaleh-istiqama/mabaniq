@@ -466,4 +466,57 @@ def api_pm_pay(b: PmPay, u=Depends(act_as("leasing_pm"))):
     return {"receipt_no": r["receipt_no"], "amount": r["amount"], "method": METHOD_LABEL[b.method]}
 
 
+# 0.28.0 — the manager's portal, completed: what is late and for how long, which leases end soon, which units stand empty, and the maintenance requests of the units in his scope.
+# Same single clause (`PM_UNIT`), same 404 for anything outside it; read-only.
+@router.get("/api/pm/aging")
+def api_pm_aging(u=Depends(need("leasing_pm"))):
+    c = db()
+    t = today()
+    edges = [(0, 30, "1–30 يومًا"), (31, 60, "31–60 يومًا"), (61, 90, "61–90 يومًا"), (91, 180, "91–180 يومًا"), (181, 10 ** 6, "أكثر من 180 يومًا")]
+    buckets = [{"label": lb, "amount": 0.0, "count": 0} for _a, _b, lb in edges]
+    per: dict = {}
+    for d in c.execute(f"""SELECT d.due, d.amount-d.paid AS left, l.id lid, l.number, u.code unit, t.name tenant, t.phone FROM rent_dues d JOIN leases l ON l.id=d.lease_id
+                           JOIN units u ON u.id=l.unit_id JOIN tenants_l t ON t.id=l.tenant_id
+                           WHERE d.due<? AND d.amount-d.paid>? AND COALESCE(d.kind,'rent')<>'deposit' AND l.status<>'draft' AND {PM_UNIT}""", (t.isoformat(), EPS, u["id"])).fetchall():
+        days = (t - dt.date.fromisoformat(d["due"])).days
+        i = next(k for k, (_a, hi, _l) in enumerate(edges) if days <= hi)
+        buckets[i]["amount"] = r3(buckets[i]["amount"] + d["left"])
+        buckets[i]["count"] += 1
+        x = per.setdefault(d["lid"], {"lease_id": d["lid"], "number": d["number"], "unit": d["unit"], "tenant": d["tenant"], "phone": d["phone"], "amount": 0.0, "oldest_days": 0})
+        x["amount"] = r3(x["amount"] + d["left"])
+        x["oldest_days"] = max(x["oldest_days"], days)
+    return {"buckets": buckets, "total": r3(sum(b["amount"] for b in buckets)), "leases": sorted(per.values(), key=lambda v: -v["amount"])}
+
+
+@router.get("/api/pm/expiring")
+def api_pm_expiring(days: int = Query(90, ge=1, le=365), u=Depends(need("leasing_pm"))):
+    c = db()
+    t = today()
+    out = rows(c.execute(f"""SELECT l.id, l.number, l.start, l."end", l.annual_rent, u.code unit, t.name tenant, t.phone FROM leases l JOIN units u ON u.id=l.unit_id JOIN tenants_l t ON t.id=l.tenant_id
+                             WHERE l.status='active' AND l."end">=? AND l."end"<=? AND {PM_UNIT} ORDER BY l."end" """, (t.isoformat(), (t + dt.timedelta(days=days)).isoformat(), u["id"])))
+    for x in out:
+        x["days_left"] = (dt.date.fromisoformat(x["end"]) - t).days
+    return out
+
+
+@router.get("/api/pm/vacant")
+def api_pm_vacant(u=Depends(need("leasing_pm"))):
+    from .leasing import _units_state
+    c = db()
+    ids = {r["id"] for r in c.execute(f"SELECT u.id FROM units u WHERE COALESCE(u.retained,0)=1 AND {PM_UNIT}", (u["id"],)).fetchall()}
+    return [{"id": x["id"], "code": x["code"], "type": x["type"], "area": x["area"], "project": x["project"], "vacant_since": x["vacant_since"]} for x in _units_state(c) if x["id"] in ids and x["state"] == "vacant"]
+
+
+@router.get("/api/pm/maint")
+def api_pm_maint(u=Depends(need("leasing_pm"))):
+    c = db()
+    out = rows(c.execute(f"""SELECT m.id, m.category, m.description, m.priority, m.status, m.created, m.sla_due, u.code unit FROM maint_requests m JOIN units u ON u.id=m.unit_id
+                             WHERE {PM_UNIT} ORDER BY m.id DESC LIMIT 100""", (u["id"],)))
+    for x in out:
+        x["status_label"] = MAINT_LABEL.get(x["status"], x["status"])
+        x["priority_label"] = PRIORITY_LABEL.get(x["priority"], x["priority"])
+        x["late"] = bool(x["sla_due"] and x["sla_due"] < today().isoformat() and x["status"] not in ("done", "closed", "rejected"))
+    return out
+
+
 __all__ = ["router", "statement_calc", "statement_doc_row", "add_expense"]

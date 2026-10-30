@@ -135,6 +135,32 @@ def api_me_leave_add(b: MyLeaveIn, u=Depends(act_as("hr_self"))):
     return {"id": rid}
 
 
+# ----------------------------------------------------------------------------------------------------- my attendance and my loans (0.28.0)
+@router.get("/api/hr/me/attendance")
+def api_me_attendance(month: str = Query("", max_length=7), u=Depends(need("hr_self"))):
+    """The employee's own days for a month (default: this one): status, times, and a count per status. Only their own rows — the id comes from the account."""
+    c = db()
+    e = _self(c, u)
+    m = month if len(month) == 7 and month[4] == "-" else today().isoformat()[:7]
+    days = rows(c.execute("SELECT day, status, check_in, check_out, note FROM attendance WHERE employee_id=? AND day LIKE ? ORDER BY day", (e["id"], m + "%")))
+    counts: dict = {}
+    for d in days:
+        counts[d["status"]] = counts.get(d["status"], 0) + 1
+    return {"month": m, "days": days, "counts": counts}
+
+
+@router.get("/api/hr/me/loans")
+def api_me_loans(u=Depends(need("hr_self"))):
+    """The employee's own advances and interest-free loans with the instalments and what is still to be deducted."""
+    c = db()
+    e = _self(c, u)
+    out = rows(c.execute("SELECT id, kind, amount, installments, start_period, status, reason, disbursed_on FROM employee_loans WHERE employee_id=? ORDER BY id DESC", (e["id"],)))
+    for ln in out:
+        ln["schedule"] = rows(c.execute("SELECT no, period, amount, status FROM loan_installments WHERE loan_id=? ORDER BY no", (ln["id"],)))
+        ln["remaining"] = round(sum(i["amount"] for i in ln["schedule"] if i["status"] == "due"), 3)
+    return out
+
+
 # ----------------------------------------------------------------------------------------------------- my other requests (a letter, an advance, anything else)
 @router.get("/api/hr/me/requests")
 def api_me_requests(u=Depends(need("hr_self"))):
