@@ -40,6 +40,7 @@ export default defineConfig({
       MABANIQ_FORCE_PW_CHANGE: '0',
       MABANIQ_LOG_JSON: '0',
       MABANIQ_RATE_LOGIN: '60/60', // the suite logs in several times in a row from one address
+      MABANIQ_LOGIN_BUDGET: '60', // …and the per-address budget kept in the database (default 10 per minute) must allow it too
       PYTHONIOENCODING: 'utf-8',
     },
   },

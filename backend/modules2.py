@@ -361,7 +361,13 @@ def rent_pay(did: int, u=Depends(act_as("leasing"))):
 # ======================================================================= المستندات (رفع آمن)
 ALLOWED = {"application/pdf": (b"%PDF", ".pdf"), "image/png": (b"\x89PNG", ".png"), "image/jpeg": (b"\xff\xd8\xff", ".jpg")}
 MAX_DOC = 5 * 1024 * 1024
-REF_TYPES = "^(booking|customer|project|permit|ipc|lease|land|brand|plan|campaign|creative|journal)$"
+REF_TYPES = "^(booking|customer|project|permit|ipc|lease|land|brand|plan|campaign|creative|journal|employee)$"
+
+
+def _employee_files_only_for_hr(u, ref_type) -> None:
+    """0.25.0: scans of passports and contracts are the people file — the generic `docs` permission (sales, engineers…) does not open them."""
+    if ref_type == "employee" and "hr" not in u["perms"]:
+        raise HTTPException(403, "ملفات الموظفين لإدارة الموارد البشرية فقط")
 
 
 def _docs_dir() -> Path:
@@ -374,6 +380,7 @@ def _docs_dir() -> Path:
 async def doc_upload(ref_type: str = Form(..., pattern=REF_TYPES), ref_id: int = Form(...),
                      title: str = Form(..., min_length=2, max_length=100), category: str = Form("عام", max_length=40),
                      file: UploadFile = File(...), u=Depends(act_as("docs"))):
+    _employee_files_only_for_hr(u, ref_type)
     data = await file.read(MAX_DOC + 1)
     c = db()
     did, sha = store_upload(c, data, file.filename, ref_type, ref_id, title, category, u["name"])
@@ -399,7 +406,8 @@ def store_upload(c, data: bytes, filename: str | None, ref_type: str, ref_id: in
 
 
 @router.get("/api/documents")
-def doc_list(ref_type: str = Query(..., pattern=REF_TYPES), ref_id: int = Query(...), _=Depends(need("docs"))):
+def doc_list(ref_type: str = Query(..., pattern=REF_TYPES), ref_id: int = Query(...), u=Depends(need("docs"))):
+    _employee_files_only_for_hr(u, ref_type)
     c = db()
     return rows(c.execute("SELECT id,title,category,filename,mime,size,sha256,uploaded_by,at FROM documents WHERE ref_type=? AND ref_id=?",
                           (ref_type, ref_id)))
@@ -414,9 +422,11 @@ def _send_doc(d):
 
 
 @router.get("/api/documents/{did}")
-def doc_get(did: int, _=Depends(need("docs"))):
+def doc_get(did: int, u=Depends(need("docs"))):
     c = db()
-    return _send_doc(one(c, "SELECT * FROM documents WHERE id=?", (did,)))
+    d = one(c, "SELECT * FROM documents WHERE id=?", (did,))
+    _employee_files_only_for_hr(u, d["ref_type"])
+    return _send_doc(d)
 
 
 @router.get("/api/portal/documents/{did}")
@@ -746,7 +756,7 @@ def users(_=Depends(need("users"))):
 class UserIn(BaseModel):
     username: str = Field(min_length=3, max_length=30, pattern=r"^[a-z][a-z0-9._-]+$")
     name: str = Field(min_length=3, max_length=60)
-    role: str = Field(pattern="^(admin|sales|finance|engineer|investor|property_manager)$")
+    role: str = Field(pattern="^(admin|sales|finance|engineer|investor|property_manager|accountant|hr)$")
     email: str | None = Field(default=None, max_length=120)  # 0.10.0: enables recovery links, e-mail sign-in and Google matching
 
 

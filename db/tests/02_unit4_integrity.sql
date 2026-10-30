@@ -2,7 +2,7 @@
 BEGIN;
 SELECT plan(
   (SELECT count(*)::int FROM pg_tables WHERE schemaname='public' AND tablename NOT IN ('schema_migrations','audit')) * 2
-  + 31 + 3 + 3 + 7 + 2
+  + 35 + 3 + 3 + 7 + 2 + 3
 );
 
 -- 1) every application table (audit excepted) has updated_at and the trigger
@@ -16,7 +16,7 @@ SELECT is((SELECT count(*) FROM pg_trigger tr JOIN pg_class c ON c.oid = tr.tgre
 -- 2) no DELETE on the ledgers for mabaniq_app (16 tables, incl. the issued-document registry since 0005)
 SELECT ok(NOT has_table_privilege('mabaniq_app', x, 'DELETE'), format('mabaniq_app has no DELETE on %s', x))
   FROM unnest(ARRAY['payments','installments','invoices','refunds','charity_dues','bank_lines','distributions','commissions',
-                    'resale_settlements','rent_dues','oa_charges','pay_intents','ipcs','ipc_items','doc_issues','doc_sends','rent_payments','arrears_notices','owner_statements','import_batches','acc_accounts','acc_cost_centers','acc_periods','bank_accounts','payment_orders','vat_returns','bank_recons','depreciation_runs','ap_payments']) AS x;
+                    'resale_settlements','rent_dues','oa_charges','pay_intents','ipcs','ipc_items','doc_issues','doc_sends','rent_payments','arrears_notices','owner_statements','import_batches','acc_accounts','acc_cost_centers','acc_periods','bank_accounts','payment_orders','vat_returns','bank_recons','depreciation_runs','ap_payments','employees','leave_requests','hr_requests','leave_types']) AS x;
 -- 0.21.0: the rent payments ledger is also closed to UPDATE (a correction is a reversing row)
 SELECT ok(NOT has_table_privilege('mabaniq_app', 'rent_payments', 'UPDATE'), 'mabaniq_app has no UPDATE on rent_payments');
 -- 0.24.0: a supplier payment is a ledger row too
@@ -54,6 +54,13 @@ SELECT throws_like($$ DELETE FROM acc_accounts WHERE code = 'T1' $$, '%permissio
 -- 0.24.0: a bank account can only be Islamic (a conventional one is refused by the database as well as by the API)
 SELECT throws_like($$ INSERT INTO bank_accounts(name, account_id, islamic) SELECT 'conv', id, 0 FROM acc_accounts WHERE code = 'T1' $$, '%check constraint%', 'a non-Islamic bank account is refused');
 SELECT throws_like($$ UPDATE ap_payments SET amount = 0 WHERE id = -1 $$, '%permission denied%', 'app role cannot UPDATE ap_payments');
+-- 0.25.0: the people file — an employee cannot be his own manager, a leave cannot end before it starts, one version of a leave type per effective date
+INSERT INTO employees(number, name, hire_date) VALUES ('T-1', 'tap-employee', '2026-01-01');
+INSERT INTO leave_types(key, name, valid_from) VALUES ('t', 'tap-type', '2000-01-01');
+SELECT throws_like($$ UPDATE employees SET manager_id = id WHERE number = 'T-1' $$, '%check constraint%', 'an employee cannot be his own manager');
+SELECT throws_like($$ INSERT INTO leave_requests(employee_id, type_id, type_key, from_date, to_date, days) SELECT e.id, t.id, 't', '2026-02-02', '2026-02-01', 1 FROM employees e, leave_types t WHERE e.number = 'T-1' AND t.key = 't' $$,
+                   '%check constraint%', 'a leave cannot end before it starts');
+SELECT throws_like($$ INSERT INTO leave_types(key, name, valid_from) VALUES ('t', 'dup', '2000-01-01') $$, '%duplicate key%', 'one version of a leave type per effective date');
 RESET ROLE;
 
 SELECT * FROM finish();

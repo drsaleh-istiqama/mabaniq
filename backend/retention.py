@@ -31,7 +31,8 @@ def policy() -> dict:
     return {"enabled": settings.retention_enabled, "every_hours": settings.retention_hours,
             "login_telemetry_days": r["login"], "expired_sessions_days": r["sessions"], "notifications_days": r["notifications"],
             "pending_pay_intents_days": r["pay_intents"], "messages_phone_mask_days": r["messages"], "demo_requests_days": r["demo_requests"],
-            "never": ["audit", "payments", "installments", "invoices", "refunds", "charity_dues", "sale_contracts", "customers (via privacy_requests only)"]}
+            "never": ["audit", "payments", "installments", "invoices", "refunds", "charity_dues", "sale_contracts", "customers (via privacy_requests only)",
+                      "employees", "leave_requests", "hr_requests"]}  # 0.25.0: service history is kept after the end of service
 
 
 def _mask_phone(p: str | None) -> str:

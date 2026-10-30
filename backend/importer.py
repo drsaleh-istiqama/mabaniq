@@ -48,6 +48,8 @@ SPECS: dict[str, list[tuple[str, str, bool]]] = {
 EXTRA_SPECS: dict[str, list[tuple[str, str, bool]]] = {
     "bank_stmt": [("date", "التاريخ", True), ("description", "البيان", False), ("reference", "المرجع", False), ("debit", "مدين", False), ("credit", "دائن", False),
                   ("amount", "المبلغ", False), ("balance", "الرصيد", False)],
+    # 0.25.0 — a device export of attendance (same reader: no formulas, size limits)
+    "attendance": [("number", "رقم الموظف", True), ("date", "التاريخ", True), ("check_in", "الدخول", False), ("check_out", "الخروج", False), ("status", "الحالة", False)],
 }
 KIND_LABEL = {"units": "الوحدات", "tenants": "المستأجرون", "leases": "العقود", "payments": "المدفوعات", "cheques": "الشيكات"}
 METHOD_WORDS = {"نقد": "cash", "نقدا": "cash", "نقدًا": "cash", "cash": "cash", "شيك": "cheque", "cheque": "cheque", "تحويل": "transfer", "transfer": "transfer",

@@ -37,10 +37,13 @@ ROLES = {
     "customer": "عميل",
     "property_manager": "مدير عقاري (خارجي)",
     "accountant": "محاسب",
+    "hr": "موارد بشرية",
+    "employee": "موظف",
 }
 ALL_STAFF = {"view", "inventory", "book", "leads", "finance", "confirm", "decide", "construction", "approve_ipc",
              "service", "admin", "audit", "land", "permits", "kyc", "brokers", "invoices", "handover", "oa",
-             "leasing", "leasing_approve", "market", "reports", "notify", "users", "docs", "accounting", "accounting_approve"}
+             "leasing", "leasing_approve", "market", "reports", "notify", "users", "docs", "accounting", "accounting_approve",
+             "hr", "hr_payroll", "hr_manager", "hr_self"}
 PERMS = {
     "admin": ALL_STAFF,
     "sales": {"view", "inventory", "book", "leads", "service", "kyc", "brokers", "market", "notify", "docs"},
@@ -52,14 +55,17 @@ PERMS = {
     "customer": {"portal"},
     "property_manager": {"leasing_pm"},  # 0.22.0 — external manager: only /api/pm, only inside his user_scopes
     "accountant": {"view", "finance", "invoices", "accounting", "docs", "reports", "audit"},  # 0.23.0 — books and statements; approval stays with the manager
+    # 0.25.0 — HR officer: the whole people file but no payroll (`hr_payroll` is the manager's, and the employee's own payslip is `hr_self`); every HR user may also be an employee
+    "hr": {"view", "hr", "hr_manager", "hr_self", "docs", "reports", "audit", "notify"},
+    "employee": {"hr_self", "hr_manager"},  # the employee portal: own file, own leave; `hr_manager` only matters for someone who has direct reports (checked per request)
 }
-TWO_FA_REQUIRED = {"admin", "finance", "accountant"}
+TWO_FA_REQUIRED = {"admin", "finance", "accountant", "hr"}
 
 USERS_SQL = """
 CREATE TABLE IF NOT EXISTS users(
   id INTEGER PRIMARY KEY, username TEXT UNIQUE, name TEXT, role TEXT, pw TEXT, customer_id INTEGER, broker_id INTEGER,
   active INTEGER DEFAULT 1, must_change INTEGER DEFAULT 0, totp_secret TEXT, totp_enabled INTEGER DEFAULT 0,
-  totp_last INTEGER DEFAULT 0, pw_changed TEXT);
+  totp_last INTEGER DEFAULT 0, pw_changed TEXT, employee_id INTEGER);
 CREATE TABLE IF NOT EXISTS sessions(token_hash TEXT PRIMARY KEY, user_id INTEGER REFERENCES users(id), expires REAL,
   created REAL, last_seen REAL, ip TEXT, ua TEXT, label TEXT);
 CREATE TABLE IF NOT EXISTS auth_failures(k TEXT, at REAL);
@@ -71,10 +77,10 @@ CREATE INDEX IF NOT EXISTS ix_auth_tokens_user ON auth_tokens(user_id, kind);
 """
 USER_MIGR = ["broker_id INTEGER", "must_change INTEGER DEFAULT 0", "totp_secret TEXT", "totp_enabled INTEGER DEFAULT 0",
              "totp_last INTEGER DEFAULT 0", "pw_changed TEXT", "recovery_codes TEXT",
-             "email TEXT", "email_verified INTEGER DEFAULT 0", "google_sub TEXT"]  # 0.10.0 external identity
+             "email TEXT", "email_verified INTEGER DEFAULT 0", "google_sub TEXT", "employee_id INTEGER"]  # 0.10.0 external identity · 0.25.0 employee link
 SESSION_MIGR = ["created REAL", "last_seen REAL", "ip TEXT", "ua TEXT", "label TEXT"]  # Unit 2
 IDLE_MINUTES = 60          # Unit 2: a session unused for an hour is over (absolute life stays SESSION_HOURS)
-LOGIN_WINDOW = (10, 60)    # Unit 2: per-ip login attempts kept in the database (shared by every instance)
+LOGIN_WINDOW = (int(os.environ.get("MABANIQ_LOGIN_BUDGET", "10")), 60)  # Unit 2: per-ip login attempts kept in the database (shared by every instance); the e2e server raises it (many sign-ins from one address)
 COOLDOWN_AFTER = 3         # Unit 2 (M10): graded lockout — after 3 failures each further attempt must wait 1,2,4,…,60 s
 
 DEMO = [  # username, name, role
@@ -171,6 +177,8 @@ def ensure_schema(c) -> None:
                 if col.split()[0] not in have:
                     c.execute(f"ALTER TABLE {table} ADD COLUMN {col}")
     c.executescript(USERS_SQL)
+    if "employee_id" in c.columns("users"):
+        c.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_users_employee ON users(employee_id) WHERE employee_id IS NOT NULL")  # one login per employee file
 
 
 def ensure_users(c, customers: list[tuple[int, str]], brokers: list[tuple[int, str]] = ()) -> None:
@@ -429,7 +437,7 @@ def public(u, mods=None) -> dict:
     needs_2fa = prod() and u["role"] in TWO_FA_REQUIRED and not u["totp_enabled"]
     perms = sorted(PERMS[u["role"]]) if mods is None else registry.effective_perms(PERMS[u["role"]], mods)
     return {"id": u["id"], "username": u["username"], "name": u["name"], "role": u["role"],
-            "role_label": ROLES[u["role"]], "perms": perms, "customer_id": u["customer_id"],
+            "role_label": ROLES[u["role"]], "perms": perms, "customer_id": u["customer_id"], "employee_id": u["employee_id"] if "employee_id" in u.keys() else None,
             "modules": sorted(mods) if mods is not None else [],
             "broker_id": u["broker_id"], "must_change": bool(u["must_change"]), "totp_enabled": bool(u["totp_enabled"]),
             "needs_2fa": needs_2fa, "tenant": TENANT.get()}

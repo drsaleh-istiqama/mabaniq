@@ -46,20 +46,20 @@ const scoreC = v => v >= 75 ? 'p-ok' : v >= 50 ? 'p-w' : 'p-b';
 
 /* ---------------- الحالة والتنقل ---------------- */
 const S = {screen: 'ov', projects: [], proj: null, bld: null, plan: 0, me: null};
-const SCREEN_PERM = {acc: 'accounting', pmg: 'leasing_pm', lea: 'leasing', ov: 'view', inv: 'inventory', crm: 'leads', fin: 'finance', con: 'construction', svc: 'service', log: 'audit', pre: 'permits', sal: 'kyc', bill: 'invoices', post: 'handover', rep: 'reports', mk: 'leads', adm: 'view'};
+const SCREEN_PERM = {hr: 'hr', me: 'hr_self', acc: 'accounting', pmg: 'leasing_pm', lea: 'leasing', ov: 'view', inv: 'inventory', crm: 'leads', fin: 'finance', con: 'construction', svc: 'service', log: 'audit', pre: 'permits', sal: 'kyc', bill: 'invoices', post: 'handover', rep: 'reports', mk: 'leads', adm: 'view'};
 const SCREEN_ANY = {pre: ['permits', 'land'], post: ['handover', 'oa', 'leasing', 'service'], sal: ['kyc', 'brokers', 'market'], rep: ['reports', 'finance', 'view'], mk: ['leads', 'inventory', 'reports']};  // Unit 7: reports for every staff role (the API filters by permission), marketing for sales/inventory/reports
 const can = p => S.me?.perms.includes(p);
-const SCREEN_MOD = {acc: ['accounting'], pmg: ['leasing'], lea: ['leasing'], pre: ['land'], inv: [], crm: ['sales'], mk: ['marketing'], sal: ['sales'], con: ['construction'], post: ['handover', 'leasing'], svc: ['handover'], fin: ['finance'], bill: ['finance'], rep: ['reports']};  // 0.20.0: a screen needs one of its modules (none listed = core)
+const SCREEN_MOD = {hr: ['hr'], me: ['hr'], acc: ['accounting'], pmg: ['leasing'], lea: ['leasing'], pre: ['land'], inv: [], crm: ['sales'], mk: ['marketing'], sal: ['sales'], con: ['construction'], post: ['handover', 'leasing'], svc: ['handover'], fin: ['finance'], bill: ['finance'], rep: ['reports']};  // 0.20.0: a screen needs one of its modules (none listed = core)
 const modOn = m => (S.me?.modules || []).includes(m);
-const canS = s => (SCREEN_ANY[s] || [SCREEN_PERM[s]]).some(can) && (!(SCREEN_MOD[s] || []).length || SCREEN_MOD[s].some(modOn));
+const canS = s => (SCREEN_ANY[s] || [SCREEN_PERM[s]]).some(can) && (!(SCREEN_MOD[s] || []).length || SCREEN_MOD[s].some(modOn)) && (s !== 'me' || !!S.me?.employee_id);  // 0.25.0: the portal needs a login that is linked to an employee file
 function go(s) {
-  if (!canS(s)) s = canS('ov') ? 'ov' : 'rep';
+  if (!canS(s)) s = canS('ov') ? 'ov' : canS('me') ? 'me' : 'rep';
   S.screen = s;
   $$('[data-s]').forEach(b => b.classList.toggle('on', b.dataset.s === s));
   $$('.scr').forEach(x => x.classList.toggle('on', x.id === s));
   localStorage.setItem('mbq-screen', s);
   ({ov: loadOverview, inv: loadInventory, crm: loadCRM, fin: loadFinance, con: () => { loadIPC(); EXT.l_conx(); }, svc: loadService, log: loadAudit,
-    acc: () => EXT.l_acc(), pmg: () => EXT.l_pm(), lea: () => EXT.l_lea(), pre: () => EXT.l_pre(), sal: () => EXT.l_sal(), bill: () => EXT.l_bill(), post: () => EXT.l_post(), rep: () => EXT.l_rep(), mk: () => EXT.l_mk(), adm: () => EXT.l_adm()})[s]?.()?.catch?.(e => toast(e.message, 1));
+    acc: () => EXT.l_acc(), hr: () => EXT.l_hr(), me: () => EXT.l_me(), pmg: () => EXT.l_pm(), lea: () => EXT.l_lea(), pre: () => EXT.l_pre(), sal: () => EXT.l_sal(), bill: () => EXT.l_bill(), post: () => EXT.l_post(), rep: () => EXT.l_rep(), mk: () => EXT.l_mk(), adm: () => EXT.l_adm()})[s]?.()?.catch?.(e => toast(e.message, 1));
   crumb(); shell(s);
 }
 $$('[data-s]').forEach(b => b.onclick = e => { e.preventDefault(); document.body.classList.remove('nav-open'); go(b.dataset.s); });
@@ -72,6 +72,8 @@ const META = {
   con: ['2 · البيع والإنشاء', 'الإنشاء والمستخلصات', 'التحقق من نسب الإنجاز قبل الصرف، والجدول الزمني، وأوامر التغيير وتقارير الموقع.'],
   fin: ['عبر الدورة · المالية', 'السيولة والتعثر', 'أرصدة حسابات الضمان المتوقعة لاثني عشر شهرًا، والعملاء المعرّضون للتعثر.'],
   bill: ['عبر الدورة · المالية', 'الفواتير والضمان', 'الفواتير والضريبة، والغرامات والفسخ، والمطابقة البنكية وحساب الضمان والتصدير المحاسبي.'],
+  hr: ['عبر الدورة · الموارد البشرية', 'الموارد البشرية', 'الهيكل والموظفون ووثائقهم وتنبيهات انتهائها، والإجازات والحضور وطلبات الموظفين.'],
+  me: ['عبر الدورة · الموارد البشرية', 'بوابتي', 'ملفي وأرصدة إجازاتي وطلباتي، وفريقي إن كان لي مرؤوسون.'],
   acc: ['عبر الدورة · المالية', 'المحاسبة', 'دليل الحسابات والقيود المزدوجة وميزان المراجعة ودفتر الأستاذ، مع ترحيل أحداث التأجير تلقائيًا.'],
   pmg: ['3 · التسليم والتشغيل', 'محفظتي (مدير عقاري)', 'العقود والتحصيل داخل نطاقك فقط.'],
   lea: ['3 · التسليم والتشغيل', 'الإيجارات', 'المحفظة والعقود والمستأجرون والتحصيل والشيكات والمتأخرات.'],
@@ -509,6 +511,7 @@ function groupsVis() { $$('.side .grp').forEach(g => { if (g.id === 'pfSec') ret
     if (S.me.role === 'broker') { location.href = '/broker'; return; }
     if (S.me.role === 'investor') { S.screen = 'rep'; }
     if (S.me.role === 'property_manager') { S.screen = 'pmg'; }
+    if (S.me.role === 'employee') { S.screen = 'me'; }
     if (S.me.must_change) { EXT.changePw(true); return; }
     if (S.me.needs_2fa) { await EXT.setup2fa(); $('#mbox').insertAdjacentHTML('afterbegin', '<div class="ai"><b class="k">مطلوب:</b> التحقق الثنائي إلزامي لدورك قبل الوصول إلى البيانات.</div>'); return; }
     await refreshAll(); } catch (e) { toast('تعذّر الاتصال بالخادم: ' + e.message, 1); }
@@ -540,7 +543,7 @@ const tryDo = async (fn, ok) => { try { const r = await fn(); if (ok) toast(type
 const projOpts = (cur) => S.projects.map(p => `<option value="${p.id}" ${p.id === cur ? 'selected' : ''}>${esc(p.name)}</option>`).join('');
 
 const EXT = {
-  cur: {lea: 'ov', pre: 'land', post: 'hand', sal: 'kyc', bill: 'inv', adm: 'users', rep: 'ready', mk: 'board'},
+  cur: {hr: 'ov', me: 'me', lea: 'ov', pre: 'land', post: 'hand', sal: 'kyc', bill: 'inv', adm: 'users', rep: 'ready', mk: 'board'},
   data: {},
   sub(id, k) { this.cur[id] = k; this.load(id); },
   load(id) { return this['l_' + id](); },
@@ -1881,3 +1884,263 @@ EXT.accYearClose = async () => {
   const y = +prompt('السنة المراد إقفالها:', new Date().getFullYear() - 1) || 0; if (!y || !confirm('إقفال السنة ' + y + ' يقفل كل أشهرها. متابعة؟')) return;
   const r = await tryDo(() => post('/acc/year-close', {year: y}), 'أُقفلت السنة'); toast(`صافي الربح المرحَّل ${A3(r.net_profit)}`); EXT.l_acc();
 };
+
+/* ================================================================ الموارد البشرية — النواة (0.25.0) */
+const HR_ST = {active: ['على رأس العمل', 'p-ok'], on_leave: ['في إجازة', 'p-w'], terminated: ['منتهي الخدمة', 'p-b']};
+const HR_LV = {pending: ['بانتظار القرار', 'p-w'], approved: ['معتمدة', 'p-ok'], rejected: ['مرفوضة', 'p-b'], cancelled: ['ملغاة', 'p-bl']};
+const HR_LVL = {expired: ['منتهية', 'p-b'], critical: ['خلال 30 يومًا', 'p-w'], soon: ['خلال 90 يومًا', 'p-bl']};
+const HR_DOCS = {passport: 'جواز السفر', resident_card: 'البطاقة المدنية / الإقامة', work_permit: 'تصريح العمل', labour_card: 'بطاقة العمل', health_insurance: 'التأمين الصحي', contract: 'عقد العمل', certificate: 'شهادة', other: 'أخرى'};
+const HR_ATT = {present: 'حاضر', absent: 'غائب', late: 'متأخر', leave: 'إجازة', holiday: 'عطلة', remote: 'عن بُعد'};
+const HR_RQ = {letter: 'خطاب', advance: 'سلفة', other: 'أخرى'}, HR_RQS = {pending: ['بانتظار', 'p-w'], approved: ['معتمد', 'p-ok'], rejected: ['مرفوض', 'p-b'], done: ['منجز', 'p-bl']};
+const hrDay = () => new Date().toISOString().slice(0, 10);
+const HF = (id, label, val = '', type = 'text', extra = '') => `<label for="${id}">${label}</label><input id="${id}" type="${type}" value="${esc(val ?? '')}" ${extra}>`;
+const HS = (id, label, opts, val) => `<label for="${id}">${label}</label><select id="${id}">${opts.map(([v, l]) => `<option value="${esc(v)}" ${String(v) === String(val ?? '') ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
+const hrUpload = async (path, file) => {
+  const fd = new FormData(); fd.append('file', file);
+  const r = await fetch('/api' + path, {method: 'POST', headers: {'X-CSRF-Token': csrf()}, body: fd}), j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(typeof j.detail === 'string' ? j.detail : 'تعذّر الرفع');
+  return j;
+};
+const hrNote = txt => `<p class="muted" style="margin:4px 0 10px">${txt}</p>`;
+const F2 = v => (+v || 0).toLocaleString('ar-OM-u-nu-latn', {maximumFractionDigits: 2});  // leave days can be fractional (monthly accrual): never rounded to a whole day on screen
+const hrDays = n => n === 1 ? 'يوم' : n === 2 ? 'يومان' : n >= 3 && n <= 10 ? 'أيام' : 'يومًا';
+const hrAgo = d => d < 0 ? `منذ ${N(-d)} ${hrDays(-d)}` : d === 0 ? 'اليوم' : `بعد ${N(d)} ${hrDays(d)}`;
+const hrBal = b => `<tr><td>${esc(b.name)}</td><td>${F2(b.entitled)}</td><td>${F2(b.carried)}</td><td>${F2(b.adjusted)}</td><td>${F2(b.taken)}</td><td>${F2(b.pending)}</td><td><b>${F2(b.remaining)}</b></td></tr>`;
+const HR_BAL_HEAD = ['النوع', 'المستحق', 'المرحَّل', 'التعديل', 'المأخوذ', 'بانتظار القرار', 'المتبقي'];
+const hrAlertRows = al => al.map(a => `<tr data-call="EXT.hrEmp" data-args="${J([a.employee_id])}" style="cursor:pointer"><td>${pill(...HR_LVL[a.level])}</td><td>${esc(a.name)} <small class="muted">${esc(a.number)}</small></td><td>${esc(a.label)}</td><td>${fmtDate(a.date)}</td><td>${hrAgo(a.days_left)}</td></tr>`);
+const hrLeaveRows = (L, who) => L.map(r => `<tr><td>${who ? esc(r.name) + ' <small class="muted">' + esc(r.number) + '</small>' : esc(r.type_name)}</td>${who ? '<td>' + esc(r.type_name) + '</td>' : ''}<td>${fmtDate(r.from_date)} ← ${fmtDate(r.to_date)}</td><td>${F2(r.days)}</td>
+  <td>${pill(esc(r.status_label), HR_LV[r.status][1])}${r.needs_doc && !r.doc_id && r.status === 'pending' ? ' <small class="muted">يلزمه مرفق</small>' : ''}</td><td class="btns">${hrLeaveActions(r)}</td></tr>`);
+function hrLeaveActions(r) {
+  const out = [], mine = S.me.employee_id === r.employee_id;
+  if (r.status === 'pending' && !mine && (can('hr') || (can('hr_manager') && r.manager_id === S.me.employee_id && r.stage === 'manager'))) out.push(`<button class="btn p" data-call="EXT.hrDecide" data-args="${J([r.id, 'approve'])}">اعتماد</button> <button class="btn" data-call="EXT.hrDecide" data-args="${J([r.id, 'reject'])}">رفض</button>`);
+  if (r.needs_doc && (r.status === 'pending' || r.status === 'approved') && (mine || can('hr'))) out.push(`<button class="btn" data-call="EXT.hrAttach" data-args="${J([r.id])}">${r.doc_id ? 'استبدال المرفق' : 'إرفاق'}</button>`);
+  if ((r.status === 'pending' && mine) || (r.status === 'approved' && (can('hr') || (mine && r.from_date > hrDay())))) out.push(`<button class="btn" data-call="EXT.hrCancel" data-args="${J([r.id, r.status === 'approved' && !(mine && r.from_date > hrDay())])}">إلغاء</button>`);
+  if (r.doc_id && can('hr') && can('docs')) out.push(`<a class="btn" href="/api/documents/${r.doc_id}" target="_blank" rel="noopener">المرفق</a>`);
+  return out.join(' ');
+}
+EXT.hrDecide = async (id, action) => {
+  let note = ''; if (action === 'reject') { note = prompt('سبب الرفض (إلزامي):', '') || ''; if (!note.trim()) return; }
+  await tryDo(() => post(`/hr/leave/requests/${id}/decide`, {action, note}), r => r.status === 'approved' ? 'اعتُمدت الإجازة' : r.status === 'rejected' ? 'رُفضت الإجازة' : 'اعتمدها المدير — بانتظار الموارد البشرية'); EXT.hrRefresh();
+};
+EXT.hrCancel = async (id, needReason) => {
+  let reason = ''; if (needReason) { reason = prompt('سبب الإلغاء (إلزامي):', '') || ''; if (!reason.trim()) return; }
+  await tryDo(() => post(`/hr/leave/requests/${id}/cancel`, {reason}), 'أُلغي الطلب'); EXT.hrRefresh();
+};
+EXT.hrAttach = id => {
+  const f = document.createElement('input'); f.type = 'file'; f.accept = '.pdf,.png,.jpg,.jpeg';
+  f.onchange = async () => { if (f.files[0]) { await tryDo(() => hrUpload(`/hr/leave/requests/${id}/attachment`, f.files[0]), 'أُرفق الملف'); EXT.hrRefresh(); } };
+  f.click();
+};
+EXT.hrRefresh = () => S.screen === 'me' ? EXT.l_me() : EXT.l_hr();
+
+EXT.l_hr = async function () {
+  const tabs = [['ov', 'نظرة عامة'], ['emp', 'الموظفون'], ['org', 'الهيكل'], ['lv', 'الإجازات'], ['att', 'الحضور'], ['rq', 'الطلبات'], ['cfg', 'العطل والإعدادات']], el = $('#hr'), k = this.cur.hr;
+  el.innerHTML = SUB0('hr', tabs, k) + '<div id="hrB">…</div>';
+  const B = $('#hrB');
+  if (k === 'ov') {
+    const [s, al, ty] = await Promise.all([api('/hr/summary'), api('/hr/alerts'), api('/hr/leave/types')]);
+    const prov = ty.filter(t => t.current && t.provisional);
+    B.innerHTML = KP([['العاملون', N(s.headcount)], ['العُمانيون', s.omani_pct == null ? '—' : N(s.omani) + ' (' + s.omani_pct.toLocaleString('ar-OM-u-nu-latn') + '٪)', 'نسبة معلوماتية'], ['في إجازة اليوم', N(s.on_leave_today)], ['عقود محددة المدة', N(s.contracts.fixed)],
+        ['تعيينات آخر 90 يومًا', N(s.hired_90d)], ['وثائق منتهية أو خلال 30 يومًا', N(s.expiring_30)], ['إجازات بانتظار القرار', N(s.pending_leave)], ['طلبات بانتظار القرار', N(s.pending_requests)]])
+      + (prov.length ? BOX('تنبيه: قيم الإجازات مبدئية', `<p>${N(prov.length)} من أنواع الإجازات بقيم وضعتها المنصة ولم يؤكدها مختص بقانون العمل بعد. راجعها من تبويب «الإجازات» ثم اضغط «اعتماد القيم».</p>`) : '')
+      + BOX(`ما ينتهي قريبًا <span class="muted">${N(al.length)}</span>`, T(['الحال', 'الموظف', 'البند', 'التاريخ', 'المدة'], hrAlertRows(al), 'لا وثائق أو عقود تنتهي خلال 90 يومًا.'))
+      + BOX('العاملون حسب القسم', T(['القسم', 'العدد'], s.by_department.map(d => `<tr><td>${esc(d.department)}</td><td>${N(d.n)}</td></tr>`), 'لا موظفين بعد.'));
+    const b = $('#cHr'); if (b) { const n = s.pending_leave + s.pending_requests; b.textContent = n ? N(n) : ''; b.classList.toggle('hidden', !n); }
+  } else if (k === 'emp') {
+    const st = this.hrSt || 'current', q = this.hrQ || '', L = await api(`/hr/employees?status=${st}${q ? '&q=' + encodeURIComponent(q) : ''}`);
+    B.innerHTML = `<div class="toolbar"><input id="hq" placeholder="بحث بالاسم أو الرقم" value="${esc(q)}"> <select id="hst"><option value="current" ${st === 'current' ? 'selected' : ''}>على رأس العمل</option><option value="terminated" ${st === 'terminated' ? 'selected' : ''}>منتهو الخدمة</option></select> <button class="btn p" data-call="EXT.hrEmpForm">+ موظف</button></div>`
+      + T(['الرقم', 'الاسم', 'القسم', 'المسمى', 'المدير المباشر', 'التعيين', 'الحال', 'الدخول'], L.map(e => `<tr data-call="EXT.hrEmp" data-args="${J([e.id])}" style="cursor:pointer"><td>${esc(e.number)}</td><td>${esc(e.name)}</td><td>${esc(e.department || '—')}</td><td>${esc(e.position || '—')}</td><td>${esc(e.manager || '—')}</td><td>${fmtDate(e.hire_date)}</td><td>${pill(...HR_ST[e.status])}</td><td>${e.username ? esc(e.username) : '<span class="muted">—</span>'}</td></tr>`), 'لا موظفين.');
+    $('#hq').onchange = e => { EXT.hrQ = e.target.value.trim(); EXT.l_hr(); }; $('#hst').onchange = e => { EXT.hrSt = e.target.value; EXT.l_hr(); };
+  } else if (k === 'org') {
+    const [D, P, tree] = await Promise.all([api('/hr/departments'), api('/hr/positions'), api('/hr/tree')]);
+    const node = d => `<li><b>${esc(d.name)}</b> <small class="muted">${d.head ? 'رئيسه: ' + esc(d.head) + ' · ' : ''}${N(d.people.length)} موظف</small>${d.children.length ? '<ul>' + d.children.map(node).join('') + '</ul>' : ''}</li>`;
+    B.innerHTML = BOX('الأقسام', T(['القسم', 'يتبع', 'الرئيس', 'مركز الكلفة', 'العاملون', ''], D.map(d => `<tr><td>${esc(d.name)} ${d.active ? '' : pill('موقوف', 'p-b')}</td><td>${esc(d.parent || '—')}</td><td>${esc(d.head || '—')}</td><td>${esc(d.cost_center || '—')}</td><td>${N(d.headcount)}</td>
+        <td><button class="btn" data-call="EXT.hrDeptForm" data-args="${J([d.id])}">تعديل</button></td></tr>`), 'لا أقسام.'), '<button class="btn p" data-call="EXT.hrDeptForm" data-args="[0]">+ قسم</button>')
+      + BOX('المسميات الوظيفية', T(['المسمى', 'القسم', 'الدرجة', 'العدد المعتمد', 'المشغول', ''], P.map(p => `<tr><td>${esc(p.title)} ${p.active ? '' : pill('موقوف', 'p-b')}</td><td>${esc(p.department || '—')}</td><td>${esc(p.grade || '—')}</td><td>${N(p.headcount)}</td><td>${p.filled > p.headcount ? pill(N(p.filled) + ' (فوق المعتمد)', 'p-w') : N(p.filled)}</td>
+        <td><button class="btn" data-call="EXT.hrPosForm" data-args="${J([p.id])}">تعديل</button></td></tr>`), 'لا مسميات.'), '<button class="btn p" data-call="EXT.hrPosForm" data-args="[0]">+ مسمى</button>')
+      + BOX('الهيكل', `<ul class="tree">${tree.departments.map(node).join('') || '<li class="muted">لا أقسام.</li>'}</ul>${tree.unassigned.length ? '<p class="muted">بلا قسم: ' + tree.unassigned.map(p => esc(p.name)).join('، ') + '</p>' : ''}`);
+  } else if (k === 'lv') {
+    const st = this.hrLvSt ?? 'pending', [R, ty] = await Promise.all([api(`/hr/leave/requests${st ? '?status=' + st : ''}`), api('/hr/leave/types')]);
+    B.innerHTML = `<div class="toolbar"><select id="lvs">${[['pending', 'بانتظار القرار'], ['approved', 'المعتمدة'], ['rejected', 'المرفوضة'], ['cancelled', 'الملغاة'], ['', 'الكل']].map(([v, l]) => `<option value="${v}" ${v === st ? 'selected' : ''}>${l}</option>`).join('')}</select> <button class="btn p" data-call="EXT.hrLeaveForm">+ تسجيل إجازة لموظف</button></div>`
+      + T(['الموظف', 'النوع', 'المدة', 'الأيام', 'الحال', ''], hrLeaveRows(R, true), 'لا طلبات.')
+      + BOX('أنواع الإجازات وأرصدتها', hrNote('كل نوع نسخ بتاريخ سريان؛ تغيير القاعدة نسخة جديدة لا تعديل. القيم التي وضعتها المنصة موسومة «مبدئية» حتى يؤكدها مختص بقانون العمل.')
+        + T(['النوع', 'مدفوعة', 'أيام السنة', 'الاستحقاق', 'الاحتساب', 'مرفق', 'تعتمدها الموارد', 'السريان', 'الحال', ''], ty.filter(t => t.current).map(t => `<tr><td>${esc(t.name)} <small class="muted">${esc(t.key)}</small></td><td>${t.paid ? 'نعم' : 'لا'}</td><td>${F2(t.days_per_year)}</td><td>${{annual: 'سنوي', monthly: 'شهري', event: 'لكل حدث'}[t.accrual]}</td><td>${t.day_count === 'working' ? 'عمل' : 'تقويمي'}</td><td>${t.needs_doc ? 'نعم' : '—'}</td><td>${t.needs_hr ? 'نعم' : '—'}</td><td>${fmtDate(t.valid_from)}</td>
+          <td>${t.provisional ? pill('مبدئية', 'p-w') : pill('مؤكدة', 'p-ok')}</td><td>${t.provisional ? `<button class="btn" data-call="EXT.hrTypeConfirm" data-args="${J([t.id])}">اعتماد القيم</button>` : ''}</td></tr>`)), '<button class="btn" data-call="EXT.hrTypeForm">+ نسخة جديدة</button>');
+    $('#lvs').onchange = e => { EXT.hrLvSt = e.target.value; EXT.l_hr(); };
+  } else if (k === 'att') {
+    const day = this.hrAttDay || hrDay(), month = this.hrAttMonth || day.slice(0, 7), [D, M] = await Promise.all([api(`/hr/attendance?day=${day}`), api(`/hr/attendance/month?month=${month}`)]);
+    B.innerHTML = `<div class="toolbar"><label>اليوم</label> <input id="ad" type="date" max="${hrDay()}" value="${day}"> <label>ملخص شهر</label> <input id="am" type="month" value="${month}"></div>`
+      + BOX('سجل اليوم', hrNote('اليوم الذي لا علامة له لا يُعدّ غيابًا حتى تقرر الموارد البشرية.') + T(['الموظف', 'الحال', 'الدخول', 'الخروج', ''], D.map(r => `<tr data-e="${r.employee_id}"><td>${esc(r.name)} <small class="muted">${esc(r.number)}</small></td>
+        <td>${r.source === 'leave' ? pill('إجازة معتمدة', 'p-bl') : `<select class="as"><option value="">—</option>${['present', 'late', 'remote', 'absent', 'holiday'].map(s => `<option value="${s}" ${r.status === s ? 'selected' : ''}>${HR_ATT[s]}</option>`).join('')}</select>`}</td>
+        <td>${r.source === 'leave' ? '' : `<input class="ai" type="time" value="${esc(r.check_in || '')}">`}</td><td>${r.source === 'leave' ? '' : `<input class="ao" type="time" value="${esc(r.check_out || '')}">`}</td>
+        <td>${r.source === 'leave' ? '' : `<button class="btn" data-call="EXT.hrAttSave" data-args="${J([r.employee_id])}">حفظ</button>`} <small class="muted">${r.source ? ({manual: 'يدوي', import: 'استيراد', device: 'جهاز'}[r.source] || '') : ''}</small></td></tr>`), 'لا موظفين.'))
+      + BOX(`ملخص ${esc(month)}`, T(['الموظف', 'حاضر', 'متأخر', 'عن بُعد', 'إجازة', 'غائب', 'عطلة', 'أيام عمل بلا علامة'], M.map(r => `<tr><td>${esc(r.name)}</td><td>${N(r.present)}</td><td>${N(r.late)}</td><td>${N(r.remote)}</td><td>${N(r.leave)}</td><td>${N(r.absent)}</td><td>${N(r.holiday)}</td><td>${r.unrecorded ? pill(N(r.unrecorded), 'p-w') : '0'}</td></tr>`), 'لا بيانات.'))
+      + BOX('استيراد من جهاز البصمة', `${hrNote('ملف xlsx أو csv بأعمدة: رقم الموظف، التاريخ، الدخول، الخروج، الحالة (اختياري). إعادة رفع الملف نفسه لا تغيّر شيئًا، ولا يُستبدل يوم سجّلته الموارد البشرية بيدها أو إجازة معتمدة.')}<div class="toolbar"><input id="af" type="file" accept=".csv,.xlsx"> <label><input id="adr" type="checkbox" checked> تجربة بلا حفظ</label> <button class="btn p" data-call="EXT.hrAttImport">استيراد</button></div><div id="aiR"></div>`);
+    $('#ad').onchange = e => { EXT.hrAttDay = e.target.value; EXT.hrAttMonth = e.target.value.slice(0, 7); EXT.l_hr(); }; $('#am').onchange = e => { EXT.hrAttMonth = e.target.value; EXT.l_hr(); };
+  } else if (k === 'rq') {
+    const R = await api('/hr/requests');
+    B.innerHTML = T(['الموظف', 'النوع', 'التفاصيل', 'المبلغ', 'الحال', ''], R.map(q => `<tr><td>${esc(q.name)} <small class="muted">${esc(q.number)}</small></td><td>${HR_RQ[q.kind]}</td><td>${esc(q.details)}</td><td>${q.amount ? OMR(q.amount) : '—'}</td><td>${pill(...HR_RQS[q.status])}${q.decision_note ? ' <small class="muted">' + esc(q.decision_note) + '</small>' : ''}</td>
+      <td>${q.status === 'pending' ? `<button class="btn p" data-call="EXT.hrReqDecide" data-args="${J([q.id, 'approved'])}">اعتماد</button> <button class="btn" data-call="EXT.hrReqDecide" data-args="${J([q.id, 'rejected'])}">رفض</button>` : q.status === 'approved' ? `<button class="btn" data-call="EXT.hrReqDecide" data-args="${J([q.id, 'done'])}">تم الإنجاز</button>` : ''}</td></tr>`), 'لا طلبات.');
+  } else if (k === 'cfg') {
+    const y = this.hrYear || new Date().getFullYear(), [H, S_] = await Promise.all([api(`/hr/holidays?year=${y}`), api('/hr/settings')]);
+    const dn = ['الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت', 'الأحد'];
+    B.innerHTML = BOX('العطل الرسمية', `<div class="toolbar"><label>السنة</label> <input id="hy" type="number" min="2000" max="2100" value="${y}"> <button class="btn p" data-call="EXT.hrHolForm">+ عطلة</button></div>${hrNote('العطل بالتقويم الهجري تُدخل يدويًا كل سنة. إضافة عطلة لا تغيّر أيام إجازة اعتُمدت من قبل.')}`
+        + T(['اليوم', 'العطلة', ''], H.map(h => `<tr><td>${fmtDate(h.day)}</td><td>${esc(h.name)}</td><td><button class="btn" data-call="EXT.hrHolDel" data-args="${J([h.id])}">حذف</button></td></tr>`), 'لا عطل مسجلة لهذه السنة.'))
+      + BOX('الدوام', `<label>أيام الراحة الأسبوعية</label><div>${dn.map((n, i) => `<label style="display:inline-block;margin-inline-end:12px"><input type="checkbox" class="wk" value="${i}" ${S_.weekend.includes(i) ? 'checked' : ''}> ${n}</label>`).join('')}</div>`
+        + HF('hws', 'بدء الدوام', S_.work_start, 'time') + HF('hlg', 'سماح التأخير (دقائق)', S_.late_grace, 'number', 'min="0" max="120"') + '<div class="btns" style="margin-top:10px"><button class="btn p" data-call="EXT.hrSetSave">حفظ</button></div>');
+    $('#hy').onchange = e => { EXT.hrYear = +e.target.value; EXT.l_hr(); };
+  }
+};
+
+EXT.hrAttSave = async eid => {
+  const tr = $(`#hrB tr[data-e="${eid}"]`), status = tr.querySelector('.as').value, ci = tr.querySelector('.ai').value, co = tr.querySelector('.ao').value;
+  if (!status && !ci && !co) { toast('اختر حالة أو أدخل وقتًا', 1); return; }
+  await tryDo(() => post('/hr/attendance', {employee_id: eid, day: EXT.hrAttDay || hrDay(), status: status || null, check_in: ci, check_out: co}), 'حُفظ'); EXT.l_hr();
+};
+EXT.hrAttImport = async () => {
+  const f = $('#af').files[0]; if (!f) { toast('اختر ملفًا', 1); return; }
+  const r = await tryDo(() => hrUpload(`/hr/attendance/import?dry=${$('#adr').checked}`, f));
+  $('#aiR').innerHTML = KP([[r.dry ? 'سيُضاف' : 'أُضيف', N(r.new)], ['حُدّث', N(r.updated)], ['مكرر', N(r.duplicate)], ['متروك (يدوي/إجازة)', N(r.skipped_manual)], ['أخطاء', N(r.error_count)]]) + (r.errors.length ? T(['الصف', 'السبب'], r.errors.map(e => `<tr><td>${N(e.row)}</td><td>${esc(e.reason)}</td></tr>`)) : '');
+  if (!r.dry) EXT.l_hr();
+};
+EXT.hrReqDecide = async (id, status) => {
+  let note = ''; if (status === 'rejected' || status === 'approved') { note = prompt(status === 'rejected' ? 'سبب الرفض (إلزامي):' : 'ملاحظة (اختياري):', '') || ''; if (status === 'rejected' && !note.trim()) return; }
+  await tryDo(() => post(`/hr/requests/${id}/decide`, {status, note}), 'سُجّل القرار'); EXT.l_hr();
+};
+EXT.hrSetSave = async () => {
+  const weekend = $$('.wk').filter(x => x.checked).map(x => +x.value);
+  await tryDo(() => api('/hr/settings', {method: 'PUT', body: {weekend, work_start: $('#hws').value || '08:00', late_grace: +$('#hlg').value || 0}}), 'حُفظت الإعدادات');
+};
+EXT.hrHolForm = () => {
+  modal(`<h3>عطلة رسمية</h3>${HF('hhd', 'اليوم', '', 'date')}${HF('hhn', 'الاسم', '', 'text', 'maxlength="80"')}<div class="err" id="hhE"></div><div class="btns" style="margin-top:12px"><button class="btn p" id="hhGo">إضافة</button> <button class="btn" data-call="closeModal">إلغاء</button></div>`);
+  $('#hhGo').onclick = async () => { try { await post('/hr/holidays', {day: $('#hhd').value, name: $('#hhn').value.trim()}); closeModal(); toast('أُضيفت العطلة'); EXT.l_hr(); } catch (e) { $('#hhE').textContent = e.message; } };
+};
+EXT.hrHolDel = async id => { if (!confirm('حذف العطلة؟')) return; await tryDo(() => api('/hr/holidays/' + id, {method: 'DELETE'}), 'حُذفت'); EXT.l_hr(); };
+EXT.hrTypeConfirm = async id => { if (!confirm('تؤكد أن القيم راجعها مختص بقانون العمل؟')) return; await tryDo(() => post(`/hr/leave/types/${id}/confirm`), 'اعتُمدت القيم'); EXT.l_hr(); };
+EXT.hrTypeForm = async () => {
+  const ty = (await api('/hr/leave/types')).filter(t => t.current);
+  modal(`<h3>نسخة جديدة من نوع إجازة</h3>${HS('htk', 'النوع', ty.map(t => [t.key, t.name]).concat([['', '— نوع جديد —']]), 'annual')}<div id="htN" class="hidden">${HF('htkn', 'مفتاح النوع (حروف لاتينية)', '', 'text', 'maxlength="30"')}</div>${HF('htn', 'الاسم', '', 'text')}
+    ${HF('htd', 'أيام السنة', '30', 'number', 'min="0" step="0.5"')}${HS('hta', 'الاستحقاق', [['monthly', 'شهري (يتراكم)'], ['annual', 'سنوي'], ['event', 'لكل حدث']], 'monthly')}${HS('htc', 'احتساب الأيام', [['working', 'أيام العمل'], ['calendar', 'أيام تقويمية']], 'working')}
+    ${HF('htm', 'حد الترحيل للسنة التالية', '0', 'number', 'min="0"')}${HF('hts', 'أشهر الخدمة المطلوبة', '0', 'number', 'min="0"')}${HS('htg', 'خاصة بـ', [['', 'الجميع'], ['male', 'الرجال'], ['female', 'النساء']], '')}
+    <label><input type="checkbox" id="htp" checked> مدفوعة</label> <label><input type="checkbox" id="htdoc"> تلزمها وثيقة</label> <label><input type="checkbox" id="hthr"> تعتمدها الموارد البشرية بعد المدير</label> <label><input type="checkbox" id="htneg"> يجوز تجاوز الرصيد</label> <label><input type="checkbox" id="hto"> مرة واحدة طوال الخدمة</label>
+    ${HF('htv', 'تاريخ السريان', hrDay(), 'date')}<div class="err" id="htE"></div><div class="btns" style="margin-top:12px"><button class="btn p" id="htGo">حفظ النسخة</button> <button class="btn" data-call="closeModal">إلغاء</button></div>`);
+  const fill = () => { const t = ty.find(x => x.key === $('#htk').value); $('#htN').classList.toggle('hidden', !!t); if (!t) return; $('#htn').value = t.name; $('#htd').value = t.days_per_year; $('#hta').value = t.accrual; $('#htc').value = t.day_count; $('#htm').value = t.carry_over_max; $('#hts').value = t.min_service_months; $('#htg').value = t.gender_only || ''; $('#htp').checked = !!t.paid; $('#htdoc').checked = !!t.needs_doc; $('#hthr').checked = !!t.needs_hr; $('#htneg').checked = !!t.allow_negative; $('#hto').checked = !!(t.rules && t.rules.once_in_service); };
+  $('#htk').onchange = fill; fill();
+  $('#htGo').onclick = async () => {
+    try { await post('/hr/leave/types', {key: $('#htk').value || $('#htkn').value.trim(), name: $('#htn').value.trim(), paid: $('#htp').checked, days_per_year: +$('#htd').value || 0, accrual: $('#hta').value, day_count: $('#htc').value, carry_over_max: +$('#htm').value || 0,
+      min_service_months: +$('#hts').value || 0, gender_only: $('#htg').value || null, needs_doc: $('#htdoc').checked, needs_hr: $('#hthr').checked, allow_negative: $('#htneg').checked, once_in_service: $('#hto').checked, valid_from: $('#htv').value}); closeModal(); toast('أُضيفت النسخة'); EXT.l_hr(); } catch (e) { $('#htE').textContent = e.message; }
+  };
+};
+EXT.hrLeaveForm = async () => {
+  const [E, ty] = await Promise.all([api('/hr/employees?status=current'), api('/hr/leave/types')]);
+  modal(`<h3>تسجيل إجازة لموظف</h3>${HS('hle', 'الموظف', E.map(e => [e.id, `${e.number} — ${e.name}`]), '')}${HS('hlt', 'النوع', ty.filter(t => t.current && t.active).map(t => [t.key, t.name]), 'annual')}${HF('hlf', 'من', hrDay(), 'date')}${HF('hlu', 'إلى', hrDay(), 'date')}${HF('hlr', 'السبب', '', 'text', 'maxlength="300"')}
+    <label><input type="checkbox" id="hla"> سجّلها معتمدة (مكالمة، تقرير طبي سُلّم)</label><div class="err" id="hlE"></div><div class="btns" style="margin-top:12px"><button class="btn p" id="hlGo">تسجيل</button> <button class="btn" data-call="closeModal">إلغاء</button></div>`);
+  $('#hlGo').onclick = async () => { try { await post('/hr/leave/requests', {employee_id: +$('#hle').value, type_key: $('#hlt').value, from_date: $('#hlf').value, to_date: $('#hlu').value, reason: $('#hlr').value.trim(), approve: $('#hla').checked}); closeModal(); toast('سُجّل الطلب'); EXT.l_hr(); } catch (e) { $('#hlE').textContent = e.message; } };
+};
+EXT.hrDeptForm = async id => {
+  const [D, E, cc] = await Promise.all([api('/hr/departments'), api('/hr/employees?status=current'), api('/acc/cost-centers').catch(() => [])]), d = D.find(x => x.id === id) || {};
+  modal(`<h3>${id ? 'تعديل قسم' : 'قسم جديد'}</h3>${HF('hdn', 'الاسم', d.name, 'text', 'maxlength="80"')}${HS('hdp', 'يتبع قسم', [['', '— لا شيء —']].concat(D.filter(x => x.id !== id).map(x => [x.id, x.name])), d.parent_id)}${HS('hdh', 'رئيس القسم', [['', '— لا أحد —']].concat(E.map(e => [e.id, e.name])), d.head_employee_id)}
+    ${cc.length ? HS('hdc', 'مركز الكلفة', [['', '— لا شيء —']].concat(cc.map(x => [x.id, x.name])), d.cost_center_id) : ''}${id ? `<label><input type="checkbox" id="hda" ${d.active ? 'checked' : ''}> نشط</label>` : ''}<div class="err" id="hdE"></div><div class="btns" style="margin-top:12px"><button class="btn p" id="hdGo">حفظ</button> <button class="btn" data-call="closeModal">إلغاء</button></div>`);
+  $('#hdGo').onclick = async () => {
+    const body = {name: $('#hdn').value.trim(), parent_id: +$('#hdp').value || null, head_employee_id: +$('#hdh').value || null, cost_center_id: $('#hdc') ? (+$('#hdc').value || null) : null};
+    try { if (id) { body.active = $('#hda').checked; await api('/hr/departments/' + id, {method: 'PATCH', body}); } else await post('/hr/departments', body); closeModal(); toast('حُفظ'); EXT.l_hr(); } catch (e) { $('#hdE').textContent = e.message; }
+  };
+};
+EXT.hrPosForm = async id => {
+  const [P, D] = await Promise.all([api('/hr/positions'), api('/hr/departments')]), p = P.find(x => x.id === id) || {};
+  modal(`<h3>${id ? 'تعديل مسمى' : 'مسمى وظيفي جديد'}</h3>${HF('hpt', 'المسمى', p.title, 'text', 'maxlength="80"')}${id ? '' : HS('hpd', 'القسم', [['', '— بلا قسم —']].concat(D.filter(d => d.active).map(d => [d.id, d.name])), '')}${HF('hpg', 'الدرجة', p.grade, 'text', 'maxlength="20"')}${HF('hph', 'العدد المعتمد', p.headcount ?? 1, 'number', 'min="0"')}
+    ${id ? `<label><input type="checkbox" id="hpa" ${p.active ? 'checked' : ''}> نشط</label>` : ''}<div class="err" id="hpE"></div><div class="btns" style="margin-top:12px"><button class="btn p" id="hpGo">حفظ</button> <button class="btn" data-call="closeModal">إلغاء</button></div>`);
+  $('#hpGo').onclick = async () => {
+    try { if (id) await api('/hr/positions/' + id, {method: 'PATCH', body: {title: $('#hpt').value.trim(), grade: $('#hpg').value.trim(), headcount: +$('#hph').value || 0, active: $('#hpa').checked}});
+      else await post('/hr/positions', {title: $('#hpt').value.trim(), department_id: +$('#hpd').value || null, grade: $('#hpg').value.trim(), headcount: +$('#hph').value || 0}); closeModal(); toast('حُفظ'); EXT.l_hr(); } catch (e) { $('#hpE').textContent = e.message; }
+  };
+};
+
+/* ---- ملف الموظف (لوحة التفاصيل) */
+EXT.hrEmp = async id => {
+  const [e, bal] = await Promise.all([api('/hr/employees/' + id), api(`/hr/employees/${id}/leave-balances`)]), ro = e.status === 'terminated';
+  insp(`${e.number} — ${e.name}`, `${KP([['الحال', HR_ST[e.status][0]], ['القسم', esc(e.department || '—')], ['المسمى', esc(e.position || '—')], ['المدير', esc(e.manager || '—')]])}
+    ${T(['البيان', 'القيمة'], [['الاسم بالإنجليزية', e.name_en], ['الجنسية', e.nationality], ['الهوية', e.id_number], ['الميلاد', e.dob && fmtDate(e.dob)], ['الهاتف', e.phone], ['البريد', e.email], ['العنوان', e.address], ['التعيين', fmtDate(e.hire_date)], ['العقد', {permanent: 'دائم', fixed: 'محدد المدة', part: 'جزئي'}[e.contract_type] + (e.contract_end ? ' حتى ' + fmtDate(e.contract_end) : '')], ['نهاية التجربة', e.probation_end && fmtDate(e.probation_end)],
+        ['البنك', [e.bank_name, e.iban].filter(Boolean).join(' · ')], ['التأمينات', e.social_ins_no], ['للطوارئ', e.emergency_contact], ['حساب الدخول', e.username]].map(([a, b]) => `<tr><td>${a}</td><td dir="auto">${b ? esc(b) : '—'}</td></tr>`))}
+    ${BOX('الوثائق', T(['الوثيقة', 'الرقم', 'تنتهي', 'الحال', ''], e.documents.map(d => `<tr><td>${esc(d.kind_label)}</td><td dir="ltr">${esc(d.number || '—')}</td><td>${d.expires ? fmtDate(d.expires) : '—'}</td><td>${d.level && d.level !== 'ok' ? pill(...HR_LVL[d.level]) : d.expires ? pill('سارية', 'p-ok') : ''}</td>
+        <td>${d.document_id ? `<a class="btn" href="/api/documents/${d.document_id}" target="_blank" rel="noopener">الملف</a> ` : ''}<button class="btn" data-call="EXT.hrDocDel" data-args="${J([d.id, id])}">حذف</button></td></tr>`), 'لا وثائق.'), ro ? '' : `<button class="btn" data-call="EXT.hrDocForm" data-args="${J([id])}">+ وثيقة</button>`)}
+    ${BOX(`أرصدة الإجازات ${new Date().getFullYear()}`, T(HR_BAL_HEAD, bal.map(hrBal), 'لا أرصدة.'), ro ? '' : `<button class="btn" data-call="EXT.hrAdjust" data-args="${J([id])}">تعديل رصيد</button>`)}
+    ${ro ? `<p class="muted">انتهت الخدمة ${fmtDate(e.terminated_on)} — ${esc(e.termination_note || '')}</p>` : `<div class="btns"><button class="btn p" data-call="EXT.hrEmpForm" data-args="${J([id])}">تعديل الملف</button> ${e.username ? `<button class="btn" data-call="EXT.hrAcct" data-args="${J([id, 'reset'])}">إعادة تعيين كلمة المرور</button>` : `<button class="btn" data-call="EXT.hrAcct" data-args="${J([id, 'create'])}">إنشاء حساب دخول</button>`} <button class="btn" data-call="EXT.hrTerminate" data-args="${J([id])}">إنهاء الخدمة</button></div>`}`);
+};
+EXT.hrAcct = async (id, what) => {
+  const r = await tryDo(() => post(`/hr/employees/${id}/account${what === 'reset' ? '/reset' : ''}`));
+  modal(`<h3>حساب الموظف</h3><p>اسم المستخدم: <b dir="ltr">${esc(r.username)}</b></p><p>كلمة المرور المؤقتة: <b dir="ltr">${esc(r.temporary_password)}</b></p><p class="muted">تُعرض مرة واحدة فقط، ويُلزم الموظف بتغييرها عند أول دخول.</p><div class="btns"><button class="btn p" data-call="closeModal">تم</button></div>`); EXT.l_hr();
+};
+EXT.hrTerminate = async id => {
+  const d = prompt('تاريخ انتهاء الخدمة (YYYY-MM-DD):', hrDay()); if (!d) return; const note = prompt('سبب انتهاء الخدمة (إلزامي):', ''); if (!note || !note.trim()) return;
+  if (!confirm('إنهاء الخدمة نهائي: يُغلق حساب الدخول وتُلغى الإجازات اللاحقة. متابعة؟')) return;
+  await tryDo(() => post(`/hr/employees/${id}/status`, {status: 'terminated', date: d, note}), 'انتهت الخدمة'); document.body.classList.remove('io'); EXT.l_hr();
+};
+EXT.hrAdjust = async id => {
+  const key = prompt('نوع الإجازة (مثل annual):', 'annual'); if (!key) return; const delta = +prompt('الفرق بالأيام (موجب يزيد، سالب ينقص):', '0'); if (!delta) return; const note = prompt('سبب التعديل (إلزامي):', ''); if (!note || note.trim().length < 3) return;
+  await tryDo(() => post('/hr/leave/adjust', {employee_id: id, type_key: key.trim(), year: new Date().getFullYear(), delta, note: note.trim()}), 'عُدّل الرصيد'); EXT.hrEmp(id);
+};
+EXT.hrDocDel = async (did, eid) => { if (!confirm('حذف سجل الوثيقة؟ الملف المرفوع يبقى في المستندات.')) return; await tryDo(() => api('/hr/documents/' + did, {method: 'DELETE'}), 'حُذف'); EXT.hrEmp(eid); };
+EXT.hrDocForm = id => {
+  modal(`<h3>وثيقة موظف</h3>${HS('hdk', 'النوع', Object.entries(HR_DOCS), 'passport')}${HF('hdno', 'الرقم', '', 'text', 'maxlength="60" dir="ltr"')}${HF('hdi', 'تاريخ الإصدار', '', 'date')}${HF('hde', 'تاريخ الانتهاء', '', 'date')}<label for="hdf">صورة الوثيقة (اختياري — PDF أو صورة)</label><input id="hdf" type="file" accept=".pdf,.png,.jpg,.jpeg">
+    <div class="err" id="hdE2"></div><div class="btns" style="margin-top:12px"><button class="btn p" id="hdGo2">حفظ</button> <button class="btn" data-call="closeModal">إلغاء</button></div>`);
+  $('#hdGo2').onclick = async () => {
+    try {
+      let document_id = null; const f = $('#hdf').files[0];
+      if (f) { const fd = new FormData(); fd.append('ref_type', 'employee'); fd.append('ref_id', id); fd.append('title', HR_DOCS[$('#hdk').value]); fd.append('category', 'وثائق الموظف'); fd.append('file', f);
+        const r = await fetch('/api/documents', {method: 'POST', headers: {'X-CSRF-Token': csrf()}, body: fd}), j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(typeof j.detail === 'string' ? j.detail : 'تعذّر الرفع'); document_id = j.id; }
+      await post(`/hr/employees/${id}/documents`, {kind: $('#hdk').value, number: $('#hdno').value.trim(), issued: $('#hdi').value, expires: $('#hde').value, document_id}); closeModal(); toast('أُضيفت الوثيقة'); EXT.hrEmp(id);
+    } catch (e) { $('#hdE2').textContent = e.message; }
+  };
+};
+EXT.hrEmpForm = async id => {
+  const [D, P, E] = await Promise.all([api('/hr/departments'), api('/hr/positions'), api('/hr/employees?status=current')]), e = id ? await api('/hr/employees/' + id) : {omani: 1, contract_type: 'permanent', hire_date: hrDay()};
+  const opt = (L, f) => [['', '— لا شيء —']].concat(L.filter(x => x.active !== 0).map(f));
+  modal(`<h3>${id ? 'تعديل ملف موظف' : 'موظف جديد'}</h3><div class="grid2">${HF('fn', 'الاسم', e.name, 'text', 'maxlength="120"')}${HF('fne', 'الاسم بالإنجليزية', e.name_en, 'text', 'dir="ltr"')}
+    <div><label><input type="checkbox" id="fo" ${e.omani ? 'checked' : ''}> عُماني</label></div>${HF('fna', 'الجنسية', e.nationality)}${HS('fg', 'الجنس', [['', '—'], ['male', 'ذكر'], ['female', 'أنثى']], e.gender)}${HS('fm', 'الحالة الاجتماعية', [['', '—'], ['single', 'أعزب'], ['married', 'متزوج'], ['divorced', 'مطلق'], ['widowed', 'أرمل']], e.marital)}
+    ${HF('fid', 'رقم الهوية', e.id_number, 'text', 'dir="ltr"')}${HF('fdb', 'تاريخ الميلاد', e.dob, 'date')}${HF('fp', 'الهاتف', e.phone, 'text', 'dir="ltr"')}${HF('fe', 'البريد', e.email, 'email', 'dir="ltr"')}</div>${HF('fa', 'العنوان', e.address)}
+    <div class="grid2">${HS('fd', 'القسم', opt(D, d => [d.id, d.name]), e.department_id)}${HS('fpo', 'المسمى', opt(P, p => [p.id, p.title + (p.department ? ' — ' + p.department : '')]), e.position_id)}${HS('fmg', 'المدير المباشر', opt(E.filter(x => x.id !== id), x => [x.id, x.name]), e.manager_id)}
+    ${HF('fh', 'تاريخ التعيين', e.hire_date, 'date')}${HS('fc', 'نوع العقد', [['permanent', 'دائم'], ['fixed', 'محدد المدة'], ['part', 'دوام جزئي']], e.contract_type)}${HF('fce', 'نهاية العقد', e.contract_end, 'date')}${HF('fpe', 'نهاية التجربة', e.probation_end, 'date')}</div>
+    <div class="grid2">${HF('fb', 'البنك', e.bank_name)}${HF('fib', 'IBAN', e.iban, 'text', 'dir="ltr"')}${HF('fsi', 'رقم التأمينات', e.social_ins_no, 'text', 'dir="ltr"')}<div><label><input type="checkbox" id="fpa" ${e.pasi_applies ? 'checked' : ''}> تُطبَّق عليه الحماية الاجتماعية</label></div></div>${HF('fem', 'جهة اتصال للطوارئ', e.emergency_contact)}
+    <div class="err" id="fE"></div><div class="btns" style="margin-top:12px"><button class="btn p" id="fGo">حفظ</button> <button class="btn" data-call="closeModal">إلغاء</button></div>`);
+  $('#fGo').onclick = async () => {
+    const n = v => +v || null, body = {name: $('#fn').value.trim(), name_en: $('#fne').value.trim(), omani: $('#fo').checked, nationality: $('#fna').value.trim(), gender: $('#fg').value || null, marital: $('#fm').value || null, id_number: $('#fid').value.trim(), dob: $('#fdb').value,
+      phone: $('#fp').value.trim(), email: $('#fe').value.trim(), address: $('#fa').value.trim(), department_id: n($('#fd').value), position_id: n($('#fpo').value), manager_id: n($('#fmg').value), hire_date: $('#fh').value, contract_type: $('#fc').value,
+      contract_end: $('#fce').value, probation_end: $('#fpe').value, bank_name: $('#fb').value.trim(), iban: $('#fib').value.trim(), social_ins_no: $('#fsi').value.trim(), pasi_applies: $('#fpa').checked, emergency_contact: $('#fem').value.trim()};
+    try { const r = id ? await api('/hr/employees/' + id, {method: 'PATCH', body}) : await post('/hr/employees', body); closeModal(); toast(id ? 'حُفظ الملف' : 'أُنشئ الملف ' + r.number + (r.warnings.length ? ' — ' + r.warnings[0] : '')); EXT.l_hr(); if (id) EXT.hrEmp(id); } catch (e) { $('#fE').textContent = e.message; }
+  };
+};
+
+/* ---- بوابة الموظف */
+EXT.l_me = async function () {
+  const tabs = [['me', 'بياناتي'], ['lv', 'إجازاتي'], ['rq', 'طلباتي']].concat(can('hr_manager') ? [['tm', 'فريقي']] : []), el = $('#me'), k = this.cur.me;
+  el.innerHTML = SUB0('me', tabs, k) + '<div id="meB">…</div>';
+  const B = $('#meB');
+  if (k === 'me') {
+    const m = await api('/hr/me');
+    B.innerHTML = KP([['الرقم الوظيفي', esc(m.number)], ['القسم', esc(m.department || '—')], ['المسمى', esc(m.position || '—')], ['المدير المباشر', esc(m.manager || '—')], ['تاريخ التعيين', fmtDate(m.hire_date)], ['إجازات بانتظار القرار', N(m.open_requests)]])
+      + (m.alerts.length ? BOX('وثائقك التي تنتهي قريبًا', T(['الحال', 'البند', 'التاريخ', 'المدة'], m.alerts.map(a => `<tr><td>${pill(...HR_LVL[a.level])}</td><td>${esc(a.label)}</td><td>${fmtDate(a.date)}</td><td>${hrAgo(a.days_left)}</td></tr>`))) : '')
+      + BOX(`أرصدة إجازاتي ${new Date().getFullYear()}`, T(HR_BAL_HEAD, m.balances.map(hrBal), 'لا أرصدة.'))
+      + BOX('وثائقي', T(['الوثيقة', 'تنتهي', ''], m.documents.map(d => `<tr><td>${esc(d.kind_label)}</td><td>${d.expires ? fmtDate(d.expires) : '—'}</td><td>${d.document_id ? `<a class="btn" href="/api/hr/me/documents/${d.id}/file" target="_blank" rel="noopener">الملف</a>` : ''}</td></tr>`), 'لا وثائق مسجلة.'))
+      + BOX('بياناتي', `${T(['البيان', 'القيمة'], [['الاسم', m.name], ['الهوية', m.id_number], ['البنك', [m.bank_name, m.iban].filter(Boolean).join(' · ')], ['التأمينات', m.social_ins_no]].map(([a, b]) => `<tr><td>${a}</td><td dir="auto">${b ? esc(b) : '—'}</td></tr>`))}${hrNote('الهوية والبنك والتأمينات تتغير عبر الموارد البشرية (من تبويب «طلباتي»).')}
+        <div class="grid2">${HF('mp', 'الهاتف', m.phone, 'text', 'dir="ltr"')}${HF('me_', 'البريد', m.email, 'email', 'dir="ltr"')}</div>${HF('ma', 'العنوان', m.address)}${HF('mem', 'جهة اتصال للطوارئ', m.emergency_contact)}<div class="btns" style="margin-top:10px"><button class="btn p" data-call="EXT.meSave">حفظ بياناتي</button></div>`);
+  } else if (k === 'lv') {
+    const [ty, L, m] = await Promise.all([api('/hr/me/leave-types'), api('/hr/me/leave'), api('/hr/me')]);
+    B.innerHTML = BOX('طلب إجازة', `<div class="grid2">${HS('ltk', 'النوع', ty.map(t => [t.key, t.name]), 'annual')}${HF('ltf', 'من', hrDay(), 'date')}${HF('ltu', 'إلى', hrDay(), 'date')}${HF('ltr', 'السبب', '', 'text', 'maxlength="300"')}</div><div id="ltN" class="muted"></div><div class="err" id="ltE"></div><div class="btns" style="margin-top:10px"><button class="btn p" id="ltGo">إرسال الطلب</button></div>`)
+      + BOX('أرصدتي', T(HR_BAL_HEAD, m.balances.map(hrBal), 'لا أرصدة.')) + BOX('طلباتي', T(['النوع', 'المدة', 'الأيام', 'الحال', ''], hrLeaveRows(L, false), 'لا طلبات.'));
+    const note = () => { const t = ty.find(x => x.key === $('#ltk').value); $('#ltN').textContent = t ? [t.needs_doc ? 'يلزمه مرفق بعد الإرسال.' : '', t.needs_hr ? 'تعتمده الموارد البشرية بعد مديرك.' : '', t.provisional ? 'قيمه مبدئية.' : ''].filter(Boolean).join(' ') : ''; };
+    $('#ltk').onchange = note; note();
+    $('#ltGo').onclick = async () => { try { await post('/hr/me/leave', {type_key: $('#ltk').value, from_date: $('#ltf').value, to_date: $('#ltu').value, reason: $('#ltr').value.trim()}); toast('أُرسل الطلب'); EXT.l_me(); } catch (e) { $('#ltE').textContent = e.message; } };
+  } else if (k === 'rq') {
+    const R = await api('/hr/me/requests');
+    B.innerHTML = BOX('طلب جديد', `<div class="grid2">${HS('rqk', 'النوع', [['letter', 'خطاب (تعريف، شهادة عمل)'], ['advance', 'سلفة'], ['other', 'أخرى (تغيير بيانات، استفسار)']], 'letter')}${HF('rqa', 'المبلغ (للسلفة فقط)', '', 'number', 'min="0" step="0.001"')}</div>${HF('rqd', 'التفاصيل', '', 'text', 'maxlength="500"')}<div class="err" id="rqE"></div><div class="btns" style="margin-top:10px"><button class="btn p" id="rqGo">إرسال</button></div>`)
+      + BOX('طلباتي', T(['النوع', 'التفاصيل', 'المبلغ', 'الحال'], R.map(q => `<tr><td>${HR_RQ[q.kind]}</td><td>${esc(q.details)}</td><td>${q.amount ? OMR(q.amount) : '—'}</td><td>${pill(...HR_RQS[q.status])}${q.decision_note ? ' <small class="muted">' + esc(q.decision_note) + '</small>' : ''}</td></tr>`), 'لا طلبات.'));
+    $('#rqGo').onclick = async () => { try { await post('/hr/me/requests', {kind: $('#rqk').value, details: $('#rqd').value.trim(), amount: +$('#rqa').value || null}); toast('أُرسل الطلب'); EXT.l_me(); } catch (e) { $('#rqE').textContent = e.message; } };
+  } else if (k === 'tm') {
+    const [T_, L] = await Promise.all([api('/hr/team'), api('/hr/team/leave?status=pending')]);
+    B.innerHTML = BOX(`بانتظار قرارك <span class="muted">${N(L.length)}</span>`, T(['الموظف', 'النوع', 'المدة', 'الأيام', 'الحال', ''], hrLeaveRows(L, true), 'لا طلبات بانتظارك.'))
+      + BOX('فريقي', T(['الرقم', 'الموظف', 'المسمى', 'الهاتف', 'رصيد السنوية', 'اليوم'], T_.map(t => `<tr><td>${esc(t.number)}</td><td>${esc(t.name)}</td><td>${esc(t.position || '—')}</td><td dir="ltr">${esc(t.phone || '—')}</td><td>${t.annual_remaining == null ? '—' : F2(t.annual_remaining)}</td><td>${t.away_today ? pill('في إجازة', 'p-bl') : pill('متاح', 'p-ok')}</td></tr>`), 'لا مرؤوسين مباشرين لك.'));
+    const b = $('#cMe'); if (b) { b.textContent = L.length ? N(L.length) : ''; b.classList.toggle('hidden', !L.length); }
+  }
+};
+EXT.meSave = async () => { await tryDo(() => api('/hr/me', {method: 'PATCH', body: {phone: $('#mp').value, email: $('#me_').value, address: $('#ma').value, emergency_contact: $('#mem').value}}), r => r.changed.length ? 'حُفظت بياناتك' : 'لا تغيير'); };

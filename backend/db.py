@@ -434,6 +434,55 @@ CREATE TABLE IF NOT EXISTS fin_installments(
   id INTEGER PRIMARY KEY, contract_id INTEGER NOT NULL REFERENCES fin_contracts(id), no INTEGER NOT NULL, due TEXT NOT NULL, amount REAL NOT NULL, margin REAL NOT NULL, paid_on TEXT,
   payment_journal_id INTEGER, UNIQUE(contract_id, no));
 
+-- 0.25.0 — الموارد البشرية (النواة): الهيكل والموظفون والوثائق والإجازات والحضور وطلبات الموظف. لا راتب هنا (يأتي في 0.26.0).
+CREATE TABLE IF NOT EXISTS departments(
+  id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE, parent_id INTEGER REFERENCES departments(id), head_employee_id INTEGER REFERENCES employees(id),
+  cost_center_id INTEGER REFERENCES acc_cost_centers(id), active INTEGER NOT NULL DEFAULT 1);
+CREATE TABLE IF NOT EXISTS positions(
+  id INTEGER PRIMARY KEY, title TEXT NOT NULL, department_id INTEGER REFERENCES departments(id), grade TEXT, headcount INTEGER NOT NULL DEFAULT 1 CHECK (headcount >= 0),
+  active INTEGER NOT NULL DEFAULT 1);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_positions_title ON positions(title, COALESCE(department_id, 0));
+CREATE TABLE IF NOT EXISTS employees(
+  id INTEGER PRIMARY KEY, number TEXT NOT NULL UNIQUE, name TEXT NOT NULL, name_en TEXT, nationality TEXT, omani INTEGER NOT NULL DEFAULT 0,
+  id_number TEXT, dob TEXT, gender TEXT CHECK (gender IN ('male','female')), marital TEXT CHECK (marital IN ('single','married','divorced','widowed')),
+  phone TEXT, email TEXT, address TEXT,
+  department_id INTEGER REFERENCES departments(id), position_id INTEGER REFERENCES positions(id), manager_id INTEGER REFERENCES employees(id) CHECK (manager_id IS NOT id),
+  hire_date TEXT NOT NULL, contract_type TEXT NOT NULL DEFAULT 'permanent' CHECK (contract_type IN ('permanent','fixed','part')), contract_end TEXT, probation_end TEXT,
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','on_leave','terminated')), terminated_on TEXT, termination_note TEXT,
+  bank_name TEXT, iban TEXT, social_ins_no TEXT, pasi_applies INTEGER NOT NULL DEFAULT 0, emergency_contact TEXT, created_by TEXT);
+CREATE INDEX IF NOT EXISTS ix_employees_dept ON employees(department_id);
+CREATE INDEX IF NOT EXISTS ix_employees_manager ON employees(manager_id);
+CREATE TABLE IF NOT EXISTS employee_documents(
+  id INTEGER PRIMARY KEY, employee_id INTEGER NOT NULL REFERENCES employees(id),
+  kind TEXT NOT NULL CHECK (kind IN ('passport','resident_card','work_permit','labour_card','health_insurance','contract','certificate','other')),
+  number TEXT, issued TEXT, expires TEXT, document_id INTEGER, note TEXT, created_by TEXT);
+CREATE INDEX IF NOT EXISTS ix_employee_documents_emp ON employee_documents(employee_id);
+CREATE TABLE IF NOT EXISTS leave_types(
+  id INTEGER PRIMARY KEY, key TEXT NOT NULL, name TEXT NOT NULL, paid INTEGER NOT NULL DEFAULT 1, days_per_year REAL NOT NULL DEFAULT 0 CHECK (days_per_year >= 0),
+  accrual TEXT NOT NULL DEFAULT 'annual' CHECK (accrual IN ('annual','monthly','event')), carry_over_max REAL NOT NULL DEFAULT 0 CHECK (carry_over_max >= 0),
+  needs_doc INTEGER NOT NULL DEFAULT 0, needs_hr INTEGER NOT NULL DEFAULT 0, gender_only TEXT CHECK (gender_only IN ('male','female')), min_service_months INTEGER NOT NULL DEFAULT 0,
+  day_count TEXT NOT NULL DEFAULT 'working' CHECK (day_count IN ('working','calendar')), allow_negative INTEGER NOT NULL DEFAULT 0, rules TEXT,
+  valid_from TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1, provisional INTEGER NOT NULL DEFAULT 1, note TEXT, UNIQUE(key, valid_from));
+CREATE TABLE IF NOT EXISTS leave_balances(
+  id INTEGER PRIMARY KEY, employee_id INTEGER NOT NULL REFERENCES employees(id), type_key TEXT NOT NULL, year INTEGER NOT NULL,
+  entitled REAL NOT NULL DEFAULT 0, taken REAL NOT NULL DEFAULT 0, carried REAL NOT NULL DEFAULT 0, adjusted REAL NOT NULL DEFAULT 0, adj_note TEXT, UNIQUE(employee_id, type_key, year));
+CREATE TABLE IF NOT EXISTS leave_requests(
+  id INTEGER PRIMARY KEY, employee_id INTEGER NOT NULL REFERENCES employees(id), type_id INTEGER NOT NULL REFERENCES leave_types(id), type_key TEXT NOT NULL,
+  from_date TEXT NOT NULL, to_date TEXT NOT NULL, days REAL NOT NULL CHECK (days > 0), reason TEXT,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected','cancelled')), stage TEXT NOT NULL DEFAULT 'manager' CHECK (stage IN ('manager','hr','done')),
+  manager_by TEXT, manager_at TEXT, manager_note TEXT, decided_by TEXT, decided_at TEXT, decision_note TEXT, doc_id INTEGER,
+  created_by TEXT, cancelled_by TEXT, cancelled_at TEXT, cancel_reason TEXT, CHECK (to_date >= from_date));
+CREATE INDEX IF NOT EXISTS ix_leave_requests_emp ON leave_requests(employee_id, from_date);
+CREATE TABLE IF NOT EXISTS holidays(id INTEGER PRIMARY KEY, day TEXT NOT NULL UNIQUE, name TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS attendance(
+  id INTEGER PRIMARY KEY, employee_id INTEGER NOT NULL REFERENCES employees(id), day TEXT NOT NULL, check_in TEXT, check_out TEXT,
+  status TEXT NOT NULL CHECK (status IN ('present','absent','late','leave','holiday','remote')), source TEXT NOT NULL DEFAULT 'manual' CHECK (source IN ('manual','import','device','leave')), note TEXT,
+  UNIQUE(employee_id, day));
+CREATE TABLE IF NOT EXISTS hr_requests(
+  id INTEGER PRIMARY KEY, employee_id INTEGER NOT NULL REFERENCES employees(id), kind TEXT NOT NULL CHECK (kind IN ('letter','advance','other')), details TEXT, amount REAL,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected','done')), requested_at TEXT, decided_by TEXT, decided_at TEXT, decision_note TEXT);
+CREATE INDEX IF NOT EXISTS ix_hr_requests_emp ON hr_requests(employee_id);
+
 CREATE INDEX IF NOT EXISTS ix_units_project ON units(project_id);
 CREATE INDEX IF NOT EXISTS ix_inst_booking ON installments(booking_id);
 CREATE INDEX IF NOT EXISTS ix_book_unit ON bookings(unit_id);

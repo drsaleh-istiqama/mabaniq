@@ -866,7 +866,7 @@ async def _inner(request: Request, call_next):
         p = request.url.path
         if p.startswith("/api/") and p not in CSRF_EXEMPT and not p.startswith("/api/v1/") and request.cookies.get(A.COOKIE) and not A.csrf_ok(request):
             return JSONResponse({"detail": "رمز CSRF مفقود أو غير مطابق — أعد تسجيل الدخول"}, status_code=403)
-        upload = request.url.path in ("/api/documents", "/api/plans") or request.url.path.startswith("/api/lea/import/") or (request.url.path.startswith("/api/acc/banks/") and request.url.path.endswith("/import"))  # multipart uploads (Unit 6: plans; 0.22.0: the lease import)
+        upload = request.url.path in ("/api/documents", "/api/plans") or request.url.path.startswith("/api/lea/import/") or (request.url.path.startswith("/api/acc/banks/") and request.url.path.endswith("/import")) or request.url.path == "/api/hr/attendance/import" or (request.url.path.startswith("/api/hr/leave/requests/") and request.url.path.endswith("/attachment"))  # multipart uploads (Unit 6: plans; 0.22.0: the lease import)
         ctype = request.headers.get("content-type", "")
         ok_type = ctype.startswith("multipart/form-data") if upload else ctype.startswith("application/json")
         if not ok_type and request.url.path.startswith("/api/") and int(request.headers.get("content-length") or 0) > 0:
@@ -925,11 +925,17 @@ from .acc_ap import router as acc_ap_router  # noqa: E402
 from .acc_assets import router as acc_assets_router  # noqa: E402
 from .acc_bank import router as acc_bank_router  # noqa: E402
 from .acc_reports import router as acc_reports_router  # noqa: E402
+from .hr import router as hr_router  # noqa: E402
+from .hr_leave import router as hr_leave_router  # noqa: E402
+from .hr_self import router as hr_self_router  # noqa: E402
 
 app.include_router(acc_ap_router)  # 0.24.0: الذمم الدائنة والبنوك
 app.include_router(acc_bank_router)  # 0.24.0: المطابقة البنكية والشيكات الصادرة
 app.include_router(acc_assets_router)  # 0.24.0: الضريبة والأصول والموازنات والتمويل الإسلامي
 app.include_router(acc_reports_router)  # 0.24.0: القوائم المالية والإقفال والتصدير
+app.include_router(hr_router)  # 0.25.0: الموارد البشرية — الهيكل والموظفون والوثائق
+app.include_router(hr_leave_router)  # 0.25.0: الإجازات والعطل والحضور
+app.include_router(hr_self_router)  # 0.25.0: بوابة الموظف وفريق المدير
 from .appearance import router as appearance_router  # noqa: E402
 from .assistant import router as assistant_router  # noqa: E402
 from .identity import router as identity_router  # noqa: E402

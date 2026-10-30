@@ -28,4 +28,9 @@ def tick() -> dict:
         out["lease_reminders"] = leasing.reminders_due_all()
     except Exception:  # noqa: BLE001
         log.exception("tick: leasing", extra={"event": "job_error"})
+    try:
+        from . import hr
+        out["hr_alerts"] = hr.alerts_due_all()
+    except Exception:  # noqa: BLE001
+        log.exception("tick: hr", extra={"event": "job_error"})
     return out
