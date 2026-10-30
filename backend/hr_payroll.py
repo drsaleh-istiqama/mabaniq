@@ -15,6 +15,7 @@ import datetime as dt
 import hashlib
 import io
 import json
+import math
 import re
 from typing import Literal
 
@@ -192,6 +193,8 @@ def api_structure_add(b: StructureIn, u=Depends(act_as("hr_payroll"))):
     c = db()
     ensure_setup(c)
     e = employee(c, b.employee_id)
+    if u.get("employee_id") == b.employee_id:
+        raise HTTPException(403, "لا تعدّل هيكل راتبك بنفسك — يعدّله شخص آخر لديه صلاحية الرواتب")
     if e["status"] == "terminated":
         raise HTTPException(409, "الملف منتهي الخدمة")
     ef = pdate(b.effective_from, "تاريخ السريان")
@@ -245,6 +248,8 @@ def _run_frozen(c, period: str) -> bool:
 def api_adjustment_add(b: AdjIn, u=Depends(act_as("hr_payroll"))):
     c = db()
     e = employee(c, b.employee_id)
+    if u.get("employee_id") == b.employee_id:
+        raise HTTPException(403, "لا تُسجّل تسوية على راتبك بنفسك — يسجّلها شخص آخر لديه صلاحية الرواتب")
     if _run_frozen(c, b.period):
         raise HTTPException(409, f"مسيّر {b.period} معتمد — ضع التسوية في الشهر التالي")
     aid = c.execute("INSERT INTO payroll_adjustments(employee_id,period,kind,name,amount,note,created_by) VALUES(?,?,?,?,?,?,?)",
@@ -350,7 +355,11 @@ def api_loan_approve(lid: int, b: LoanApprove, u=Depends(act_as("hr_payroll"))):
     day = pdate(b.disbursed_on, "تاريخ الصرف")
     if b.bank_account_id is not None:
         one(c, "SELECT 1 FROM bank_accounts WHERE id=? AND active=1", (b.bank_account_id,), "الحساب البنكي غير موجود")
-    each = r3(l["amount"] / l["installments"])
+    elif ledger.start_date(c):
+        raise HTTPException(400, "اختر الحساب البنكي الذي صُرف منه المبلغ — المحاسبة مفعَّلة ولا يُقيَّد الصرف بدونه")
+    each = math.floor(l["amount"] / l["installments"] * 1000) / 1000   # rounded DOWN: the last instalment then absorbs the remainder and is never below the others
+    if each < 0.001:
+        raise HTTPException(400, "المبلغ أصغر من أن يُقسَّط على هذا العدد من الأقساط")
     for i in range(1, l["installments"] + 1):
         amt = each if i < l["installments"] else r3(l["amount"] - each * (l["installments"] - 1))
         c.execute("INSERT INTO loan_installments(loan_id,no,period,amount) VALUES(?,?,?,?)", (lid, i, _next_period(l["start_period"], i - 1), amt))
@@ -378,6 +387,8 @@ def api_loan_cancel(lid: int, b: CancelIn, u=Depends(act_as("hr_payroll"))):
     if l["status"] == "pending":
         c.execute("UPDATE employee_loans SET status='cancelled' WHERE id=?", (lid,))
     elif l["status"] == "active" and not c.execute("SELECT 1 FROM loan_installments WHERE loan_id=? AND status!='due'", (lid,)).fetchone() and not l["disburse_journal_id"]:
+        if u["username"] in (l["created_by"], l["approved_by"]):
+            raise HTTPException(403, "لا يُلغي قرضًا اعتُمد من أنشأه أو اعتمده — يلغيه شخص ثالث لديه صلاحية الرواتب")
         c.execute("UPDATE employee_loans SET status='cancelled' WHERE id=?", (lid,))
         c.execute("UPDATE loan_installments SET status='waived' WHERE loan_id=?", (lid,))
     else:
@@ -452,6 +463,11 @@ def _unpaid_leave_days(c, eid: int, ws: dt.date, we: dt.date) -> float:
     return n
 
 
+def _fingerprint(c, rid: int) -> list:
+    cols = ("employee_id", "gross", "absence_ded", "adj_earn", "adj_ded", "pasi_employee", "pasi_employer", "loan_ded", "net")
+    return [[r[k] for k in cols] for r in c.execute(f"SELECT {', '.join(cols)} FROM payslips WHERE run_id=? ORDER BY employee_id", (rid,)).fetchall()]
+
+
 def compute_run(c, run: dict, by: str) -> dict:
     """(Re)build every payslip of a run that is still draft/computed. Idempotent: running it twice gives the same payslips, and the instalments it assigned are released first."""
     if run["status"] not in ("draft", "computed"):
@@ -473,6 +489,8 @@ def compute_run(c, run: dict, by: str) -> dict:
             skipped.append({"employee_id": e["id"], "number": e["number"], "name": e["name"], "reason": "لا هيكل راتب"})
             continue
         warns: list[dict] = []
+        if c.execute("SELECT 1 FROM salary_structures WHERE employee_id=? AND effective_from>? AND effective_from<=?", (e["id"], ps.isoformat(), pe.isoformat())).fetchone():
+            warns.append({"kind": "mid_month_structure", "blocker": 0, "msg": "تغيّر هيكل الراتب خلال الشهر: احتُسب الشهر كله بالهيكل الأحدث (لا تقسيم بالأيام) — سوِّ الفرق بتسوية إن لزم"})
         ws = max(ps, dt.date.fromisoformat(e["hire_date"]))
         we = min(pe, dt.date.fromisoformat(e["terminated_on"])) if e["terminated_on"] else pe
         factor = round(((we - ws).days + 1) / days_in, 6)
@@ -562,21 +580,40 @@ def api_run(rid: int, u=Depends(act_as("hr_payroll"))):
 
 
 @router.post("/api/hr/payroll/runs/{rid}/approve")
-def api_approve(rid: int, u=Depends(act_as("hr_payroll"))):
-    """The person who computed the run never approves it. A blocker (a missing PASI rate, a negative net) stops the approval."""
+def api_approve(rid: int, confirm_missing: int = Query(0, ge=0, le=1), u=Depends(act_as("hr_payroll"))):
+    """The person who computed the run never approves it. A blocker (a missing PASI rate, a negative net) stops the approval. Since 0.28.1 the run is also re-computed here:
+    if anything it reads (an adjustment, a loan, a disciplinary deduction, a structure, attendance, leave) changed since the compute, the run is refreshed and the approval refused
+    so the approver reviews what will actually be paid; the month must have ended; and employees with no salary structure must be acknowledged, not silently unpaid."""
     c = db()
     run = _run(c, rid)
     if run["status"] != "computed":
         raise HTTPException(409, "يُعتمد المسيّر بعد احتسابه فقط")
     if run["computed_by"] == u["username"]:
         raise HTTPException(403, "لا تعتمد مسيّرًا احتسبته — يعتمده شخص آخر لديه صلاحية الرواتب")
+    ps, pe = bounds(run["period"])
+    if pe > today():
+        raise HTTPException(409, "لا يُعتمد مسيّر شهر لم ينتهِ بعد — الغياب والإجازات والجزاءات لم تكتمل")
+    if u.get("employee_id") and c.execute("SELECT 1 FROM payslips WHERE run_id=? AND employee_id=?", (rid, u["employee_id"])).fetchone():
+        raise HTTPException(403, "في المسيّر قسيمتك — يعتمده شخص آخر")
+    before = _fingerprint(c, rid)
+    compute_run(c, run, run["computed_by"])   # keeps the maker: the approver's refresh is not a second "compute by" him
+    c.commit()   # the refreshed payslips are real state whatever happens next (no transaction is left open across a refusal)
+    if _fingerprint(c, rid) != before:
+        raise HTTPException(409, "تغيّرت مدخلات الشهر بعد الاحتساب (تسوية أو جزاء أو سلفة أو هيكل أو حضور أو إجازة) — أُعيد الاحتساب الآن؛ راجع القسائم ثم اعتمد")
+    run = _run(c, rid)
+    miss = [e["number"] for e in c.execute("SELECT id, number FROM employees WHERE hire_date<=? AND (terminated_on IS NULL OR terminated_on>=?) ORDER BY number", (pe.isoformat(), ps.isoformat())).fetchall()
+            if not structure_on(c, e["id"], pe)]
+    if miss and not confirm_missing:
+        raise HTTPException(409, "موظفون بلا هيكل راتب لن يُصرف لهم: " + "، ".join(miss[:8]) + (f" … (+{len(miss) - 8})" if len(miss) > 8 else "") + " — أضف هياكلهم وأعد الاحتساب، أو أكّد المتابعة بدونهم")
     if run["blockers"]:
         bad = [f"{r['number']}: {w['msg']}" for r in c.execute("SELECT s.warnings, e.number FROM payslips s JOIN employees e ON e.id=s.employee_id WHERE s.run_id=?", (rid,)).fetchall()
                for w in json.loads(r["warnings"] or "[]") if w["blocker"]]
         raise HTTPException(409, "عوائق تمنع الاعتماد: " + " | ".join(bad[:5]) + (f" … (+{len(bad) - 5})" if len(bad) > 5 else ""))
     if run["headcount"] == 0:
         raise HTTPException(409, "لا قسائم في المسيّر")
-    c.execute("UPDATE payroll_runs SET status='approved', approved_by=?, approved_at=? WHERE id=?", (u["username"], now_s(), rid))
+    done = c.execute("UPDATE payroll_runs SET status='approved', approved_by=?, approved_at=? WHERE id=? AND status='computed'", (u["username"], now_s(), rid))
+    if done.rowcount != 1:
+        raise HTTPException(409, "اعتُمد المسيّر للتوّ من جهة أخرى")
     c.execute("""UPDATE disciplinary_cases SET applied_run_id=? WHERE status='issued' AND apply_period=? AND applied_run_id IS NULL AND employee_id IN (SELECT employee_id FROM payslips WHERE run_id=?)
                  AND rule_id IN (SELECT id FROM penalty_rules WHERE kind='deduction')""", (rid, run["period"], rid))
     for lid in {r["loan_id"] for r in c.execute("SELECT DISTINCT i.loan_id FROM loan_installments i JOIN payslips s ON s.id=i.payslip_id WHERE s.run_id=?", (rid,)).fetchall()}:
@@ -610,6 +647,8 @@ def api_pay(rid: int, b: PayIn, u=Depends(act_as("hr_payroll"))):
         raise HTTPException(400, "الدفع قبل بداية الشهر")
     if b.bank_account_id is not None:
         one(c, "SELECT 1 FROM bank_accounts WHERE id=? AND active=1", (b.bank_account_id,), "الحساب البنكي غير موجود")
+    elif ledger.start_date(c):
+        raise HTTPException(400, "اختر الحساب البنكي الذي صُرفت منه الرواتب — المحاسبة مفعَّلة ولا يُقيَّد الدفع بدونه")
     c.execute("UPDATE payroll_runs SET status='paid', paid_on=?, bank_account_id=? WHERE id=?", (day.isoformat(), b.bank_account_id, rid))
     audit(c, "دفع رواتب", f"{run['period']} · {day.isoformat()}")
     note = None

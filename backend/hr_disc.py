@@ -226,6 +226,8 @@ def api_issue(did: int, u=Depends(act_as("hr"))):
         raise HTTPException(403, "لا تُصدر جزاءً اقترحته — يُصدره شخص آخر")
     if x["rule_kind"] is None or c.execute("SELECT status FROM penalty_rules WHERE id=?", (x["rule_id"],)).fetchone()["status"] != "approved":
         raise HTTPException(409, "المادة لم تعد معتمدة")
+    if x["rule_kind"] == "deduction" and x["apply_period"] and c.execute("SELECT 1 FROM payroll_runs WHERE period=? AND status IN ('approved','paid')", (x["apply_period"],)).fetchone():
+        raise HTTPException(409, f"مسيّر {x['apply_period']} اعتُمد بعد الاقتراح — أعد اقتراح الجزاء على شهر لاحق حتى لا يضيع الخصم")
     c.execute("UPDATE disciplinary_cases SET status='issued', issued_by=?, issued_at=? WHERE id=?", (u["username"], now_s(), did))
     audit(c, "إصدار جزاء", f"{x['number']} · {x['emp_number']} · {KINDS[x['rule_kind']]}")
     c.commit()

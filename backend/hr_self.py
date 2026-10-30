@@ -6,6 +6,7 @@ number, a bank number or (from 0.26.0) a salary of anyone but the employee himse
 """
 from __future__ import annotations
 
+import re
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -141,8 +142,8 @@ def api_me_attendance(month: str = Query("", max_length=7), u=Depends(need("hr_s
     """The employee's own days for a month (default: this one): status, times, and a count per status. Only their own rows — the id comes from the account."""
     c = db()
     e = _self(c, u)
-    m = month if len(month) == 7 and month[4] == "-" else today().isoformat()[:7]
-    days = rows(c.execute("SELECT day, status, check_in, check_out, note FROM attendance WHERE employee_id=? AND day LIKE ? ORDER BY day", (e["id"], m + "%")))
+    m = month if re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", month or "") else today().isoformat()[:7]
+    days = rows(c.execute("SELECT day, status, check_in, check_out FROM attendance WHERE employee_id=? AND day LIKE ? ORDER BY day", (e["id"], m + "%")))
     counts: dict = {}
     for d in days:
         counts[d["status"]] = counts.get(d["status"], 0) + 1

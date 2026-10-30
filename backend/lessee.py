@@ -2,8 +2,8 @@
 maintenance requests, and files a maintenance request. Nothing else.
 
 Ownership is decided in one place: every query below is bound to `users.lessee_id` (never to an id the client sends), and an id that is not theirs answers 404 — the same answer
-as an id that does not exist, so a tenant cannot learn that another tenant's lease exists. Draft leases are the office's, not shown. The owner's name, the other tenants,
-the office's notes and ratings, the blacklist and the lease event log never leave this file.
+as an id that does not exist, so a tenant cannot learn that another tenant's lease exists. Draft leases are the office's, not shown. The other tenants, the office's notes
+and ratings, the blacklist and the lease event log never leave this file (the owner appears only as the party printed on the tenant's own lease PDF).
 """
 from __future__ import annotations
 
@@ -92,8 +92,9 @@ def api_lease(lid: int, u=Depends(need("lessee"))):
     _lease(c, u, lid)
     d = lease_detail(c, lid)
     receipts = {}
+    reversed_ids = {p["reverses_id"] for p in d["payments"] if p["reverses_id"]}
     for p in d["payments"]:
-        if p["receipt_no"] and not p["reverses_id"] and p["receipt_no"] not in receipts:
+        if p["receipt_no"] and not p["reverses_id"] and p["id"] not in reversed_ids and p["receipt_no"] not in receipts:   # a reversed payment has no receipt to download
             receipts[p["receipt_no"]] = p["id"]
     return {"id": d["id"], "number": d["number"], "status": d["status"], "status_label": d["status_label"], "start": d["start"], "end": d["end"], "annual_rent": d["annual_rent"],
             "frequency": d["frequency"], "deposit": d["deposit"], "deposit_state": d["deposit_state"], "unit": d["unit"], "unit_type": d["unit_type"], "area": d["area"],
@@ -131,7 +132,8 @@ def _owned_doc(c, u: dict, kind: str, ref_id: int) -> None:
     if kind == "lease":
         ok = c.execute("SELECT 1 FROM leases WHERE id=? AND tenant_id=? AND status<>'draft'", (ref_id, tid)).fetchone()
     elif kind == "rent_receipt":
-        ok = c.execute("SELECT 1 FROM rent_payments p JOIN leases l ON l.id=p.lease_id WHERE p.id=? AND l.tenant_id=? AND l.status<>'draft' AND p.receipt_no IS NOT NULL", (ref_id, tid)).fetchone()
+        ok = c.execute("""SELECT 1 FROM rent_payments p JOIN leases l ON l.id=p.lease_id WHERE p.id=? AND l.tenant_id=? AND l.status<>'draft' AND p.receipt_no IS NOT NULL
+                          AND NOT EXISTS (SELECT 1 FROM rent_payments r2 WHERE r2.reverses_id=p.id)""", (ref_id, tid)).fetchone()
     elif kind == "cheque_receipt":
         ok = c.execute("SELECT 1 FROM cheques q JOIN leases l ON l.id=q.lease_id WHERE q.id=? AND l.tenant_id=? AND l.status<>'draft' AND COALESCE(q.direction,'in')='in'", (ref_id, tid)).fetchone()
     elif kind == "arrears_notice":
@@ -166,7 +168,7 @@ class MaintIn(BaseModel):
 def api_maint(u=Depends(need("lessee"))):
     c = db()
     out = rows(c.execute("""SELECT m.id, m.category, m.description, m.priority, m.status, m.created, m.updated, m.sla_due, l.number lease_no, un.code unit
-                            FROM maint_requests m JOIN leases l ON l.id=m.lease_id JOIN units un ON un.id=m.unit_id WHERE l.tenant_id=? AND l.status<>'draft' ORDER BY m.id DESC LIMIT 100""", (_tid(u),)))
+                            FROM maint_requests m JOIN leases l ON l.id=m.lease_id JOIN units un ON un.id=m.unit_id WHERE l.tenant_id=? AND l.status<>'draft' AND m.source='tenant' ORDER BY m.id DESC LIMIT 100""", (_tid(u),)))   # what the tenant filed, not the office's own notes
     for x in out:
         x["status_label"] = MAINT_LABEL.get(x["status"], x["status"])
     return out
@@ -179,6 +181,9 @@ def api_maint_add(b: MaintIn, u=Depends(act_as("lessee"))):
     t = today().isoformat()
     if l["status"] != "active" or not (l["start"] <= t <= l["end"]):
         raise HTTPException(409, "تُرفع طلبات الصيانة على عقد ساري")
+    open_n = c.execute("SELECT COUNT(*) FROM maint_requests WHERE lease_id=? AND source='tenant' AND status IN ('new','triaged')", (l["id"],)).fetchone()[0]
+    if open_n >= 5:
+        raise HTTPException(409, "لديك 5 طلبات صيانة بانتظار المكتب — انتظر معالجتها قبل رفع المزيد")
     prio = "urgent" if b.urgent else "normal"
     sla = today() + dt.timedelta(days=PRIORITY_DAYS[prio])
     mid = c.execute("""INSERT INTO maint_requests(unit_id,lease_id,source,requester,category,description,priority,status,created,updated,sla_due,created_by)
@@ -208,9 +213,7 @@ def api_account_create(tid: int, u=Depends(act_as("leasing"))):
     username = f"ten{tid:04d}"
     if c.execute("SELECT 1 FROM users WHERE username=?", (username,)).fetchone():
         raise HTTPException(409, "اسم المستخدم المقترح مستخدم")
-    email = (t["email"] or "").strip().lower() or None
-    if email and c.execute("SELECT 1 FROM users WHERE lower(email)=?", (email,)).fetchone():
-        email = None
+    email = None   # the address on the tenant file was typed by a clerk and is unverified: it must not become a sign-in identity (Google auto-link) — the tenant adds their own later
     temp = A.temp_password()
     c.execute("INSERT INTO users(username,name,role,pw,must_change,email,lessee_id) VALUES(?,?,?,?,1,?,?)", (username, t["name"], "lessee", A.hash_pw(temp), email, tid))
     audit(c, "حساب مستأجر جديد", f"{username} ↔ مستأجر {tid}")

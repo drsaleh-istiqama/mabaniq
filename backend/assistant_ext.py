@@ -24,7 +24,7 @@ def register(A) -> None:
         t = today()
         ls = [dict(r) for r in c.execute('SELECT id,"end",annual_rent,status FROM leases')]
         act = [r for r in ls if r["status"] == "active"]
-        soon = [r for r in act if d(r["end"]) and d(r["end"]) <= t + dt.timedelta(days=90)]
+        soon = [r for r in act if d(r["end"]) and t <= d(r["end"]) <= t + dt.timedelta(days=90)]
         ag = aging(c)
         vacant = [u for u in _units_state(c) if u["state"] == "vacant"]
         chq = c.execute("""SELECT COUNT(*) n, COALESCE(SUM(amount),0) v FROM cheques WHERE COALESCE(direction,'in')='in' AND status='held' AND due_date<=?""", ((t + dt.timedelta(days=7)).isoformat(),)).fetchone()
@@ -44,6 +44,8 @@ def register(A) -> None:
 
     # ------------------------------------------------------------------------------------------------- accounting
     def t_accounting(ctx, a):
+        if ctx.external:   # the books are answered by the local engine only (0.28.1)
+            return {"data": None, "text": "بيانات المحاسبة لا تُرسل إلى نموذج لغوي خارجي. اطرح سؤالك كما هو وسيجيبه المساعد المحلي.", "source": "المحاسبة"}
         from . import ledger
         from .acc_reports import balances, income_statement
         c = ctx.c
@@ -106,6 +108,8 @@ def register(A) -> None:
 
     def t_hr(ctx, a):
         c = ctx.c
+        if ctx.external:   # the people file (counts, leave, balances, payroll) is answered by the local engine only (0.28.1)
+            return {"data": None, "text": "بيانات الموارد البشرية لا تُرسل إلى نموذج لغوي خارجي. اطرح سؤالك كما هو وسيجيبه المساعد المحلي.", "source": "الموارد البشرية"}
         if not ctx.can("hr"):
             return _self_text(ctx) if ctx.can("hr_self") else {"data": None, "text": "", "source": ""}
         if a.get("topic") == "self":

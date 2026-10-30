@@ -42,11 +42,14 @@ test.describe.serial('المساعد ومظهر المنصة', () => {
     await expect(page.locator('#toast')).toContainText('حُفظ');
     await page.reload();
     await expect(page.locator('html')).toHaveAttribute('data-bg', 'forest');
+    await page.waitForLoadState('networkidle');   // the boot's own refresh (dashboard, appearance) must finish before the next action, or it re-applies the saved look over the preview
     // restore the default so later specs and re-runs start from the standard look
     await page.click('[data-s="adm"]');
     await page.locator('.subt button', {hasText: 'المظهر والمساعد'}).click();
     await page.locator('button', {hasText: 'القيم الافتراضية'}).click();
+    await expect(page.locator('html')).toHaveAttribute('data-bg', 'navy');   // the preview first — the saved look may still be arriving
     await page.locator('button', {hasText: 'حفظ للمؤسسة'}).click();
+    await expect(page.locator('#toast')).toContainText('حُفظ');
     await expect(page.locator('html')).toHaveAttribute('data-bg', 'navy');
   });
 });

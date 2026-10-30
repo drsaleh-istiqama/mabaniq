@@ -504,6 +504,14 @@ def test_the_year_close_carries_profit_to_retained_earnings_and_a_closed_year_st
     assert cl.post(f"/api/acc/year-close/{y}/reopen", json={"reason": "تصحيح فاتورة سنة سابقة"}).status_code == 200
     assert _bal(cl, CODE["retained"]) == 0 and _bal(cl, CODE["other_rev"]) == -800
     assert cl.get("/api/acc/status").json()["ledger_diff"] == 0
+    # 0.28.1: reversing the closing is not "activity" — the year's profit stays 500 (it showed 1,000 before), and the reopened year can be closed again
+    inc = cl.get("/api/acc/statements/income_statement", params={"frm": f"{y}-01-01", "to": f"{y}-12-31"}).json()
+    assert inc["net"] == 500 and inc["revenue"] == 800 and inc["expenses"] == 300
+    assert cl.post(f"/api/acc/journals/{jid}/approve").status_code == 200   # the late entry can now be posted
+    again = cl.post("/api/acc/year-close", json={"year": y, "ignore_pending": True})
+    assert again.status_code == 200 and again.json()["net_profit"] == 500, again.text
+    assert _bal(cl, CODE["retained"]) == -500
+    assert cl.post("/api/acc/year-close", json={"year": y, "ignore_pending": True}).status_code == 409   # and not a third time
 
 
 def test_the_erpnext_export_lists_the_chart_and_the_journals_in_journal_entry_shape(cl):

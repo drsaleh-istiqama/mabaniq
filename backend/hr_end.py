@@ -331,6 +331,8 @@ def api_term_pay(tid: int, b: TermPay, u=Depends(act_as("hr_payroll"))):
     day = pdate(b.paid_on, "تاريخ الدفع")
     if b.bank_account_id is not None:
         one(c, "SELECT 1 FROM bank_accounts WHERE id=? AND active=1", (b.bank_account_id,), "الحساب البنكي غير موجود")
+    elif ledger.start_date(c) and t["net"] > 0:
+        raise HTTPException(400, "اختر الحساب البنكي الذي صُرفت منه المخالصة — المحاسبة مفعَّلة ولا يُقيَّد الدفع بدونه")
     c.execute("UPDATE terminations SET status='paid', paid_on=?, bank_account_id=? WHERE id=?", (day.isoformat(), b.bank_account_id, tid))
     audit(c, "دفع مخالصة", f"{t['number']} · {day.isoformat()}")
     note = None
@@ -347,7 +349,7 @@ def post_settlement(c, ctx, t: dict) -> None:
     """One journal at approval: the gratuity and the leave pay are expenses, the loans are recovered, the rest is owed to the leaver. Then, once paid, the payment."""
     if t["status"] in ("approved", "paid") and not t["journal_id"]:
         L = [dict(account="exp_eosb", debit=t["eosb_amount"]), dict(account="exp_payroll", debit=r3(t["leave_payout"] + t["other_dues"])),
-             dict(account="emp_loans", credit=t["loans_due"], party_type="employee", party_id=t["employee_id"]), dict(account="rev_recoveries", credit=t["other_deductions"])]
+             dict(account="emp_loans", credit=t["loans_due"], party_type="employee", party_id=t["employee_id"]), dict(account="rev_other", credit=t["other_deductions"])]   # not "recoveries from tenants" (0.28.1)
         L.append(dict(account="payroll_payable", **({"credit": t["net"]} if t["net"] >= 0 else {"debit": -t["net"]}), party_type="employee", party_id=t["employee_id"]))
         jid = ledger.post(c, date=dt.date.fromisoformat(t["end_date"]), memo=f"مخالصة نهاية خدمة — {t['number']}", source_kind="settlement", source_ref=str(t["id"]),
                           source_key=f"settlement:{t['id']}", ctx=ctx, lines=L)

@@ -525,6 +525,9 @@ def _allowed(u, name) -> bool:
     return not perms or bool(set(perms) & set(u["perms"]))
 
 
+LOCAL_ONLY = ("accounting", "hr")   # tools whose results are never handed to an external language model
+
+
 def _module_on(u, name) -> bool:
     mod = TOOL_MODULE.get(name)
     return not mod or mod in u.get("modules", ())
@@ -707,9 +710,11 @@ def llm_answer(ctx, q, history, client=None):
     if not key:
         return None
     msgs = []
-    for h in (history or [])[-6:]:
-        if h.get("q") and h.get("a"):
-            msgs += [{"role": "user", "content": str(h["q"])[:500]}, {"role": "assistant", "content": str(h["a"])[:1500]}]
+    # 0.28.1: only the user's earlier QUESTIONS are context. The answers came from the client and may have been produced by the local engine (names, books, payroll);
+    # sending them would defeat the redaction that `ctx.external` applies to the tools' results.
+    qs = [str(h["q"])[:300] for h in (history or [])[-6:] if h.get("q")]
+    if qs:
+        msgs += [{"role": "user", "content": "أسئلتي السابقة في هذه المحادثة (للسياق فقط): " + " | ".join(qs)}, {"role": "assistant", "content": "مفهوم."}]
     msgs.append({"role": "user", "content": q})
     tools = _tool_defs(ctx.u)
     used = []
@@ -748,6 +753,11 @@ def llm_answer(ctx, q, history, client=None):
 def answer(c, u, q, history=None, last_intent=None, client=None):
     cfg = tenant_cfg(c)
     use_llm = cfg["llm"] and bool(ai_key())
+    if use_llm:   # 0.28.1: a question about the books or the people is answered by the local engine — those figures never leave the server
+        sc = _score(norm(q))
+        top = max(sc, key=sc.get) if sc else None
+        if top in LOCAL_ONLY and sc[top] >= 2:
+            use_llm = False
     if use_llm:
         dq = _RATE[u["id"]]
         now = time.time()

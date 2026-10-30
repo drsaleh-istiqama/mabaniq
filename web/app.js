@@ -2313,7 +2313,7 @@ EXT.payRunView = async function (rid) {
       <td><a class="btn" href="/api/hr/payroll/payslips/${s.id}.pdf" target="_blank" rel="noopener">قسيمة</a></td></tr>`), 'اضغط «احتساب».');
 };
 EXT.payRunDo = async (rid, what) => {
-  try { const r = await tryDo(() => post(`/hr/payroll/runs/${rid}/${what}`), what === 'compute' ? (x => `احتُسب: ${N(x.headcount)} قسيمة${x.blockers ? ' — عوائق ' + N(x.blockers) : ''}`) : (x => x.note || 'اعتُمد المسيّر')); if (what === 'compute' && r.skipped.length) toast(`${N(r.skipped.length)} موظفًا بلا هيكل راتب`, 1); } catch (e) { /* toast shown */ }
+  try { const r = await tryDo(() => post(`/hr/payroll/runs/${rid}/${what}${EXT.data.confirmMissing === rid ? '?confirm_missing=1' : ''}`).catch(e => { if (what === 'approve' && e.message.startsWith('موظفون بلا هيكل') && confirm(e.message + '\n\nهل تعتمد المسيّر بدون هؤلاء؟')) { EXT.data.confirmMissing = rid; return post(`/hr/payroll/runs/${rid}/approve?confirm_missing=1`); } throw e; }), what === 'compute' ? (x => `احتُسب: ${N(x.headcount)} قسيمة${x.blockers ? ' — عوائق ' + N(x.blockers) : ''}`) : (x => x.note || 'اعتُمد المسيّر')); if (what === 'compute' && r.skipped.length) toast(`${N(r.skipped.length)} موظفًا بلا هيكل راتب`, 1); } catch (e) { /* toast shown */ }
   EXT.payRunView(rid);
 };
 EXT.payRunPay = async rid => {

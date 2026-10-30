@@ -158,9 +158,23 @@ def _approved_run(cl, period=PERIOD):
     rid = _run(cl, period)
     assert cl.post(f"/api/hr/payroll/runs/{rid}/compute").status_code == 200
     login_as(cl, _user(cl, f"hrt-pay-{period}", "payroll"))
-    r = cl.post(f"/api/hr/payroll/runs/{rid}/approve")
+    r = _approve(cl, rid, period)
     assert r.status_code == 200, r.text
     return rid
+
+
+def _approve(cl, rid, period, **params):
+    """A month is approved only once it has ended (0.28.1): for the running month the clock is moved to the day after it."""
+    from unittest import mock
+
+    from backend import hr_payroll as HP
+    ps = dt.date.fromisoformat(period + "-01")
+    after = (ps.replace(day=28) + dt.timedelta(days=4)).replace(day=1)
+    q = ("?" + "&".join(f"{k}={v}" for k, v in params.items())) if params else ""
+    if after > TODAY:
+        with mock.patch.object(HP, "today", lambda: after):
+            return cl.post(f"/api/hr/payroll/runs/{rid}/approve{q}")
+    return cl.post(f"/api/hr/payroll/runs/{rid}/approve{q}")
 
 
 # ----------------------------------------------------------------------------------------------------- the calculation
@@ -484,3 +498,69 @@ def test_the_settlement_posts_one_balanced_journal_when_accounting_is_on(cl):
     assert jid
     lines = _sql("SELECT SUM(debit) d, SUM(credit) c FROM acc_lines WHERE journal_id=?", (jid,))[0]
     assert lines["d"] == pytest.approx(lines["c"]) and lines["d"] > 0
+
+
+# ----------------------------------------------------------------------------------------------------- 0.28.1 audit round
+def test_a_run_whose_inputs_changed_after_the_compute_is_refreshed_not_approved(cl):
+    _rates(cl)
+    _staff(cl, "موظف التسوية", 300, omani=False)
+    e = _sql("SELECT id FROM employees")[0][0]
+    login_as(cl, "admin")
+    rid = _run(cl)
+    assert cl.post(f"/api/hr/payroll/runs/{rid}/compute").status_code == 200
+    cl.post("/api/hr/payroll/adjustments", json={"employee_id": e, "period": PERIOD, "kind": "deduction", "name": "استقطاع لاحق", "amount": 20})
+    login_as(cl, _user(cl, "hrt-pay2", "payroll"))
+    r = _approve(cl, rid, PERIOD)
+    assert r.status_code == 409 and "أُعيد الاحتساب" in r.text      # the approver reviews what will really be paid
+    assert _slip(cl, rid, "EMP-0001")["adj_ded"] == 20
+    assert cl.get(f"/api/hr/payroll/runs/{rid}").json()["computed_by"] == "admin"   # the maker stays the maker
+    assert _approve(cl, rid, PERIOD).status_code == 200
+
+
+def test_a_month_that_has_not_ended_is_not_approved_and_nobody_is_silently_left_unpaid(cl):
+    _rates(cl)
+    _staff(cl, "موظف أول", 300, omani=False)
+    login_as(cl, "admin")
+    assert cl.post("/api/hr/employees", json={"name": "بلا هيكل", "omani": False, "hire_date": "2024-01-01", "gender": "male"}).status_code == 200
+    rid = _run(cl, NEXT)
+    cl.post(f"/api/hr/payroll/runs/{rid}/compute")
+    login_as(cl, _user(cl, "hrt-pay2", "payroll"))
+    r = cl.post(f"/api/hr/payroll/runs/{rid}/approve")
+    assert r.status_code == 409 and "لم ينتهِ" in r.text
+    r = _approve(cl, rid, NEXT)
+    assert r.status_code == 409 and "بلا هيكل" in r.text and "EMP-0002" in r.text
+    assert _approve(cl, rid, NEXT, confirm_missing=1).status_code == 200
+
+
+def test_nobody_sets_their_own_pay_or_approves_a_run_with_their_own_payslip(cl):
+    _rates(cl)
+    eid = _staff(cl, "مسؤول الرواتب", 300, omani=False)
+    me = _user(cl, "hrt-pay2", "payroll")
+    login_as(cl, "admin")
+    uid = _sql("SELECT id FROM users WHERE username=?", (me,))[0][0]
+    assert cl.post(f"/api/hr/employees/{eid}/link-user", json={"user_id": uid}).status_code == 200
+    login_as(cl, me)
+    assert cl.post("/api/hr/payroll/structures", json={"employee_id": eid, "effective_from": TODAY.isoformat(), "basic": 900, "lines": []}).status_code == 403
+    assert cl.post("/api/hr/payroll/adjustments", json={"employee_id": eid, "period": PERIOD, "kind": "earning", "name": "علاوة", "amount": 50}).status_code == 403
+    login_as(cl, "admin")
+    rid = _run(cl)
+    cl.post(f"/api/hr/payroll/runs/{rid}/compute")
+    login_as(cl, me)
+    r = _approve(cl, rid, PERIOD)
+    assert r.status_code == 403 and "قسيمتك" in r.text
+
+
+def test_loans_split_without_negative_instalments_and_a_third_person_cancels_an_approved_one(cl):
+    _rates(cl)
+    e = _staff(cl, "مقترض صغير", 300, omani=False)
+    login_as(cl, "admin")
+    tiny = cl.post("/api/hr/payroll/loans", json={"employee_id": e, "kind": "qard_hasan", "amount": 0.05, "installments": 60, "start_period": PERIOD}).json()["id"]
+    one_omr = cl.post("/api/hr/payroll/loans", json={"employee_id": e, "kind": "qard_hasan", "amount": 1, "installments": 60, "start_period": PERIOD}).json()["id"]
+    login_as(cl, _user(cl, "hrt-pay2", "payroll"))
+    assert cl.post(f"/api/hr/payroll/loans/{tiny}/approve", json={"disbursed_on": TODAY.isoformat()}).status_code == 400
+    assert cl.post(f"/api/hr/payroll/loans/{one_omr}/approve", json={"disbursed_on": TODAY.isoformat()}).status_code == 200
+    sch = [x["amount"] for x in cl.get(f"/api/hr/payroll/loans/{one_omr}").json()["schedule"]]
+    assert sum(sch) == pytest.approx(1.0) and min(sch) > 0 and sch[-1] >= sch[0]
+    assert cl.post(f"/api/hr/payroll/loans/{one_omr}/cancel", json={"reason": "تراجع"}).status_code == 403   # the approver does not cancel what he approved
+    login_as(cl, _user(cl, "hrt-pay3", "payroll"))
+    assert cl.post(f"/api/hr/payroll/loans/{one_omr}/cancel", json={"reason": "تراجع"}).status_code == 200

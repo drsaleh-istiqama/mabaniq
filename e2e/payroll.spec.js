@@ -66,6 +66,7 @@ test.describe.serial('الرواتب', () => {
     const second = await signIn(browser, {username: 'e2e-pay2', temporary_password: p2.temporary_password});
     await expect(second.page.locator('#payB')).toContainText('أُحتسب بواسطة');   // a payroll officer lands on the payroll screen
     await second.page.locator('#payB tbody tr', {hasText: prevMonth()}).click();
+    second.page.on('dialog', d => d.accept());   // 0.28.1: the other people in the shared test database have no salary structure — the approver must acknowledge it
     await second.page.click('[data-call="EXT.payRunDo"][data-args*="approve"]');
     await expect(second.page.locator('#toast')).toContainText('اعتُمد');
     await expect(second.page.locator('#payB')).toContainText('معتمد');

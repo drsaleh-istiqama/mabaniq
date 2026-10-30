@@ -14,7 +14,7 @@ from .common import rows, today
 
 STRICT = frozenset({"hr", "hr_payroll", "accounting"})   # held in person (or by `admin`) — the `reports` permission does not stand in for them
 NO_MAIL_READY = frozenset({"hr_payroll"})                # money-per-person reports are not e-mailed on a schedule
-NO_MAIL_DATASETS = frozenset({"payslips"})
+NO_MAIL_DATASETS = frozenset({"payslips", "journal_lines"})   # journal lines carry per-person loan and settlement entries
 
 
 def _tbl(title, cols, data):
@@ -26,12 +26,36 @@ def _r3(v) -> float:
 
 
 def _day(params: dict) -> str:
-    return (params.get("to") or today().isoformat())[:10]
+    return (str(params.get("to") or today().isoformat()))[:10]
 
 
 def _month(params: dict) -> str:
-    m = (params.get("month") or params.get("to") or today().isoformat())[:7]
+    m = (str(params.get("month") or params.get("to") or today().isoformat()))[:7]
     return m if len(m) == 7 else today().isoformat()[:7]
+
+
+def clean_params(params: dict) -> dict:
+    """Dates are YYYY-MM-DD (or YYYY-MM for a month) and a project is a number — anything else is a 400 here instead of a 500 deep inside a report (0.28.1)."""
+    from fastapi import HTTPException
+    out = {}
+    for k, v in (params or {}).items():
+        if v in (None, ""):
+            continue
+        s = str(v)
+        if k in ("from", "to"):
+            try:
+                dt.date.fromisoformat(s[:10]) if len(s) >= 10 else dt.date.fromisoformat(s[:7] + "-01")
+            except ValueError:
+                raise HTTPException(400, "التاريخ غير صالح — الصيغة YYYY-MM-DD") from None
+        elif k == "month":
+            try:
+                dt.date.fromisoformat(s[:7] + "-01")
+            except ValueError:
+                raise HTTPException(400, "الشهر غير صالح — الصيغة YYYY-MM") from None
+        elif k == "project_id" and not s.isdigit():
+            raise HTTPException(400, "المشروع غير صالح")
+        out[k] = v
+    return out
 
 
 # ----------------------------------------------------------------------------------------------------- accounting
@@ -155,7 +179,7 @@ def r_hr_headcount(c, params):
 
 def r_hr_leave(c, params):
     from . import hr_leave
-    year = int((params.get("to") or today().isoformat())[:4])
+    year = int(_day(params)[:4])
     data = []
     for e in rows(c.execute("SELECT * FROM employees WHERE status!='terminated' ORDER BY number")):
         dep = c.execute("SELECT name FROM departments WHERE id=?", (e["department_id"],)).fetchone() if e["department_id"] else None
@@ -196,7 +220,7 @@ def r_hr_attendance(c, params):
     tot = {k: sum(d[k] or 0 for d in data) for k in ("present", "late", "absent", "leave_days", "remote")}
     days = sum(tot.values())
     return {"key": "hr_attendance", "title": "الحضور الشهري", "subtitle": f"شهر {month}",
-            "kpis": [{"label": "أيام حضور", "value": tot["present"] + tot["remote"]}, {"label": "تأخير", "value": tot["late"]}, {"label": "غياب", "value": tot["absent"]}, {"label": "إجازات", "value": tot["leave_days"]},
+            "kpis": [{"label": "أيام حضور", "value": tot["present"] + tot["remote"] + tot["late"]}, {"label": "تأخير", "value": tot["late"]}, {"label": "غياب", "value": tot["absent"]}, {"label": "إجازات", "value": tot["leave_days"]},
                      {"label": "نسبة الغياب", "value": round(100 * tot["absent"] / days, 1) if days else 0, "format": "pct"}],
             "charts": [{"type": "bar", "title": "بحسب الحالة", "labels": ["حضور", "عن بُعد", "تأخير", "غياب", "إجازة"], "series": [{"name": "أيام", "data": [tot["present"], tot["remote"], tot["late"], tot["absent"], tot["leave_days"]]}], "format": "num"}],
             "tables": [_tbl("بحسب الموظف", [("number", "الرقم", "text"), ("name", "الموظف", "text"), ("present", "حضور", "int"), ("remote", "عن بُعد", "int"), ("late", "تأخير", "int"), ("absent", "غياب", "int"),
@@ -317,6 +341,22 @@ def mail_blocked(kind: str, ref: str | None, spec: dict | None) -> bool:
     if kind == "ready":
         return ref in NO_MAIL_READY
     return bool(spec and spec.get("dataset") in NO_MAIL_DATASETS)
+
+
+def readable(d: dict, perms, ready: dict, datasets: dict) -> bool:
+    """May this viewer see that this saved report / schedule exists? Only if they could run it — the payroll officer does not list the books' reports (0.28.1)."""
+    import json as _json
+    ps = set(perms)
+    if "admin" in ps:
+        return True
+    if d["kind"] == "ready":
+        r = ready.get(d["ref"])
+        return bool(r) and (r["perm"] in ps or (r["perm"] not in STRICT and "reports" in ps))
+    try:
+        ds = datasets.get((_json.loads(d["spec"]) or {}).get("dataset"))
+    except Exception:  # noqa: BLE001
+        return False
+    return bool(ds) and (ds["perm"] in ps or (ds["perm"] not in STRICT and "reports" in ps))
 
 
 __all__ = ["register", "mail_blocked", "STRICT"]

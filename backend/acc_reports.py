@@ -265,8 +265,9 @@ def api_year_close(b: CloseIn, u=Depends(act_as("accounting_approve"))):
         raise HTTPException(409, "لا تُقفل سنة لم تنتهِ بعد")
     if f"{b.year}-12-31" < start:
         raise HTTPException(409, "السنة تسبق بدء المحاسبة")
-    if c.execute("SELECT 1 FROM acc_journals WHERE source_key=?", (f"yearclose:{b.year}",)).fetchone():
+    if c.execute("SELECT 1 FROM acc_journals WHERE source_kind='yearclose' AND source_ref=? AND kind='auto' AND status='posted'", (str(b.year),)).fetchone():
         raise HTTPException(409, "أُقفلت هذه السنة سابقًا")
+    tries = c.execute("SELECT COUNT(*) FROM acc_journals WHERE source_kind='yearclose' AND source_ref=? AND kind='auto'", (str(b.year),)).fetchone()[0]   # a reopened year can be closed again
     if c.execute("SELECT 1 FROM acc_journals WHERE status IN ('draft','pending') AND jdate>=? AND jdate<=?", (f"{b.year}-01-01", f"{b.year}-12-31")).fetchone():
         raise HTTPException(409, "في السنة قيود مسودة أو بانتظار الاعتماد — اعتمدها أو احذفها أولًا")
     if not b.ignore_pending and sum(ledger.autopost(c, dry=True)["pending"].values()):
@@ -285,7 +286,7 @@ def api_year_close(b: CloseIn, u=Depends(act_as("accounting_approve"))):
         lines.append(dict(account="retained_earnings", credit=net) if net > 0 else dict(account="retained_earnings", debit=-net))
         try:
             jid = ledger.post(c, date=dt.date(b.year, 12, 31), lines=lines, memo=f"إقفال السنة المالية {b.year} — ترحيل صافي الربح إلى الأرباح المرحّلة", source_kind="yearclose",
-                              source_ref=str(b.year), source_key=f"yearclose:{b.year}", by=u["name"], kind="auto")
+                              source_ref=str(b.year), source_key=f"yearclose:{b.year}" + (f":{tries + 1}" if tries else ""), by=u["name"], kind="auto")
         except ledger.LedgerError as e:
             raise HTTPException(409, str(e)) from None
     for m in range(1, 13):
@@ -305,7 +306,7 @@ class ReopenYear(BaseModel):
 def api_year_reopen(year: int, b: ReopenYear, u=Depends(act_as("accounting_approve"))):
     """Undo a year-end close (reasoned and audited): the months reopen and the closing journal is reversed."""
     c = db()
-    j = c.execute("SELECT id, status FROM acc_journals WHERE source_key=?", (f"yearclose:{year}",)).fetchone()
+    j = c.execute("SELECT id, status FROM acc_journals WHERE source_kind='yearclose' AND source_ref=? AND kind='auto' ORDER BY id DESC LIMIT 1", (str(year),)).fetchone()
     if not j and not c.execute("SELECT 1 FROM acc_periods WHERE year=? AND status='closed'", (year,)).fetchone():
         raise HTTPException(409, "السنة غير مقفلة")
     c.execute("UPDATE acc_periods SET status='open', reopened_by=?, reopened_at=?, reopen_reason=? WHERE year=?", (u["name"], now_s(), b.reason, year))

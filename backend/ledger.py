@@ -240,7 +240,9 @@ def reverse(c, jid: int, on: dt.date, reason: str, by: str) -> int:
            "vat_class": x["vat_class"], "memo": x["memo"]} for x in rows(c.execute("SELECT * FROM acc_lines WHERE journal_id=? ORDER BY line_no", (jid,)))]
     try:
         _open_period(c, on)
-        rid = insert_draft(c, ctx, d=on, memo=f"عكس {j['number']} — {reason}", lines=ls, kind="reversal", by=by, reversal_of=jid)
+        # a reversed year-end closing keeps its source_kind so that both journals stay out of the year's income statement (before 0.28.1 the reversal counted as activity and doubled it)
+        rid = insert_draft(c, ctx, d=on, memo=f"عكس {j['number']} — {reason}", lines=ls, kind="reversal", by=by, reversal_of=jid,
+                           source_kind="yearclose" if j["source_kind"] == "yearclose" else None, source_ref=j["source_ref"] if j["source_kind"] == "yearclose" else None)
     except LedgerError as e:
         raise HTTPException(409, str(e)) from None
     finalize(c, rid, by, approved_by=by)

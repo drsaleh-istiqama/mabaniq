@@ -22,7 +22,7 @@ import re
 from collections import OrderedDict, defaultdict
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from . import engines as E
 from . import mail, pdfcharts
@@ -179,7 +179,9 @@ def build_sql(spec: Spec) -> tuple[str, list]:
             where.append(f"{col} IN ({','.join('?' * len(vals))})")
             params.extend(vals)
         elif f.op == "between":
-            a, b = (f.value or [None, None])[:2] if isinstance(f.value, list) else (None, None)
+            if not isinstance(f.value, list) or len(f.value) != 2:
+                raise HTTPException(400, "المرشح «بين» يحتاج قيمتين")
+            a, b = f.value
             where.append(f"{col} BETWEEN ? AND ?")
             params.extend([_coerce(meta, a), _coerce(meta, b)])
         elif f.op == "null":
@@ -239,10 +241,13 @@ def _coerce(meta, v):
     t = meta[1]
     if v is None:
         return None
-    if t in ("num", "money", "pct"):
-        return float(v)
-    if t in ("int", "bool"):
-        return int(v)
+    try:
+        if t in ("num", "money", "pct"):
+            return float(v)
+        if t in ("int", "bool"):
+            return int(v)
+    except (TypeError, ValueError):
+        raise HTTPException(400, f"قيمة المرشح غير صالحة للعمود «{meta[0]}»") from None
     return str(v)[:200]
 
 
@@ -591,6 +596,7 @@ def run_ready(c, key: str, params: dict, perms: set) -> dict:
     r = READY.get(key)
     if not r or not _on(READY_MODULE, key, c):
         raise HTTPException(404, "التقرير غير موجود")
+    params = reports_ext.clean_params(params or {})
     if not _perm_ok(r["perm"], perms):
         raise HTTPException(403, "ليست لديك صلاحية هذا التقرير")
     doc = r["fn"](c, params or {})
@@ -601,13 +607,23 @@ def run_ready(c, key: str, params: dict, perms: set) -> dict:
 
 @router.get("/api/reports/ready/{key}")
 def ready_report(key: str, request: Request, u=Depends(need_any(*PERM))):
-    params = {k: v for k, v in request.query_params.items() if k in ("from", "to", "project_id")}
-    return run_ready(db(), key, params, set(u["perms"]))
+    params = reports_ext.clean_params({k: v for k, v in request.query_params.items() if k in ("from", "to", "project_id")})
+    c = db()
+    doc = run_ready(c, key, params, set(u["perms"]))
+    if READY[key]["perm"] in reports_ext.STRICT:   # 0.28.0: who read the books, the people file or the payroll is on record
+        audit(c, "اطلاع على تقرير حساس", doc["title"], f"{u['name']} ({u['role_label']})")
+        c.commit()
+    return doc
 
 
 @router.post("/api/reports/custom/run")
 def custom_run(spec: Spec, u=Depends(need_any(*PERM))):
-    return run_spec(db(), spec, set(u["perms"]) | ({"view"} if "reports" in u["perms"] else set()))
+    c = db()
+    doc = run_spec(c, spec, set(u["perms"]) | ({"view"} if "reports" in u["perms"] else set()))
+    if DATASETS[spec.dataset]["perm"] in reports_ext.STRICT:
+        audit(c, "اطلاع على بيانات حساسة", DATASETS[spec.dataset]["label"], f"{u['name']} ({u['role_label']})")
+        c.commit()
+    return doc
 
 
 # ---------------------------------------------------------------- saved definitions
@@ -625,7 +641,7 @@ def saved_list(u=Depends(need_any(*PERM))):
     c = db()
     out = []
     for r in rows(c.execute("SELECT * FROM report_defs ORDER BY id DESC")):
-        if r["shared"] or r["owner"] == u["username"]:
+        if (r["shared"] or r["owner"] == u["username"]) and reports_ext.readable(r, u["perms"], READY, DATASETS):
             r["spec"] = json.loads(r["spec"] or "null")
             r["params"] = json.loads(r["params"] or "{}")
             out.append(r)
@@ -638,7 +654,7 @@ def saved_create(body: SavedIn, u=Depends(act_as("reports"))):
     if body.kind == "ready" and body.ref not in READY:
         raise HTTPException(400, "تقرير جاهز غير معروف")
     if body.kind == "custom":
-        Spec(**(body.spec or {}))  # validates
+        _spec(body.spec)  # validates
     rid = c.execute("INSERT INTO report_defs(name,kind,ref,spec,params,owner,shared,created) VALUES(?,?,?,?,?,?,?,?)",
                     (body.name, body.kind, body.ref, json.dumps(body.spec, ensure_ascii=False) if body.spec else None, json.dumps(body.params, ensure_ascii=False), u["username"], int(body.shared), now_s())).lastrowid
     audit(c, "حفظ تقرير", f"{body.name} ({body.kind})")
@@ -688,12 +704,19 @@ class ExportIn(BaseModel):
     table: int = 0  # csv: which table
 
 
+def _spec(raw) -> Spec:
+    try:
+        return Spec(**(raw or {}))
+    except ValidationError as e:
+        raise HTTPException(422, "مواصفة التقرير غير صالحة: " + "; ".join(f"{'.'.join(map(str, x['loc']))} {x['msg']}" for x in e.errors()[:3])) from None
+
+
 def _doc_for(c, body: ExportIn, perms: set) -> dict:
     if body.kind == "ready":
         return run_ready(c, body.ref or "", body.params, perms)
     if body.kind == "saved":
         return run_saved(c, int(body.saved_id or 0), perms, body.params)
-    return run_spec(c, Spec(**(body.spec or {})), perms)
+    return run_spec(c, _spec(body.spec), perms)
 
 
 def to_csv(doc: dict, table: int = 0) -> bytes:
@@ -712,7 +735,7 @@ def export(body: ExportIn, request: Request, u=Depends(need_any(*PERM))):
     c = db()
     doc = _doc_for(c, body, set(u["perms"]))
     name = re.sub(r"[^\w؀-ۿ -]", "", doc["title"])[:60] or "report"
-    audit(c, "تصدير تقرير", f"{doc['title']} ({body.format})")
+    audit(c, "تصدير تقرير", f"{doc['title']} ({body.format})", f"{u['name']} ({u['role_label']})")   # 0.28.0: named, not "النظام"
     c.commit()
     if body.format == "csv":
         from urllib.parse import quote as q
@@ -749,7 +772,12 @@ def _next_run(cadence: str, hour: int, after: dt.datetime) -> str:
 @router.get("/api/reports/schedules")
 def schedules(u=Depends(need_any(*PERM))):
     c = db()
-    return rows(c.execute("SELECT s.*, d.name report_name FROM report_schedules s JOIN report_defs d ON d.id=s.report_id ORDER BY s.id DESC"))
+    out = rows(c.execute("SELECT s.*, d.name report_name, d.kind report_kind, d.ref report_ref, d.spec report_spec FROM report_schedules s JOIN report_defs d ON d.id=s.report_id ORDER BY s.id DESC"))
+    keep = [x for x in out if reports_ext.readable({"kind": x["report_kind"], "ref": x["report_ref"], "spec": x["report_spec"]}, u["perms"], READY, DATASETS)]
+    for x in keep:
+        for k in ("report_kind", "report_ref", "report_spec"):
+            x.pop(k, None)
+    return keep
 
 
 @router.post("/api/reports/schedules")
@@ -759,7 +787,7 @@ def schedule_create(body: ScheduleIn, u=Depends(act_as("reports"))):
     d = one(c, "SELECT * FROM report_defs WHERE id=?", (body.report_id,), "التقرير غير موجود")
     if reports_ext.mail_blocked(d["kind"], d["ref"], json.loads(d["spec"]) if d["spec"] else None):
         raise HTTPException(409, "لا تُرسل بيانات الرواتب بالبريد — اعرض التقرير من الشاشة")
-    run_saved(c, body.report_id, set(u["perms"]))   # the person scheduling it must be able to read it himself (403/404 here, not at 07:00 the next day)
+    run_saved(c, body.report_id, set(u["perms"]) | ({"view"} if "reports" in u["perms"] else set()))   # the person scheduling it must be able to read it himself (403/404 here, not at 07:00 the next day)
     rcpts = [x.strip().lower() for x in body.recipients.split(",") if x.strip()]
     if not rcpts or any(not EMAIL_RE.match(x) for x in rcpts):
         raise HTTPException(400, "عناوين البريد غير صالحة (افصل بينها بفاصلة)")
@@ -788,7 +816,8 @@ def _owner_perms(c, username) -> set:
     u = c.execute("SELECT * FROM users WHERE username=? AND active=1", (username,)).fetchone()
     if not u:
         raise HTTPException(403, "صاحب الجدولة لم يعد مفعَّلًا")
-    return set(A.public(u, registry.enabled_modules(c))["perms"])
+    ps = set(A.public(u, registry.enabled_modules(c))["perms"])
+    return ps | ({"view"} if "reports" in ps else set())   # the same rule as the on-screen custom run
 
 
 def run_due_schedules(c, now: dt.datetime | None = None) -> int:
@@ -798,6 +827,9 @@ def run_due_schedules(c, now: dt.datetime | None = None) -> int:
     sent = 0
     for s in rows(c.execute("SELECT * FROM report_schedules WHERE active=1 AND next_run<=?", (now.isoformat(timespec="minutes"),))):
         try:
+            d0 = c.execute("SELECT kind, ref, spec FROM report_defs WHERE id=?", (s["report_id"],)).fetchone()
+            if d0 and reports_ext.mail_blocked(d0["kind"], d0["ref"], json.loads(d0["spec"]) if d0["spec"] else None):
+                raise HTTPException(409, "لا تُرسل بيانات الرواتب والقيود بالبريد")   # checked again at send time, not only when the schedule was made
             doc = run_saved(c, s["report_id"], _owner_perms(c, s["created_by"]))
             if s["format"] == "csv":
                 blob, mime, ext = to_csv(doc), "text/csv", "csv"
@@ -806,6 +838,7 @@ def run_due_schedules(c, now: dt.datetime | None = None) -> int:
             for to in s["recipients"].split(","):
                 mail.send(to, f"{doc['title']} — تقرير مجدول", f"مرفق تقرير «{doc['title']}» بتاريخ {today().isoformat()}.", kind="report", attachments=[(f"{doc['title']}.{ext}", blob, mime)])
             sent += 1
+            audit(c, "إرسال تقرير مجدول", f"{doc['title']} إلى {len(s['recipients'].split(','))} مستلمًا", f"المجدول ({s['created_by']})")
             c.execute("UPDATE report_schedules SET last_run=?, next_run=? WHERE id=?", (now.isoformat(timespec="minutes"), _next_run(s["cadence"], s["hour"], now), s["id"]))
         except Exception as e:  # noqa: BLE001
             c.execute("UPDATE report_schedules SET last_error=?, next_run=? WHERE id=?", (str(e)[:200], _next_run(s["cadence"], s["hour"], now), s["id"]))

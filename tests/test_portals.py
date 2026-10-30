@@ -509,3 +509,116 @@ def test_the_dashboard_is_built_from_the_widgets_registry_and_filtered_per_viewe
     login_as(cl, "admin", "almaqsura")
     ids = {t["id"] for t in cl.get("/api/dashboard").json()["tiles"]}
     assert "occupancy" in ids and not ids & {"acc_off", "acc_cash", "acc_net", "hr_head", "sales30"}
+
+# ----------------------------------------------------------------------------------------------------- 0.28.1 audit round
+def test_a_reversed_receipt_is_not_served_and_the_tenant_sees_only_what_they_filed(cl, two_tenants):
+    b_lease, _bt, b_user = two_tenants["b"]
+    a_lease, _at, a_user = two_tenants["a"]
+    login_as(cl, "admin")
+    assert cl.post(f"/api/lea/payments/{two_tenants['pay']}/reverse", json={"reason": "خطأ في الإدخال"}).status_code == 200
+    login_as(cl, b_user)
+    d = cl.get(f"/api/lessee/leases/{b_lease}").json()
+    assert all(p["pdf"] is None for p in d["payments"])
+    assert cl.get(f"/api/lessee/docs/rent_receipt/{two_tenants['pay']}.pdf").status_code == 404
+    # the office's own request on A's unit is not listed to A; A is capped at five open requests
+    login_as(cl, "admin")
+    unit_id = cl.get(f"/api/lea/leases/{a_lease}").json()["unit_id"]
+    assert cl.post("/api/lea/maint", json={"unit_id": unit_id, "category": "كهرباء", "description": "ملاحظة داخلية عن المستأجر"}).status_code == 200
+    login_as(cl, a_user)
+    body = {"lease_id": a_lease, "category": "سباكة", "description": "تسرّب في حوض الغسيل"}
+    for _ in range(5):
+        assert cl.post("/api/lessee/maintenance", json=body).status_code == 200
+    assert cl.post("/api/lessee/maintenance", json=body).status_code == 409
+    mine = cl.get("/api/lessee/maintenance").json()
+    assert len(mine) == 5 and all("داخلية" not in m["description"] for m in mine)
+    # the clerk's e-mail on the tenant file does not become a sign-in identity
+    assert _sql("SELECT email FROM users WHERE username=?", (a_user,))[0][0] is None
+
+
+def test_odd_report_input_is_a_400_and_sensitive_reads_are_on_record(cl):
+    login_as(cl, "admin")
+    for url in ("/api/reports/ready/acc_vat?to=2026-13-40", "/api/reports/ready/acc_income?from=abc", "/api/reports/ready/acc_payables?to=bad", "/api/reports/ready/hr_leave?to=abcd",
+                "/api/reports/ready/hr_attendance?to=2026-99", "/api/reports/ready/portfolio?project_id=x"):
+        assert cl.get(url).status_code == 400, url
+    assert cl.post("/api/reports/export", json={"format": "csv", "kind": "ready", "ref": "acc_vat", "params": {"to": 5}}).status_code == 400
+    assert cl.post("/api/reports/saved", json={"name": "اختبار-سيئ", "kind": "custom", "spec": {"dataset": "employees", "limit": 0}}).status_code == 422
+    assert cl.post("/api/reports/custom/run", json={"dataset": "employees", "filters": [{"col": "omani", "op": "eq", "value": "abc"}]}).status_code == 400
+    assert cl.post("/api/reports/custom/run", json={"dataset": "employees", "filters": [{"col": "hire_date", "op": "between", "value": ["2020-01-01"]}]}).status_code == 400
+    assert cl.get("/api/reports/ready/hr_headcount").status_code == 200
+    assert cl.post("/api/reports/export", json={"format": "csv", "kind": "ready", "ref": "hr_headcount"}).status_code == 200
+    audit = [r[0] + "|" + r[1] for r in _sql("SELECT action, actor FROM audit WHERE action IN ('اطلاع على تقرير حساس','تصدير تقرير') ORDER BY id DESC LIMIT 4")]
+    assert any(a.startswith("اطلاع على تقرير حساس") and "مدير" in a for a in audit) and not any("النظام" in a for a in audit)
+
+
+def test_saved_reports_and_schedules_are_listed_only_to_those_who_can_read_them_and_ledger_lines_are_not_mailed(cl, monkeypatch):
+    from backend import mail
+    monkeypatch.setattr(mail, "available", lambda: True)
+    login_as(cl, "admin")
+    acc = cl.post("/api/reports/saved", json={"name": "اختبار-ميزان", "kind": "ready", "ref": "acc_trial"}).json()["id"]
+    ledger = cl.post("/api/reports/saved", json={"name": "اختبار-قيود", "kind": "custom", "spec": {"dataset": "journal_lines"}}).json()["id"]
+    assert cl.post("/api/reports/schedules", json={"report_id": acc, "cadence": "daily", "recipients": "a@example.test"}).status_code == 200
+    r = cl.post("/api/reports/schedules", json={"report_id": ledger, "cadence": "daily", "recipients": "a@example.test"})
+    assert r.status_code == 409                                   # per-person loan and settlement entries live in the ledger lines
+    assert any(s["report_name"] == "اختبار-ميزان" for s in cl.get("/api/reports/schedules").json())
+    _sql("INSERT INTO users(username,name,role,pw,must_change) VALUES('por-pay3','رواتب','payroll',?,0)", (A.hash_pw("Pay-Pass-2026-q"),))
+    login_as(cl, "por-pay3")
+    assert [x for x in cl.get("/api/reports/saved").json() if x["name"].startswith("اختبار-")] == []
+    assert cl.get("/api/reports/schedules").json() == []
+    # a schedule made before the rule existed is refused at send time too
+    from backend import reports
+    _sql("INSERT INTO report_schedules(report_id,cadence,hour,recipients,format,active,next_run,created_by,created) VALUES(?,?,?,?,?,1,'2000-01-01T00:00','admin','x')", (ledger, "daily", 7, "a@example.test", "csv"))
+    tok = TENANT.set("bayan")
+    try:
+        c = connect()
+        reports.run_due_schedules(c)
+        assert "الرواتب والقيود" in c.execute("SELECT last_error FROM report_schedules WHERE report_id=? AND last_error IS NOT NULL", (ledger,)).fetchone()[0]
+        c.close()
+    finally:
+        TENANT.reset(tok)
+
+
+def test_books_and_people_never_reach_an_external_model(cl, monkeypatch):
+    from backend import assistant as AS
+    login_as(cl, "admin")
+    tok = TENANT.set("bayan")
+    try:
+        c = connect()
+        u = _u(["view", "accounting", "hr", "hr_payroll", "hr_self"], ["accounting", "hr", "finance"])
+        for tool in ("accounting", "hr"):
+            out = AS.run_tool(AS.Ctx(c, u, external=True), tool, {"account": "رواتب"})
+            assert out["data"] is None and "لا تُرسل" in out["text"], tool
+        # the model sees earlier questions only — never earlier answers (which may have come from the local engine)
+        seen = []
+
+        class Fake:
+            def post(self, url, headers=None, json=None):
+                seen.append(json["messages"])
+
+                class R:
+                    status_code = 200
+
+                    def json(self):
+                        return {"stop_reason": "end_turn", "content": [{"type": "text", "text": "تمام"}]}
+                return R()
+        monkeypatch.setattr(AS, "ai_key", lambda: "k")
+        AS.llm_answer(AS.Ctx(c, u, external=True), "وماذا بعد؟", [{"q": "كم موظف؟", "a": "آخر مسيّر 1500 ر.ع لـ 3 موظفين"}], Fake())
+        flat = " ".join(str(m["content"]) for m in seen[0])
+        assert "كم موظف؟" in flat and "1500" not in flat
+        # a question about the books or the people is answered locally even when the model is on
+        monkeypatch.setattr(AS, "tenant_cfg", lambda c_: {"llm": True, "names": False})
+        monkeypatch.setattr(AS, "llm_answer", lambda *a, **k: (_ for _ in ()).throw(AssertionError("the model must not be called")))
+        r = AS.answer(c, u, "كم موظف لدينا ونسبة العمانيين؟")
+        assert r["mode"] == "rules" and "على رأس العمل" in r["answer"]
+        c.close()
+    finally:
+        TENANT.reset(tok)
+
+
+def test_the_employee_attendance_month_is_validated_and_hr_remarks_stay_internal(cl):
+    _eid, un = _employee_with_login(cl, "موظف الملاحظات", "porrem")
+    eid = _sql("SELECT id FROM employees ORDER BY id DESC LIMIT 1")[0][0]
+    month = TODAY.isoformat()[:7]
+    _sql("INSERT INTO attendance(employee_id,day,status,source,note) VALUES(?,?,?,'manual',?)", (eid, f"{month}-02", "late", "ملاحظة داخلية من الموارد البشرية"))
+    login_as(cl, un)
+    a = cl.get("/api/hr/me/attendance?month=%25%25%25%25-%25%25").json()
+    assert a["month"] == month and [d["status"] for d in a["days"]] == ["late"] and "note" not in a["days"][0]
