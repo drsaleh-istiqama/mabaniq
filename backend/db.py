@@ -533,6 +533,43 @@ BEGIN SELECT RAISE(ABORT, 'an approved payslip is immutable'); END;
 CREATE TRIGGER IF NOT EXISTS payslip_frozen_d BEFORE DELETE ON payslips WHEN (SELECT status FROM payroll_runs WHERE id = OLD.run_id) NOT IN ('draft','computed')
 BEGIN SELECT RAISE(ABORT, 'an approved payslip is immutable'); END;
 
+-- 0.27.0 — بقية دورة الموظف: التوظيف، التقييم السنوي، التدريب، الجزاءات (لا جزاء إلا بمادة لائحة يعتمدها شخص ثانٍ).
+CREATE TABLE IF NOT EXISTS job_openings(
+  id INTEGER PRIMARY KEY, title TEXT NOT NULL, department_id INTEGER REFERENCES departments(id), position_id INTEGER REFERENCES positions(id), headcount INTEGER NOT NULL DEFAULT 1 CHECK (headcount >= 1),
+  status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','open','closed','filled','cancelled')), opened_on TEXT, closes_on TEXT, description TEXT, requirements TEXT, created_by TEXT);
+CREATE TABLE IF NOT EXISTS candidates(
+  id INTEGER PRIMARY KEY, opening_id INTEGER NOT NULL REFERENCES job_openings(id), name TEXT NOT NULL, phone TEXT, email TEXT, source TEXT,
+  stage TEXT NOT NULL DEFAULT 'applied' CHECK (stage IN ('applied','screening','interview','offer','hired','rejected','withdrawn')), rating INTEGER CHECK (rating BETWEEN 1 AND 5), notes TEXT,
+  cv_document_id INTEGER, reject_reason TEXT, hired_employee_id INTEGER REFERENCES employees(id), anonymized INTEGER NOT NULL DEFAULT 0, stage_at TEXT, created_by TEXT);
+CREATE INDEX IF NOT EXISTS ix_candidates_opening ON candidates(opening_id);
+CREATE TABLE IF NOT EXISTS interviews(
+  id INTEGER PRIMARY KEY, candidate_id INTEGER NOT NULL REFERENCES candidates(id), scheduled_at TEXT NOT NULL, kind TEXT NOT NULL DEFAULT 'in_person' CHECK (kind IN ('phone','in_person','online','technical')),
+  interviewer TEXT, status TEXT NOT NULL DEFAULT 'scheduled' CHECK (status IN ('scheduled','done','cancelled')), score INTEGER CHECK (score BETWEEN 1 AND 5), notes TEXT, created_by TEXT);
+CREATE INDEX IF NOT EXISTS ix_interviews_candidate ON interviews(candidate_id);
+CREATE TABLE IF NOT EXISTS appraisal_cycles(
+  id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE, year INTEGER NOT NULL, start_date TEXT NOT NULL, end_date TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','open','closed')), created_by TEXT);
+CREATE TABLE IF NOT EXISTS appraisals(
+  id INTEGER PRIMARY KEY, cycle_id INTEGER NOT NULL REFERENCES appraisal_cycles(id), employee_id INTEGER NOT NULL REFERENCES employees(id), reviewer_id INTEGER REFERENCES employees(id),
+  status TEXT NOT NULL DEFAULT 'self' CHECK (status IN ('self','manager','hr','final','ack')), goals TEXT, competencies TEXT, self_comment TEXT, manager_comment TEXT, hr_comment TEXT,
+  overall REAL, rating TEXT, decision TEXT NOT NULL DEFAULT 'none' CHECK (decision IN ('none','promotion','raise','training','improvement_plan','no_action')),
+  self_at TEXT, manager_at TEXT, hr_at TEXT, hr_by TEXT, ack_at TEXT, UNIQUE(cycle_id, employee_id));
+CREATE TABLE IF NOT EXISTS training_courses(
+  id INTEGER PRIMARY KEY, title TEXT NOT NULL UNIQUE, provider TEXT, hours REAL CHECK (hours >= 0), cert_valid_months INTEGER CHECK (cert_valid_months > 0), mandatory INTEGER NOT NULL DEFAULT 0, active INTEGER NOT NULL DEFAULT 1);
+CREATE TABLE IF NOT EXISTS training_records(
+  id INTEGER PRIMARY KEY, course_id INTEGER NOT NULL REFERENCES training_courses(id), employee_id INTEGER NOT NULL REFERENCES employees(id),
+  status TEXT NOT NULL DEFAULT 'planned' CHECK (status IN ('planned','completed','cancelled','no_show')), planned_on TEXT, completed_on TEXT, score REAL, certificate_no TEXT, cert_expires TEXT,
+  document_id INTEGER, note TEXT, created_by TEXT);
+CREATE INDEX IF NOT EXISTS ix_training_records_emp ON training_records(employee_id);
+CREATE TABLE IF NOT EXISTS penalty_rules(
+  id INTEGER PRIMARY KEY, code TEXT NOT NULL UNIQUE, name TEXT NOT NULL, description TEXT, kind TEXT NOT NULL CHECK (kind IN ('warning','deduction','suspension')), max_days REAL NOT NULL DEFAULT 0 CHECK (max_days >= 0),
+  source TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','approved','retired')), valid_from TEXT, created_by TEXT, approved_by TEXT, approved_at TEXT);
+CREATE TABLE IF NOT EXISTS disciplinary_cases(
+  id INTEGER PRIMARY KEY, number TEXT NOT NULL UNIQUE, employee_id INTEGER NOT NULL REFERENCES employees(id), incident_date TEXT NOT NULL, description TEXT NOT NULL, rule_id INTEGER REFERENCES penalty_rules(id),
+  status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','proposed','issued','appealed','revoked','closed')), statement TEXT, witnesses TEXT, penalty_days REAL NOT NULL DEFAULT 0 CHECK (penalty_days >= 0),
+  apply_period TEXT, proposed_by TEXT, issued_by TEXT, issued_at TEXT, appeal_text TEXT, appeal_at TEXT, appeal_decision TEXT CHECK (appeal_decision IN ('upheld','revoked')), appeal_decided_by TEXT, appeal_decided_at TEXT,
+  applied_run_id INTEGER REFERENCES payroll_runs(id), closed_note TEXT, created_by TEXT);
+CREATE INDEX IF NOT EXISTS ix_disc_emp ON disciplinary_cases(employee_id);
+
 CREATE INDEX IF NOT EXISTS ix_units_project ON units(project_id);
 CREATE INDEX IF NOT EXISTS ix_inst_booking ON installments(booking_id);
 CREATE INDEX IF NOT EXISTS ix_book_unit ON bookings(unit_id);

@@ -2,7 +2,7 @@
 BEGIN;
 SELECT plan(
   (SELECT count(*)::int FROM pg_tables WHERE schemaname='public' AND tablename NOT IN ('schema_migrations','audit')) * 2
-  + 42 + 3 + 3 + 7 + 2 + 3 + 6
+  + 45 + 3 + 3 + 7 + 2 + 3 + 6 + 3
 );
 
 -- 1) every application table (audit excepted) has updated_at and the trigger
@@ -16,7 +16,7 @@ SELECT is((SELECT count(*) FROM pg_trigger tr JOIN pg_class c ON c.oid = tr.tgre
 -- 2) no DELETE on the ledgers for mabaniq_app (16 tables, incl. the issued-document registry since 0005)
 SELECT ok(NOT has_table_privilege('mabaniq_app', x, 'DELETE'), format('mabaniq_app has no DELETE on %s', x))
   FROM unnest(ARRAY['payments','installments','invoices','refunds','charity_dues','bank_lines','distributions','commissions',
-                    'resale_settlements','rent_dues','oa_charges','pay_intents','ipcs','ipc_items','doc_issues','doc_sends','rent_payments','arrears_notices','owner_statements','import_batches','acc_accounts','acc_cost_centers','acc_periods','bank_accounts','payment_orders','vat_returns','bank_recons','depreciation_runs','ap_payments','employees','leave_requests','hr_requests','leave_types','payroll_runs','salary_structures','employee_loans','loan_installments','eosb_rules','terminations','hr_rates']) AS x;
+                    'resale_settlements','rent_dues','oa_charges','pay_intents','ipcs','ipc_items','doc_issues','doc_sends','rent_payments','arrears_notices','owner_statements','import_batches','acc_accounts','acc_cost_centers','acc_periods','bank_accounts','payment_orders','vat_returns','bank_recons','depreciation_runs','ap_payments','employees','leave_requests','hr_requests','leave_types','payroll_runs','salary_structures','employee_loans','loan_installments','eosb_rules','terminations','hr_rates','appraisals','disciplinary_cases','penalty_rules']) AS x;
 -- 0.21.0: the rent payments ledger is also closed to UPDATE (a correction is a reversing row)
 SELECT ok(NOT has_table_privilege('mabaniq_app', 'rent_payments', 'UPDATE'), 'mabaniq_app has no UPDATE on rent_payments');
 -- 0.24.0: a supplier payment is a ledger row too
@@ -70,6 +70,13 @@ SELECT throws_like($$ DELETE FROM payslips WHERE net = 100 $$, '%immutable%', 'a
 SELECT throws_like($$ INSERT INTO payroll_runs(period) VALUES ('2026-01') $$, '%duplicate key%', 'one payroll run per month');
 SELECT is((SELECT count(*) FROM information_schema.columns WHERE table_schema = 'public' AND table_name IN ('employee_loans', 'loan_installments') AND column_name ~* '(rate|interest|fee|profit|markup)'), 0::bigint,
           'a staff loan has no rate, interest, fee or profit column');
+-- 0.27.0: lifecycle — a candidate's rating is 1 to 5, one appraisal per person per cycle, and a bylaw article has a known status
+INSERT INTO job_openings(title) VALUES ('tap-opening');
+INSERT INTO appraisal_cycles(name, year, start_date, end_date) VALUES ('tap-cycle', 2026, '2026-01-01', '2026-12-31');
+INSERT INTO appraisals(cycle_id, employee_id) SELECT k.id, e.id FROM appraisal_cycles k, employees e WHERE k.name = 'tap-cycle' AND e.number = 'T-1';
+SELECT throws_like($$ INSERT INTO candidates(opening_id, name, rating) SELECT id, 'x', 6 FROM job_openings WHERE title = 'tap-opening' $$, '%check constraint%', 'a candidate rating is 1 to 5');
+SELECT throws_like($$ INSERT INTO appraisals(cycle_id, employee_id) SELECT k.id, e.id FROM appraisal_cycles k, employees e WHERE k.name = 'tap-cycle' AND e.number = 'T-1' $$, '%duplicate key%', 'one appraisal per employee per cycle');
+SELECT throws_like($$ INSERT INTO penalty_rules(code, name, kind, source, status) VALUES ('t', 't', 'warning', 'src', 'secret') $$, '%check constraint%', 'a bylaw article has a known status');
 RESET ROLE;
 
 SELECT * FROM finish();

@@ -484,6 +484,11 @@ def compute_run(c, run: dict, by: str) -> dict:
         abs_ded = min(gross, r3(s["basic"] / divisor * abs_days))
         adj = rows(c.execute("SELECT kind, name, amount FROM payroll_adjustments WHERE employee_id=? AND period=?", (e["id"], period)))
         adj_earn, adj_ded = r3(sum(a["amount"] for a in adj if a["kind"] == "earning")), r3(sum(a["amount"] for a in adj if a["kind"] == "deduction"))
+        from .hr_disc import deductions_for  # 0.27.0: a disciplinary deduction is days of wage, valued here from the salary (HR never sees the amount)
+        for pen in deductions_for(c, e["id"], period):
+            amt = r3(s["basic"] / divisor * pen["penalty_days"])
+            adj_ded = r3(adj_ded + amt)
+            warns.append({"kind": "discipline", "blocker": 0, "msg": f"جزاء {pen['number']} (مادة {pen['code']}): خصم {pen['penalty_days']:g} يومًا = {amt:.3f}"})
         pasi_base = pasi_e = pasi_r = 0.0
         if e["pasi_applies"]:
             pasi_base = r3(sum(x["amount"] for x in earn if x["pasi"]))
@@ -572,6 +577,8 @@ def api_approve(rid: int, u=Depends(act_as("hr_payroll"))):
     if run["headcount"] == 0:
         raise HTTPException(409, "لا قسائم في المسيّر")
     c.execute("UPDATE payroll_runs SET status='approved', approved_by=?, approved_at=? WHERE id=?", (u["username"], now_s(), rid))
+    c.execute("""UPDATE disciplinary_cases SET applied_run_id=? WHERE status='issued' AND apply_period=? AND applied_run_id IS NULL AND employee_id IN (SELECT employee_id FROM payslips WHERE run_id=?)
+                 AND rule_id IN (SELECT id FROM penalty_rules WHERE kind='deduction')""", (rid, run["period"], rid))
     for lid in {r["loan_id"] for r in c.execute("SELECT DISTINCT i.loan_id FROM loan_installments i JOIN payslips s ON s.id=i.payslip_id WHERE s.run_id=?", (rid,)).fetchall()}:
         if not c.execute("SELECT 1 FROM loan_installments WHERE loan_id=? AND status='due'", (lid,)).fetchone():
             c.execute("UPDATE employee_loans SET status='paid' WHERE id=? AND status='active'", (lid,))

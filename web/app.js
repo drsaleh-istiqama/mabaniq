@@ -1936,7 +1936,7 @@ EXT.hrAttach = id => {
 EXT.hrRefresh = () => S.screen === 'me' ? EXT.l_me() : EXT.l_hr();
 
 EXT.l_hr = async function () {
-  const tabs = [['ov', 'نظرة عامة'], ['emp', 'الموظفون'], ['org', 'الهيكل'], ['lv', 'الإجازات'], ['att', 'الحضور'], ['rq', 'الطلبات'], ['cfg', 'العطل والإعدادات']], el = $('#hr'), k = this.cur.hr;
+  const tabs = [['ov', 'نظرة عامة'], ['emp', 'الموظفون'], ['org', 'الهيكل'], ['lv', 'الإجازات'], ['att', 'الحضور'], ['rq', 'الطلبات'], ['rec', 'التوظيف'], ['apr', 'التقييم'], ['trn', 'التدريب'], ['dsc', 'الجزاءات'], ['cfg', 'العطل والإعدادات']], el = $('#hr'), k = this.cur.hr;
   el.innerHTML = SUB0('hr', tabs, k) + '<div id="hrB">…</div>';
   const B = $('#hrB');
   if (k === 'ov') {
@@ -1991,7 +1991,7 @@ EXT.l_hr = async function () {
       + BOX('الدوام', `<label>أيام الراحة الأسبوعية</label><div>${dn.map((n, i) => `<label style="display:inline-block;margin-inline-end:12px"><input type="checkbox" class="wk" value="${i}" ${S_.weekend.includes(i) ? 'checked' : ''}> ${n}</label>`).join('')}</div>`
         + HF('hws', 'بدء الدوام', S_.work_start, 'time') + HF('hlg', 'سماح التأخير (دقائق)', S_.late_grace, 'number', 'min="0" max="120"') + '<div class="btns" style="margin-top:10px"><button class="btn p" data-call="EXT.hrSetSave">حفظ</button></div>');
     $('#hy').onchange = e => { EXT.hrYear = +e.target.value; EXT.l_hr(); };
-  }
+  } else if (k === 'rec') { await EXT.hrRec(B); } else if (k === 'apr') { await EXT.hrApr(B); } else if (k === 'trn') { await EXT.hrTrn(B); } else if (k === 'dsc') { await EXT.hrDsc(B); }
 };
 
 EXT.hrAttSave = async eid => {
@@ -2115,7 +2115,7 @@ EXT.hrEmpForm = async id => {
 
 /* ---- بوابة الموظف */
 EXT.l_me = async function () {
-  const tabs = [['me', 'بياناتي'], ['lv', 'إجازاتي'], ['pay', 'قسائمي'], ['rq', 'طلباتي']].concat(can('hr_manager') ? [['tm', 'فريقي']] : []), el = $('#me'), k = this.cur.me;
+  const tabs = [['me', 'بياناتي'], ['lv', 'إجازاتي'], ['pay', 'قسائمي'], ['rq', 'طلباتي'], ['apr', 'تقييمي'], ['trn', 'تدريبي'], ['dsc', 'إشعاراتي']].concat(can('hr_manager') ? [['tm', 'فريقي']] : []), el = $('#me'), k = this.cur.me;
   el.innerHTML = SUB0('me', tabs, k) + '<div id="meB">…</div>';
   const B = $('#meB');
   if (k === 'me') {
@@ -2133,7 +2133,7 @@ EXT.l_me = async function () {
     const note = () => { const t = ty.find(x => x.key === $('#ltk').value); $('#ltN').textContent = t ? [t.needs_doc ? 'يلزمه مرفق بعد الإرسال.' : '', t.needs_hr ? 'تعتمده الموارد البشرية بعد مديرك.' : '', t.provisional ? 'قيمه مبدئية.' : ''].filter(Boolean).join(' ') : ''; };
     $('#ltk').onchange = note; note();
     $('#ltGo').onclick = async () => { try { await post('/hr/me/leave', {type_key: $('#ltk').value, from_date: $('#ltf').value, to_date: $('#ltu').value, reason: $('#ltr').value.trim()}); toast('أُرسل الطلب'); EXT.l_me(); } catch (e) { $('#ltE').textContent = e.message; } };
-  } else if (k === 'pay') {
+  } else if (k === 'apr') { await EXT.meApr(B); } else if (k === 'trn') { await EXT.meTrn(B); } else if (k === 'dsc') { await EXT.meDsc(B); } else if (k === 'pay') {
     await EXT.mePayslips(B);
   } else if (k === 'rq') {
     const R = await api('/hr/me/requests');
@@ -2144,6 +2144,7 @@ EXT.l_me = async function () {
     const [T_, L] = await Promise.all([api('/hr/team'), api('/hr/team/leave?status=pending')]);
     B.innerHTML = BOX(`بانتظار قرارك <span class="muted">${N(L.length)}</span>`, T(['الموظف', 'النوع', 'المدة', 'الأيام', 'الحال', ''], hrLeaveRows(L, true), 'لا طلبات بانتظارك.'))
       + BOX('فريقي', T(['الرقم', 'الموظف', 'المسمى', 'الهاتف', 'رصيد السنوية', 'اليوم'], T_.map(t => `<tr><td>${esc(t.number)}</td><td>${esc(t.name)}</td><td>${esc(t.position || '—')}</td><td dir="ltr">${esc(t.phone || '—')}</td><td>${t.annual_remaining == null ? '—' : F2(t.annual_remaining)}</td><td>${t.away_today ? pill('في إجازة', 'p-bl') : pill('متاح', 'p-ok')}</td></tr>`), 'لا مرؤوسين مباشرين لك.'));
+    B.insertAdjacentHTML('afterbegin', await EXT.meReviews());
     const b = $('#cMe'); if (b) { b.textContent = L.length ? N(L.length) : ''; b.classList.toggle('hidden', !L.length); }
   }
 };
@@ -2332,4 +2333,212 @@ EXT.mePayslips = async function (B) {
   const L = await api('/hr/me/payslips'), sal = await api('/hr/me/salary');
   B.innerHTML = (sal ? BOX('راتبي الحالي', KP([['الأساسي', P3(sal.basic)], ['البدلات', P3(sal.total - sal.basic)], ['الإجمالي', P3(sal.total)], ['سريان الهيكل', fmtDate(sal.effective_from)]])) : '')
     + BOX('قسائمي', T(['الشهر', 'الإجمالي', 'الاستقطاعات', 'الصافي', 'الحال', ''], L.map(s => `<tr><td>${esc(s.period)}</td><td>${P3(s.gross + s.adj_earn)}</td><td>${P3(s.absence_ded + s.pasi_employee + s.loan_ded + s.adj_ded)}</td><td><b>${P3(s.net)}</b></td><td>${s.status === 'paid' ? pill('مدفوعة', 'p-ok') : pill('معتمدة', 'p-bl')}</td><td><a class="btn" href="/api/hr/me/payslips/${s.id}.pdf" target="_blank" rel="noopener">القسيمة PDF</a></td></tr>`), 'لا قسائم معتمدة بعد.'));
+};
+
+/* ================================================================ بقية دورة الموظف (0.27.0): التوظيف والتقييم والتدريب والجزاءات */
+const REC_ST = {applied: ['تقدّم', 'p-bl'], screening: ['فرز', 'p-bl'], interview: ['مقابلة', 'p-w'], offer: ['عرض', 'p-w'], hired: ['عُيّن', 'p-ok'], rejected: ['مرفوض', 'p-b'], withdrawn: ['انسحب', 'p-b']};
+const REC_NEXT = {applied: 'screening', screening: 'interview', interview: 'offer'};
+const OPN_ST = {draft: ['مسودة', 'p-bl'], open: ['مفتوحة', 'p-ok'], closed: ['مغلقة', 'p-w'], filled: ['مكتملة', 'p-ok'], cancelled: ['ملغاة', 'p-b']};
+const APR_ST = {self: ['ذاتي', 'p-w'], manager: ['عند المدير', 'p-w'], hr: ['عند الموارد', 'p-bl'], final: ['معتمد', 'p-ok'], ack: ['أُقرّ به', 'p-ok']};
+const CYC_ST = {draft: ['مسودة', 'p-bl'], open: ['مفتوحة', 'p-ok'], closed: ['مغلقة', 'p-b']};
+const APR_DEC = {none: 'بلا قرار', promotion: 'ترقية', raise: 'زيادة', training: 'تدريب', improvement_plan: 'خطة تحسين', no_action: 'لا إجراء'};
+const TRN_ST = {planned: ['مخطط', 'p-bl'], completed: ['أُتمّت', 'p-ok'], cancelled: ['ملغاة', 'p-b'], no_show: ['لم يحضر', 'p-b']};
+const CMP_ST = {valid: ['سارية', 'p-ok'], expiring: ['تنتهي قريبًا', 'p-w'], expired: ['منتهية', 'p-b'], missing: ['لم تُؤخذ', 'p-b']};
+const DSC_ST = {open: ['قيد الدراسة', 'p-bl'], proposed: ['مقترح', 'p-w'], issued: ['صادر', 'p-ok'], appealed: ['متظلَّم منه', 'p-w'], revoked: ['ملغى', 'p-b'], closed: ['مغلق بلا جزاء', 'p-bl']};
+const DSC_KIND = {warning: 'إنذار كتابي', deduction: 'خصم من الأجر', suspension: 'إيقاف عن العمل'};
+
+/* ---- التوظيف */
+EXT.hrRec = async function (B) {
+  const oid = this.recOpening || '', [O, C] = await Promise.all([api('/hr/recruitment/openings'), api('/hr/recruitment/candidates' + (oid ? '?opening_id=' + oid : ''))]);
+  B.innerHTML = `<div class="toolbar"><button class="btn p" data-call="EXT.recOpenForm">+ وظيفة شاغرة</button> <button class="btn" data-call="EXT.recRetention">محو بيانات المرفوضين</button></div>`
+    + T(['الوظيفة', 'القسم', 'العدد', 'الحال', 'مرشحون', 'نشطون', 'عُيّنوا', ''], O.map(o => `<tr data-call="EXT.recFilter" data-args="${J([o.id])}" style="cursor:pointer" class="${o.id == oid ? 'sel' : ''}"><td>${esc(o.title)}</td><td>${esc(o.department || '—')}</td><td>${N(o.headcount)}</td><td>${pill(...OPN_ST[o.status])}</td><td>${N(o.candidates)}</td><td>${N(o.active)}</td><td>${N(o.hired)}</td>
+      <td>${o.status === 'draft' || o.status === 'closed' ? `<button class="btn" data-call="EXT.recOpenSet" data-args="${J([o.id, 'open'])}">فتح</button> ` : ''}${o.status === 'open' ? `<button class="btn" data-call="EXT.recOpenSet" data-args="${J([o.id, 'closed'])}">إغلاق</button> <button class="btn p" data-call="EXT.recCandForm" data-args="${J([o.id])}">+ مرشح</button>` : ''}${o.status === 'draft' || o.status === 'open' ? ` <button class="btn" data-call="EXT.recOpenSet" data-args="${J([o.id, 'cancelled'])}">إلغاء</button>` : ''}</td></tr>`), 'لا وظائف شاغرة.')
+    + BOX(`المرشحون${oid ? '' : ' (الكل)'} <span class="muted">${N(C.length)}</span>`, T(['المرشح', 'الوظيفة', 'المرحلة', 'مقابلات', 'متوسط الدرجات', ''], C.map(x => `<tr data-call="EXT.recCand" data-args="${J([x.id])}" style="cursor:pointer"><td>${esc(x.name)}</td><td>${esc(x.opening)}</td><td>${pill(...REC_ST[x.stage])}</td><td>${N(x.interviews_done)}</td><td>${x.avg_score == null ? '—' : F2(x.avg_score)}</td><td>${x.cv_document_id ? 'سيرة ✓' : ''}</td></tr>`), 'لا مرشحين.'));
+};
+EXT.recFilter = id => { EXT.recOpening = EXT.recOpening == id ? '' : id; EXT.l_hr(); };
+EXT.recOpenSet = async (id, status) => { await tryDo(() => post(`/hr/recruitment/openings/${id}/status`, {status}), 'حُدّثت الوظيفة'); EXT.l_hr(); };
+EXT.recOpenForm = async () => {
+  const [D, P] = await Promise.all([api('/hr/departments'), api('/hr/positions')]);
+  modal(`<h3>وظيفة شاغرة</h3>${HF('roT', 'المسمى', '', 'text', 'maxlength="120"')}${HS('roD', 'القسم', [['', '—']].concat(D.filter(d => d.active).map(d => [d.id, d.name])), '')}${HS('roP', 'المسمى الوظيفي المعتمد', [['', '—']].concat(P.filter(p => p.active).map(p => [p.id, p.title])), '')}${HF('roH', 'العدد المطلوب', '1', 'number', 'min="1"')}${HF('roC', 'آخر موعد للتقديم', '', 'date')}${HF('roR', 'المتطلبات', '', 'text', 'maxlength="2000"')}
+    <div class="err" id="roE"></div><div class="btns" style="margin-top:12px"><button class="btn p" id="roGo">حفظ</button> <button class="btn" data-call="closeModal">إلغاء</button></div>`);
+  $('#roGo').onclick = async () => { try { await post('/hr/recruitment/openings', {title: $('#roT').value.trim(), department_id: +$('#roD').value || null, position_id: +$('#roP').value || null, headcount: +$('#roH').value || 1, closes_on: $('#roC').value, requirements: $('#roR').value.trim()}); closeModal(); toast('أُضيفت الوظيفة (مسودة — افتحها للتقديم)'); EXT.l_hr(); } catch (e) { $('#roE').textContent = e.message; } };
+};
+EXT.recCandForm = id => {
+  modal(`<h3>مرشح جديد</h3>${HF('rcN', 'الاسم', '', 'text', 'maxlength="120"')}${HF('rcP', 'الهاتف', '', 'text', 'dir="ltr"')}${HF('rcE', 'البريد', '', 'email', 'dir="ltr"')}${HF('rcS', 'المصدر', '', 'text')}<div class="err" id="rcErr"></div>
+    <div class="btns" style="margin-top:12px"><button class="btn p" id="rcGo">إضافة</button> <button class="btn" data-call="closeModal">إلغاء</button></div>`);
+  $('#rcGo').onclick = async () => { try { await post('/hr/recruitment/candidates', {opening_id: id, name: $('#rcN').value.trim(), phone: $('#rcP').value.trim(), email: $('#rcE').value.trim(), source: $('#rcS').value.trim()}); closeModal(); toast('أُضيف المرشح'); EXT.l_hr(); } catch (e) { $('#rcErr').textContent = e.message; } };
+};
+EXT.recCand = async id => {
+  const x = await api('/hr/recruitment/candidates/' + id), live = ['applied', 'screening', 'interview', 'offer'].includes(x.stage);
+  insp(x.name, `${KP([['المرحلة', REC_ST[x.stage][0]], ['الوظيفة', esc(x.opening)], ['الهاتف', esc(x.phone || '—')], ['البريد', esc(x.email || '—')]])}${x.anonymized ? '<p class="muted">محوت بياناته بعد مدة الاحتفاظ.</p>' : ''}
+    ${x.cv_document_id ? `<a class="btn" href="/api/documents/${x.cv_document_id}" target="_blank" rel="noopener">السيرة الذاتية</a>` : live ? `<button class="btn" data-call="EXT.recCv" data-args="${J([id])}">رفع السيرة</button>` : ''}
+    ${BOX('المقابلات', T(['الموعد', 'النوع', 'المحاور', 'الحال', 'الدرجة', ''], x.interviews.map(i => `<tr><td>${esc(i.scheduled_at)}</td><td>${esc(i.kind)}</td><td>${esc(i.interviewer || '—')}</td><td>${esc(i.status)}</td><td>${i.score ?? '—'}</td><td>${i.status === 'scheduled' ? `<button class="btn" data-call="EXT.recResult" data-args="${J([i.id, id])}">النتيجة</button>` : ''}</td></tr>`), 'لا مقابلات.'), live && ['screening', 'interview'].includes(x.stage) ? `<button class="btn" data-call="EXT.recInterviewForm" data-args="${J([id])}">+ مقابلة</button>` : '')}
+    ${x.notes ? `<p>${esc(x.notes)}</p>` : ''}${x.reject_reason ? `<p class="muted">سبب الرفض: ${esc(x.reject_reason)}</p>` : ''}
+    <div class="btns">${REC_NEXT[x.stage] ? `<button class="btn p" data-call="EXT.recStage" data-args="${J([id, REC_NEXT[x.stage]])}">← ${REC_ST[REC_NEXT[x.stage]][0]}</button>` : ''}${x.stage === 'offer' ? `<button class="btn p" data-call="EXT.recHire" data-args="${J([id])}">تعيين</button>` : ''}${live ? ` <button class="btn" data-call="EXT.recStage" data-args="${J([id, 'rejected'])}">رفض</button> <button class="btn" data-call="EXT.recStage" data-args="${J([id, 'withdrawn'])}">انسحاب</button>` : ''}</div>`);
+};
+EXT.recStage = async (id, stage) => {
+  let reason = ''; if (stage === 'rejected') { reason = prompt('سبب الرفض (إلزامي):', '') || ''; if (!reason.trim()) return; }
+  await tryDo(() => post(`/hr/recruitment/candidates/${id}/stage`, {stage, reason}), 'حُدّثت المرحلة'); EXT.recCand(id); EXT.l_hr();
+};
+EXT.recCv = id => { const f = document.createElement('input'); f.type = 'file'; f.accept = '.pdf,.png,.jpg,.jpeg'; f.onchange = async () => { if (f.files[0]) { await tryDo(() => hrUpload(`/hr/recruitment/candidates/${id}/cv`, f.files[0]), 'رُفعت السيرة'); EXT.recCand(id); } }; f.click(); };
+EXT.recInterviewForm = id => {
+  modal(`<h3>مقابلة</h3>${HF('riD', 'الموعد', hrDay(), 'date')}${HF('riT', 'الوقت', '10:00', 'time')}${HS('riK', 'النوع', [['in_person', 'حضورية'], ['online', 'عن بُعد'], ['phone', 'هاتفية'], ['technical', 'فنية']], 'in_person')}${HF('riI', 'المحاور', '', 'text')}<div class="err" id="riE"></div>
+    <div class="btns" style="margin-top:12px"><button class="btn p" id="riGo">حفظ</button> <button class="btn" data-call="closeModal">إلغاء</button></div>`);
+  $('#riGo').onclick = async () => { try { await post(`/hr/recruitment/candidates/${id}/interviews`, {scheduled_at: $('#riD').value + ' ' + $('#riT').value, kind: $('#riK').value, interviewer: $('#riI').value.trim()}); closeModal(); EXT.recCand(id); EXT.l_hr(); } catch (e) { $('#riE').textContent = e.message; } };
+};
+EXT.recResult = async (iid, cid) => {
+  const s = +prompt('درجة المقابلة من 1 إلى 5:', '3'); if (!s) return; const notes = prompt('ملاحظات:', '') || '';
+  await tryDo(() => post(`/hr/recruitment/interviews/${iid}/result`, {score: s, notes}), 'سُجّلت النتيجة'); EXT.recCand(cid);
+};
+EXT.recHire = id => {
+  modal(`<h3>تعيين المرشح</h3>${HF('rhD', 'تاريخ المباشرة', hrDay(), 'date')}<label><input type="checkbox" id="rhO"> عُماني</label>${HS('rhG', 'الجنس', [['', '—'], ['male', 'ذكر'], ['female', 'أنثى']], '')}${HS('rhC', 'نوع العقد', [['permanent', 'دائم'], ['fixed', 'محدد المدة'], ['part', 'جزئي']], 'permanent')}${HF('rhE', 'نهاية العقد', '', 'date')}${HF('rhP', 'نهاية التجربة', '', 'date')}
+    <p class="muted">يُفتح ملف الموظف بقسمه ومسماه من الوظيفة، وتنتقل السيرة إلى ملفه وتُمحى بيانات الاتصال من التوظيف.</p><div class="err" id="rhErr"></div><div class="btns" style="margin-top:12px"><button class="btn p" id="rhGo">تعيين</button> <button class="btn" data-call="closeModal">إلغاء</button></div>`);
+  $('#rhGo').onclick = async () => { try { const r = await post(`/hr/recruitment/candidates/${id}/hire`, {hire_date: $('#rhD').value, omani: $('#rhO').checked, gender: $('#rhG').value || null, contract_type: $('#rhC').value, contract_end: $('#rhE').value, probation_end: $('#rhP').value}); closeModal(); document.body.classList.remove('io'); toast('فُتح ملف ' + r.number); EXT.l_hr(); } catch (e) { $('#rhErr').textContent = e.message; } };
+};
+EXT.recRetention = async () => {
+  const r = await api('/hr/recruitment/retention');
+  modal(`<h3>محو بيانات المرشحين غير المعيَّنين</h3><p>تُمحى بيانات من رُفض أو انسحب بعد <b>${N(r.days)}</b> يومًا (الاسم والهاتف والبريد والملاحظات وملف السيرة) تلقائيًا كل يوم. لا يقل الحد عن 30 يومًا، والمحو لا رجعة فيه.</p>${HF('rrD', 'مدة الاحتفاظ بالأيام', r.days, 'number', 'min="30"')}<div class="err" id="rrE"></div>
+    <div class="btns" style="margin-top:12px"><button class="btn p" id="rrSave">حفظ المدة</button> <button class="btn" id="rrNow">امحُ المستحق الآن</button> <button class="btn" data-call="closeModal">إغلاق</button></div>`);
+  $('#rrSave').onclick = async () => { try { await api('/hr/recruitment/retention', {method: 'PUT', body: {days: +$('#rrD').value}}); closeModal(); toast('حُفظت المدة'); } catch (e) { $('#rrE').textContent = e.message; } };
+  $('#rrNow').onclick = async () => { if (!confirm('محو لا رجعة فيه. متابعة؟')) return; try { const x = await post('/hr/recruitment/purge', {days: +$('#rrD').value}); closeModal(); toast('مُحي ' + N(x.erased) + ' مرشحًا'); EXT.l_hr(); } catch (e) { $('#rrE').textContent = e.message; } };
+};
+
+/* ---- التقييم السنوي */
+EXT.hrApr = async function (B) {
+  const cyc = this.aprCycle || '', Cy = await api('/hr/appraisal-cycles'), A_ = await api('/hr/appraisals' + (cyc ? '?cycle_id=' + cyc : ''));
+  B.innerHTML = `<div class="toolbar"><button class="btn p" data-call="EXT.aprCycleForm">+ دورة تقييم</button></div>` + hrNote('الدرجة الكلية تُحسب ولا تُكتب: 70٪ للأهداف الموزونة و30٪ للكفاءات على مقياس 1–5. القرار (ترقية، زيادة…) يُسجَّل هنا ولا يغيّر راتبًا.')
+    + T(['الدورة', 'السنة', 'الحال', 'التقييمات', 'اكتمل', ''], Cy.map(k => `<tr data-call="EXT.aprFilter" data-args="${J([k.id])}" style="cursor:pointer" class="${k.id == cyc ? 'sel' : ''}"><td>${esc(k.name)}</td><td>${N(k.year)}</td><td>${pill(...CYC_ST[k.status])}</td><td>${N(k.total)}</td><td>${N(k.done)}</td>
+      <td>${k.status !== 'closed' ? `<button class="btn p" data-call="EXT.aprCycleDo" data-args="${J([k.id, 'open'])}">${k.status === 'draft' ? 'فتح وتوليد التقييمات' : 'إضافة الناقص'}</button> ` : ''}${k.status === 'open' ? `<button class="btn" data-call="EXT.aprCycleDo" data-args="${J([k.id, 'close'])}">إغلاق</button>` : ''}</td></tr>`), 'لا دورات.')
+    + BOX(`التقييمات <span class="muted">${N(A_.length)}</span>`, T(['الموظف', 'المراجع', 'الحال', 'الدرجة', 'التصنيف', 'القرار'], A_.map(a => `<tr data-call="EXT.aprView" data-args="${J([a.id])}" style="cursor:pointer"><td>${esc(a.name)} <small class="muted">${esc(a.number)}</small></td><td>${esc(a.reviewer || '—')}</td><td>${pill(...APR_ST[a.status])}</td><td>${a.overall == null ? '—' : F2(a.overall)}</td><td>${esc(a.rating || '—')}</td><td>${a.status === 'final' || a.status === 'ack' ? APR_DEC[a.decision] : '—'}</td></tr>`), 'لا تقييمات.'));
+};
+EXT.aprFilter = id => { EXT.aprCycle = EXT.aprCycle == id ? '' : id; EXT.l_hr(); };
+EXT.aprCycleForm = () => {
+  const y = new Date().getFullYear();
+  modal(`<h3>دورة تقييم</h3>${HF('acN', 'الاسم', 'تقييم ' + y, 'text')}${HF('acY', 'السنة', y, 'number')}${HF('acS', 'من', y + '-01-01', 'date')}${HF('acE', 'إلى', y + '-12-31', 'date')}<div class="err" id="acE2"></div><div class="btns" style="margin-top:12px"><button class="btn p" id="acGo">حفظ</button> <button class="btn" data-call="closeModal">إلغاء</button></div>`);
+  $('#acGo').onclick = async () => { try { await post('/hr/appraisal-cycles', {name: $('#acN').value.trim(), year: +$('#acY').value, start_date: $('#acS').value, end_date: $('#acE').value}); closeModal(); toast('أُنشئت الدورة'); EXT.l_hr(); } catch (e) { $('#acE2').textContent = e.message; } };
+};
+EXT.aprCycleDo = async (id, what) => {
+  if (what === 'close') { try { await post(`/hr/appraisal-cycles/${id}/close`, {force: false}); toast('أُغلقت الدورة'); } catch (e) { if (confirm(e.message + '\nأغلق بتجاوز صريح؟')) { await tryDo(() => post(`/hr/appraisal-cycles/${id}/close`, {force: true}), 'أُغلقت الدورة'); } } EXT.l_hr(); return; }
+  const r = await tryDo(() => post(`/hr/appraisal-cycles/${id}/open`)); toast('أُضيف ' + N(r.added) + ' تقييمًا'); EXT.l_hr();
+};
+const aprGoals = a => T(['الهدف', 'الوزن', 'ذاتي', 'المدير'], a.goals.map(g => `<tr><td>${esc(g.title)}</td><td>${N(g.weight)}٪</td><td>${g.self_score ?? '—'}</td><td>${g.mgr_score ?? '—'}</td></tr>`), 'لا أهداف بعد.')
+  + T(['الكفاءة', 'ذاتي', 'المدير'], a.competencies.map(k => `<tr><td>${esc(k.name)}</td><td>${k.self_score ?? '—'}</td><td>${k.mgr_score ?? '—'}</td></tr>`));
+EXT.aprView = async id => {
+  const a = await api('/hr/appraisals/' + id);
+  insp(`${a.name} — ${a.cycle}`, `${KP([['الحال', APR_ST[a.status][0]], ['الدرجة', a.overall == null ? '—' : F2(a.overall)], ['التصنيف', esc(a.rating || '—')], ['القرار', a.status === 'final' || a.status === 'ack' ? APR_DEC[a.decision] : '—']])}${aprGoals(a)}
+    ${a.self_comment ? `<p><b>الموظف:</b> ${esc(a.self_comment)}</p>` : ''}${a.manager_comment ? `<p><b>المدير:</b> ${esc(a.manager_comment)}</p>` : ''}${a.hr_comment ? `<p><b>الموارد البشرية:</b> ${esc(a.hr_comment)}</p>` : ''}
+    <div class="btns">${a.status === 'hr' ? `<button class="btn p" data-call="EXT.aprFinalForm" data-args="${J([id])}">اعتماد وقرار</button>` : ''}${a.status === 'manager' && !a.reviewer_id ? `<button class="btn p" data-call="EXT.aprReviewForm" data-args="${J([id, true])}">مراجعة (لا مدير)</button>` : ''}</div>`);
+};
+EXT.aprFinalForm = id => {
+  modal(`<h3>اعتماد التقييم</h3>${HS('afD', 'القرار', Object.entries(APR_DEC), 'none')}${HF('afC', 'تعليق الموارد البشرية', '', 'text', 'maxlength="1500"')}${hrNote('القرار يُسجَّل فقط ولا يغيّر راتبًا.')}<div class="err" id="afE"></div><div class="btns" style="margin-top:12px"><button class="btn p" id="afGo">اعتماد</button> <button class="btn" data-call="closeModal">إلغاء</button></div>`);
+  $('#afGo').onclick = async () => { try { await post(`/hr/appraisals/${id}/finalize`, {decision: $('#afD').value, hr_comment: $('#afC').value.trim()}); closeModal(); document.body.classList.remove('io'); toast('اعتُمد التقييم'); EXT.l_hr(); } catch (e) { $('#afE').textContent = e.message; } };
+};
+/* مراجعة المدير (وللموارد البشرية حين لا مدير) */
+EXT.aprReviewForm = async (id, asHr) => {
+  const a = await api(asHr ? '/hr/appraisals/' + id : '/hr/team-appraisals').then(x => asHr ? x : x.find(y => y.id === id));
+  modal(`<h3>مراجعة تقييم ${esc(a.name)}</h3>${T(['الهدف (الوزن)', 'ذاتي', 'درجتك'], a.goals.map((g, i) => `<tr><td>${esc(g.title)} (${N(g.weight)}٪)</td><td>${g.self_score}</td><td><input class="rvG" type="number" min="1" max="5" style="width:70px"></td></tr>`))}
+    ${T(['الكفاءة', 'ذاتي', 'درجتك'], a.competencies.map(k => `<tr><td>${esc(k.name)}</td><td>${k.self_score}</td><td><input class="rvC" type="number" min="1" max="5" style="width:70px"></td></tr>`))}${HF('rvM', 'تعليقك', '', 'text', 'maxlength="1500"')}<div class="err" id="rvE"></div>
+    <div class="btns" style="margin-top:12px"><button class="btn p" id="rvGo">إرسال</button> <button class="btn" data-call="closeModal">إلغاء</button></div>`);
+  $('#rvGo').onclick = async () => { try { await api(`/hr/${asHr ? 'appraisals' : 'team/appraisals'}/${id}/review`, {method: 'PUT', body: {goal_scores: $$('.rvG').map(x => +x.value || 0), competency_scores: $$('.rvC').map(x => +x.value || 0), manager_comment: $('#rvM').value.trim(), submit: true}}); closeModal(); toast('أُرسلت المراجعة'); EXT.hrRefresh(); } catch (e) { $('#rvE').textContent = e.message; } };
+};
+
+/* ---- التدريب */
+EXT.hrTrn = async function (B) {
+  const [Co, R, Cm] = await Promise.all([api('/hr/training/courses'), api('/hr/training/records'), api('/hr/training/compliance')]), bad = Cm.filter(x => x.state !== 'valid');
+  B.innerHTML = `<div class="toolbar"><button class="btn p" data-call="EXT.trnCourseForm">+ دورة</button> <button class="btn" data-call="EXT.trnRecForm">+ سجل تدريب</button></div>`
+    + (bad.length ? BOX(`الدورات الإلزامية — ما يحتاج متابعة <span class="muted">${N(bad.length)}</span>`, T(['الموظف', 'الدورة', 'الحال', 'المدة'], bad.map(x => `<tr><td>${esc(x.name)} <small class="muted">${esc(x.number)}</small></td><td>${esc(x.course)}</td><td>${pill(...CMP_ST[x.state])}</td><td>${x.days_left == null ? '—' : hrAgo(x.days_left)}</td></tr>`))) : '')
+    + BOX('الدورات', T(['الدورة', 'الجهة', 'الساعات', 'صلاحية الشهادة', 'إلزامية', 'أُتمّت'], Co.map(t => `<tr><td>${esc(t.title)}</td><td>${esc(t.provider || '—')}</td><td>${F2(t.hours)}</td><td>${t.cert_valid_months ? N(t.cert_valid_months) + ' شهرًا' : '—'}</td><td>${t.mandatory ? 'نعم' : '—'}</td><td>${N(t.completed)}</td></tr>`), 'لا دورات.'))
+    + BOX('السجلات', T(['الموظف', 'الدورة', 'الحال', 'التاريخ', 'الدرجة', 'تنتهي الشهادة'], R.map(r => `<tr><td>${esc(r.name)}</td><td>${esc(r.course)}</td><td>${pill(...TRN_ST[r.status])}</td><td>${fmtDate(r.completed_on || r.planned_on)}</td><td>${r.score ?? '—'}</td><td>${r.cert_expires ? fmtDate(r.cert_expires) + ' ' + (r.days_left < 0 ? pill('منتهية', 'p-b') : r.days_left <= 90 ? pill(hrAgo(r.days_left), 'p-w') : '') : '—'}</td></tr>`), 'لا سجلات.'));
+};
+EXT.trnCourseForm = () => {
+  modal(`<h3>دورة تدريبية</h3>${HF('tcT', 'العنوان', '', 'text', 'maxlength="120"')}${HF('tcP', 'الجهة المقدِّمة', '')}${HF('tcH', 'الساعات', '8', 'number', 'min="0"')}${HF('tcV', 'صلاحية الشهادة بالأشهر (اختياري)', '', 'number', 'min="1"')}<label><input type="checkbox" id="tcM"> إلزامية لكل العاملين</label><div class="err" id="tcE"></div>
+    <div class="btns" style="margin-top:12px"><button class="btn p" id="tcGo">حفظ</button> <button class="btn" data-call="closeModal">إلغاء</button></div>`);
+  $('#tcGo').onclick = async () => { try { await post('/hr/training/courses', {title: $('#tcT').value.trim(), provider: $('#tcP').value.trim(), hours: +$('#tcH').value || 0, cert_valid_months: +$('#tcV').value || null, mandatory: $('#tcM').checked}); closeModal(); toast('أُضيفت الدورة'); EXT.l_hr(); } catch (e) { $('#tcE').textContent = e.message; } };
+};
+EXT.trnRecForm = async () => {
+  const [Co, E] = await Promise.all([api('/hr/training/courses'), api('/hr/employees?status=current')]);
+  modal(`<h3>سجل تدريب</h3>${HS('trE', 'الموظف', E.map(e => [e.id, `${e.number} — ${e.name}`]), '')}${HS('trC', 'الدورة', Co.map(t => [t.id, t.title]), '')}${HS('trS', 'الحال', [['planned', 'مخطط'], ['completed', 'أُتمّت'], ['no_show', 'لم يحضر'], ['cancelled', 'ملغاة']], 'completed')}${HF('trP', 'التاريخ المخطط', '', 'date')}${HF('trD', 'تاريخ الإتمام', hrDay(), 'date')}${HF('trN', 'رقم الشهادة', '')}${HF('trX', 'انتهاء الشهادة (يُحسب من الدورة إن تُرك فارغًا)', '', 'date')}
+    <div class="err" id="trErr"></div><div class="btns" style="margin-top:12px"><button class="btn p" id="trGo">حفظ</button> <button class="btn" data-call="closeModal">إلغاء</button></div>`);
+  $('#trGo').onclick = async () => { try { await post('/hr/training/records', {employee_id: +$('#trE').value, course_id: +$('#trC').value, status: $('#trS').value, planned_on: $('#trP').value, completed_on: $('#trD').value, certificate_no: $('#trN').value.trim(), cert_expires: $('#trX').value}); closeModal(); toast('سُجّل'); EXT.l_hr(); } catch (e) { $('#trErr').textContent = e.message; } };
+};
+
+/* ---- الجزاءات */
+EXT.hrDsc = async function (B) {
+  const [Ru, Ca] = await Promise.all([api('/hr/discipline/rules'), api('/hr/discipline/cases')]), appr = Ru.filter(r => r.status === 'approved');
+  B.innerHTML = (appr.length ? '' : BOX('لا لائحة معتمدة', '<p>لا يجوز إصدار أي جزاء قبل أن تُدخَل مواد اللائحة المعتمدة رسميًا في المنشأة ويعتمدها شخص ثانٍ. أدخل المواد بمصدرها (رقم اللائحة والمادة) أدناه.</p>'))
+    + BOX('مواد اللائحة', T(['الرمز', 'المادة', 'النوع', 'الحد الأقصى', 'المصدر', 'الحال', ''], Ru.map(r => `<tr><td>${esc(r.code)}</td><td>${esc(r.name)}</td><td>${DSC_KIND[r.kind]}</td><td>${r.kind === 'warning' ? '—' : F2(r.max_days) + ' يومًا'}</td><td>${esc(r.source)}</td><td>${r.status === 'approved' ? pill('معتمدة منذ ' + r.valid_from, 'p-ok') : r.status === 'draft' ? pill('مسودة', 'p-w') : pill('موقوفة', 'p-b')}</td>
+        <td>${r.status === 'draft' ? `<button class="btn p" data-call="EXT.dscRuleApprove" data-args="${J([r.id])}" ${r.created_by === S.me.username ? 'disabled title="لا تعتمد مادة أنشأتها"' : ''}>اعتماد</button>` : r.status === 'approved' ? `<button class="btn" data-call="EXT.dscRuleRetire" data-args="${J([r.id])}">إيقاف</button>` : ''}</td></tr>`), 'لا مواد.'), '<button class="btn p" data-call="EXT.dscRuleForm">+ مادة</button>')
+    + BOX(`القضايا <span class="muted">${N(Ca.length)}</span>`, T(['الرقم', 'الموظف', 'الواقعة', 'المادة', 'الحال', ''], Ca.map(x => `<tr data-call="EXT.dscCase" data-args="${J([x.id])}" style="cursor:pointer"><td>${esc(x.number)}</td><td>${esc(x.emp_name)}</td><td>${fmtDate(x.incident_date)}</td><td>${esc(x.rule_code || '—')}</td><td>${pill(...DSC_ST[x.status])}</td><td></td></tr>`), 'لا قضايا.'), '<button class="btn p" data-call="EXT.dscCaseForm">+ قضية</button>');
+};
+EXT.dscRuleForm = () => {
+  modal(`<h3>مادة من اللائحة</h3>${HF('drC', 'الرمز', '', 'text', 'maxlength="20"')}${HF('drN', 'المادة (مثل: التأخر المتكرر)', '', 'text', 'maxlength="120"')}${HS('drK', 'نوع الجزاء', Object.entries(DSC_KIND), 'warning')}${HF('drM', 'الحد الأقصى للأيام (للخصم والإيقاف)', '0', 'number', 'min="0" step="0.5"')}${HF('drS', 'المصدر (اللائحة المعتمدة والمادة)', '', 'text', 'maxlength="300"')}
+    <div class="err" id="drE"></div><div class="btns" style="margin-top:12px"><button class="btn p" id="drGo">حفظ كمسودة</button> <button class="btn" data-call="closeModal">إلغاء</button></div>`);
+  $('#drGo').onclick = async () => { try { await post('/hr/discipline/rules', {code: $('#drC').value.trim(), name: $('#drN').value.trim(), kind: $('#drK').value, max_days: +$('#drM').value || 0, source: $('#drS').value.trim()}); closeModal(); toast('حُفظت المسودة — يعتمدها شخص آخر'); EXT.l_hr(); } catch (e) { $('#drE').textContent = e.message; } };
+};
+EXT.dscRuleApprove = id => {
+  modal(`<h3>اعتماد مادة</h3><p>تؤكد أن نص المادة يطابق اللائحة المعتمدة في المنشأة.</p>${HF('daV', 'تاريخ سريان اللائحة نفسها', hrDay(), 'date')}<div class="err" id="daE"></div><div class="btns" style="margin-top:12px"><button class="btn p" id="daGo">اعتماد</button> <button class="btn" data-call="closeModal">إلغاء</button></div>`);
+  $('#daGo').onclick = async () => { try { await post(`/hr/discipline/rules/${id}/approve`, {valid_from: $('#daV').value}); closeModal(); toast('اعتُمدت المادة'); EXT.l_hr(); } catch (e) { $('#daE').textContent = e.message; } };
+};
+EXT.dscRuleRetire = async id => { if (!confirm('إيقاف المادة؟ لا يُصدر بها جزاء جديد.')) return; await tryDo(() => post(`/hr/discipline/rules/${id}/retire`), 'أُوقفت'); EXT.l_hr(); };
+EXT.dscCaseForm = async () => {
+  const E = await api('/hr/employees?status=current');
+  modal(`<h3>قضية تأديبية</h3>${HS('dcE', 'الموظف', E.map(e => [e.id, `${e.number} — ${e.name}`]), '')}${HF('dcD', 'تاريخ الواقعة', hrDay(), 'date')}${HF('dcT', 'وصف الواقعة', '', 'text', 'maxlength="2000"')}${HF('dcW', 'الشهود', '', 'text')}<div class="err" id="dcErr"></div>
+    <div class="btns" style="margin-top:12px"><button class="btn p" id="dcGo">فتح القضية</button> <button class="btn" data-call="closeModal">إلغاء</button></div>`);
+  $('#dcGo').onclick = async () => { try { const r = await post('/hr/discipline/cases', {employee_id: +$('#dcE').value, incident_date: $('#dcD').value, description: $('#dcT').value.trim(), witnesses: $('#dcW').value.trim()}); closeModal(); toast('فُتحت ' + r.number); EXT.l_hr(); } catch (e) { $('#dcErr').textContent = e.message; } };
+};
+EXT.dscCase = async id => {
+  const x = await api('/hr/discipline/cases/' + id), me = S.me.username;
+  insp(`${x.number} — ${x.emp_name}`, `${KP([['الحال', DSC_ST[x.status][0]], ['الواقعة', fmtDate(x.incident_date)], ['المادة', esc(x.rule_code ? x.rule_code + ' · ' + x.rule_name : '—')], ['الجزاء', x.rule_kind ? DSC_KIND[x.rule_kind] + (x.penalty_days ? ' ' + F2(x.penalty_days) + ' يومًا' : '') + (x.apply_period ? ' · ' + x.apply_period : '') : '—']])}
+    <p>${esc(x.description)}</p>${x.witnesses ? `<p class="muted">الشهود: ${esc(x.witnesses)}</p>` : ''}${x.statement ? `<p><b>أقوال الموظف:</b> ${esc(x.statement)}</p>` : ''}${x.appeal_text ? `<p><b>تظلّمه:</b> ${esc(x.appeal_text)}</p>` : ''}${x.applied_run_id ? '<p class="muted">طُبّق الخصم في مسيّر الرواتب.</p>' : ''}
+    <div class="btns">${x.status === 'open' ? `<button class="btn" data-call="EXT.dscStatement" data-args="${J([id])}">أقوال الموظف</button> <button class="btn p" data-call="EXT.dscPropose" data-args="${J([id])}">اقتراح جزاء</button> <button class="btn" data-call="EXT.dscClose" data-args="${J([id])}">إغلاق بلا جزاء</button>` : ''}
+      ${x.status === 'proposed' ? `<button class="btn p" data-call="EXT.dscIssue" data-args="${J([id])}" ${x.proposed_by === me ? 'disabled title="لا تُصدر ما اقترحته"' : ''}>إصدار</button> <button class="btn" data-call="EXT.dscClose" data-args="${J([id])}">إغلاق بلا جزاء</button>` : ''}
+      ${x.status === 'appealed' ? `<button class="btn p" data-call="EXT.dscDecide" data-args="${J([id, 'upheld'])}" ${x.issued_by === me ? 'disabled title="من أصدر لا يبتّ في التظلم"' : ''}>رفض التظلم</button> <button class="btn" data-call="EXT.dscDecide" data-args="${J([id, 'revoked'])}" ${x.issued_by === me ? 'disabled' : ''}>قبول التظلم وإلغاء الجزاء</button>` : ''}</div>`);
+};
+EXT.dscStatement = async id => { const s = prompt('أقوال الموظف (أو: رفض الإدلاء بأقواله):', ''); if (!s || s.trim().length < 3) return; await tryDo(() => post(`/hr/discipline/cases/${id}/statement`, {statement: s.trim()}), 'سُجّلت الأقوال'); EXT.dscCase(id); };
+EXT.dscClose = async id => { const n = prompt('سبب الإغلاق بلا جزاء:', ''); if (!n || n.trim().length < 3) return; await tryDo(() => post(`/hr/discipline/cases/${id}/close`, {note: n.trim()}), 'أُغلقت'); document.body.classList.remove('io'); EXT.l_hr(); };
+EXT.dscIssue = async id => { if (!confirm('إصدار الجزاء يُبلَّغ به الموظف ويحقّ له التظلم. متابعة؟')) return; await tryDo(() => post(`/hr/discipline/cases/${id}/issue`), 'صدر الجزاء'); EXT.dscCase(id); EXT.l_hr(); };
+EXT.dscDecide = async (id, decision) => { await tryDo(() => post(`/hr/discipline/cases/${id}/appeal-decision`, {decision}), 'سُجّل القرار'); EXT.dscCase(id); EXT.l_hr(); };
+EXT.dscPropose = async id => {
+  const R = (await api('/hr/discipline/rules')).filter(r => r.status === 'approved');
+  if (!R.length) { toast('لا مواد معتمدة في اللائحة', 1); return; }
+  modal(`<h3>اقتراح جزاء</h3>${HS('dpR', 'المادة', R.map(r => [r.id, `${r.code} — ${r.name} (${DSC_KIND[r.kind]}${r.max_days ? '، حتى ' + F2(r.max_days) + ' يومًا' : ''})`]), '')}${HF('dpD', 'عدد الأيام (للخصم والإيقاف)', '', 'number', 'min="0" step="0.5"')}${HF('dpP', 'شهر الخصم (للخصم)', payMonth(), 'month')}<div class="err" id="dpE"></div>
+    <div class="btns" style="margin-top:12px"><button class="btn p" id="dpGo">اقتراح</button> <button class="btn" data-call="closeModal">إلغاء</button></div>`);
+  $('#dpGo').onclick = async () => { try { await post(`/hr/discipline/cases/${id}/propose`, {rule_id: +$('#dpR').value, penalty_days: +$('#dpD').value || 0, apply_period: $('#dpP').value}); closeModal(); EXT.dscCase(id); EXT.l_hr(); } catch (e) { $('#dpE').textContent = e.message; } };
+};
+
+/* ---- بوابة الموظف: تقييمي وتدريبي وإشعاراتي */
+EXT.meApr = async function (B) {
+  const L = await api('/hr/me/appraisals');
+  B.innerHTML = L.map(a => BOX(`${esc(a.cycle)} ${pill(...APR_ST[a.status])}`, (a.status === 'self' && a.cycle_status === 'open' ? `<div id="sf${a.id}"></div>` : `${KP([['الدرجة', a.overall == null ? '—' : F2(a.overall)], ['التصنيف', esc(a.rating || '—')], ['القرار', a.decision && a.decision !== 'none' ? APR_DEC[a.decision] : '—']])}${aprGoals(a)}${a.manager_comment ? `<p><b>مديري:</b> ${esc(a.manager_comment)}</p>` : ''}${a.hr_comment ? `<p><b>الموارد البشرية:</b> ${esc(a.hr_comment)}</p>` : ''}${a.status === 'self' ? '' : a.status === 'final' ? `<div class="btns"><button class="btn p" data-call="EXT.meAck" data-args="${J([a.id])}">أقرّ بالاطلاع</button></div>` : ''}`))).join('') || '<p class="muted">لا تقييمات مفتوحة لك.</p>';
+  L.filter(a => a.status === 'self' && a.cycle_status === 'open').forEach(a => EXT.meAprForm(a));
+};
+EXT.meAprForm = a => {
+  const box = $('#sf' + a.id), goals = a.goals.length ? a.goals : [{title: '', weight: 100, self_score: null}];
+  const row = g => `<tr><td><input class="sgT" value="${esc(g.title)}" placeholder="الهدف"></td><td><input class="sgW" type="number" min="1" max="100" value="${g.weight}" style="width:70px"></td><td><input class="sgS" type="number" min="1" max="5" value="${g.self_score ?? ''}" style="width:70px"></td></tr>`;
+  box.innerHTML = hrNote('أدخل أهدافك (حتى 7) بأوزان مجموعها 100، وقيّم نفسك من 1 إلى 5. لا ترى تقييم مديرك قبل أن تعتمده الموارد البشرية.')
+    + T(['الهدف', 'الوزن ٪', 'تقييمي'], goals.map(row)).replace('<tbody>', '<tbody id="sgb' + a.id + '">')
+    + T(['الكفاءة', 'تقييمي (1–5)'], a.competencies.map(k => `<tr><td class="scN">${esc(k.name)}</td><td><input class="scS" type="number" min="1" max="5" value="${k.self_score ?? ''}" style="width:70px"></td></tr>`))
+    + HF('sc' + a.id, 'تعليقي', a.self_comment || '', 'text', 'maxlength="1500"') + `<div class="err" id="se${a.id}"></div><div class="btns" style="margin-top:10px"><button class="btn" id="sa${a.id}">+ هدف</button> <button class="btn" id="sv${a.id}">حفظ مسودة</button> <button class="btn p" id="ss${a.id}">إرسال إلى مديري</button></div>`;
+  $('#sa' + a.id).onclick = () => $('#sgb' + a.id).insertAdjacentHTML('beforeend', row({title: '', weight: 0, self_score: null}));
+  const send = async submit => {
+    const goals2 = $$('#sf' + a.id + ' .sgT').map((t, i) => ({title: t.value.trim(), weight: +$$('#sf' + a.id + ' .sgW')[i].value || 0, self_score: +$$('#sf' + a.id + ' .sgS')[i].value || null})).filter(g => g.title);
+    const comps = $$('#sf' + a.id + ' .scN').map((n, i) => ({name: n.textContent, self_score: +$$('#sf' + a.id + ' .scS')[i].value || null}));
+    try { await api(`/hr/me/appraisals/${a.id}/self`, {method: 'PUT', body: {goals: goals2, competencies: comps, self_comment: $('#sc' + a.id).value.trim(), submit}}); toast(submit ? 'أُرسل إلى مديرك' : 'حُفظت المسودة'); EXT.l_me(); } catch (e) { $('#se' + a.id).textContent = e.message; }
+  };
+  $('#sv' + a.id).onclick = () => send(false); $('#ss' + a.id).onclick = () => send(true);
+};
+EXT.meAck = async id => { const c = prompt('ملاحظتك على التقييم (اختياري):', '') || ''; await tryDo(() => post(`/hr/me/appraisals/${id}/ack`, {comment: c}), 'سُجّل إقرارك'); EXT.l_me(); };
+EXT.meTrn = async function (B) {
+  const r = await api('/hr/me/training');
+  B.innerHTML = (r.mandatory_missing.length ? BOX('دورات إلزامية ناقصة أو منتهية', `<p>${r.mandatory_missing.map(esc).join('، ')}</p>`) : '') + T(['الدورة', 'الحال', 'التاريخ', 'الدرجة', 'تنتهي الشهادة'], r.records.map(x => `<tr><td>${esc(x.course)}</td><td>${pill(...TRN_ST[x.status])}</td><td>${fmtDate(x.completed_on || x.planned_on)}</td><td>${x.score ?? '—'}</td><td>${x.cert_expires ? fmtDate(x.cert_expires) : '—'}</td></tr>`), 'لا سجلات تدريب.');
+};
+EXT.meDsc = async function (B) {
+  const L = await api('/hr/me/discipline');
+  B.innerHTML = hrNote('هنا ما صدر بحقك فقط. لك التظلم خلال مدة محددة من الإصدار، ويبتّ فيه شخص غير من أصدر.') + T(['الرقم', 'الواقعة', 'المادة', 'الجزاء', 'الحال', ''], L.map(x => `<tr><td>${esc(x.number)}</td><td>${fmtDate(x.incident_date)}<br><small class="muted">${esc(x.description)}</small></td><td>${esc(x.rule_code || '')} ${esc(x.rule_name || '')}</td><td>${x.rule_kind ? DSC_KIND[x.rule_kind] + (x.penalty_days ? ' ' + F2(x.penalty_days) + ' يومًا' : '') : '—'}</td><td>${pill(...DSC_ST[x.status])}${x.appeal_decision ? ' <small class="muted">' + (x.appeal_decision === 'upheld' ? 'رُفض تظلمك' : 'قُبل تظلمك') + '</small>' : ''}</td>
+      <td>${x.can_appeal ? `<button class="btn" data-call="EXT.meAppeal" data-args="${J([x.id])}">تظلّم</button>` : ''}</td></tr>`), 'لا إشعارات تأديبية.');
+};
+EXT.meAppeal = async id => { const t = prompt('نص التظلم (10 أحرف على الأقل):', ''); if (!t || t.trim().length < 10) return; await tryDo(() => post(`/hr/me/discipline/${id}/appeal`, {text: t.trim()}), 'قُدّم التظلم'); EXT.l_me(); };
+EXT.meReviews = async function (B) {   // appraisals waiting for me as a manager (inside «فريقي»)
+  const L = await api('/hr/team-appraisals');
+  return BOX(`تقييمات بانتظار مراجعتك <span class="muted">${N(L.filter(a => a.status === 'manager').length)}</span>`, T(['الموظف', 'الدورة', 'الحال', ''], L.map(a => `<tr><td>${esc(a.name)}</td><td>${esc(a.cycle)}</td><td>${pill(...APR_ST[a.status])}</td><td>${a.status === 'manager' ? `<button class="btn p" data-call="EXT.aprReviewForm" data-args="${J([a.id, false])}">مراجعة</button>` : ''}</td></tr>`), 'لا تقييمات بانتظارك.'));
 };

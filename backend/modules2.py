@@ -361,12 +361,12 @@ def rent_pay(did: int, u=Depends(act_as("leasing"))):
 # ======================================================================= المستندات (رفع آمن)
 ALLOWED = {"application/pdf": (b"%PDF", ".pdf"), "image/png": (b"\x89PNG", ".png"), "image/jpeg": (b"\xff\xd8\xff", ".jpg")}
 MAX_DOC = 5 * 1024 * 1024
-REF_TYPES = "^(booking|customer|project|permit|ipc|lease|land|brand|plan|campaign|creative|journal|employee)$"
+REF_TYPES = "^(booking|customer|project|permit|ipc|lease|land|brand|plan|campaign|creative|journal|employee|candidate)$"
 
 
 def _employee_files_only_for_hr(u, ref_type) -> None:
     """0.25.0: scans of passports and contracts are the people file — the generic `docs` permission (sales, engineers…) does not open them."""
-    if ref_type == "employee" and "hr" not in u["perms"]:
+    if ref_type in ("employee", "candidate") and "hr" not in u["perms"]:
         raise HTTPException(403, "ملفات الموظفين لإدارة الموارد البشرية فقط")
 
 

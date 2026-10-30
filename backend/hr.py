@@ -378,9 +378,8 @@ def api_employee(eid: int, u=Depends(act_as("hr"))):
     return e
 
 
-@router.post("/api/hr/employees")
-def api_employee_add(b: EmployeeIn, u=Depends(act_as("hr"))):
-    c = db()
+def create_employee(c, b: EmployeeIn, by: str) -> dict:
+    """The one way a file is opened (the HR form, and the hiring of a candidate): validates, numbers it from the gapless counter, writes it. The caller commits."""
     hire, ce, pe, dob = _fmt_dates(b.hire_date, b.contract_type, b.contract_end, b.probation_end, b.dob)
     warns = _check_refs(c, b.department_id, b.position_id, b.manager_id)
     if b.email and c.execute("SELECT 1 FROM employees WHERE lower(email)=? AND status!='terminated'", (b.email.strip().lower(),)).fetchone():
@@ -396,10 +395,17 @@ def api_employee_add(b: EmployeeIn, u=Depends(act_as("hr"))):
                     (number, b.name.strip(), b.name_en.strip() or None, nat or None, int(b.omani), pii.enc(b.id_number.strip()) if b.id_number else None, pii.enc(dob) if dob else None,
                      b.gender, b.marital, b.phone or None, b.email.strip() or None, b.address or None, b.department_id, b.position_id, b.manager_id, hire, b.contract_type, ce, pe,
                      b.bank_name or None, pii.enc(b.iban.strip()) if b.iban else None, pii.enc(b.social_ins_no.strip()) if b.social_ins_no else None, pasi,
-                     pii.enc(b.emergency_contact) if b.emergency_contact else None, u["name"])).lastrowid
+                     pii.enc(b.emergency_contact) if b.emergency_contact else None, by)).lastrowid
     audit(c, "موظف جديد", f"{number} · {b.name}")
-    c.commit()
     return {"id": eid, "number": number, "warnings": warns}
+
+
+@router.post("/api/hr/employees")
+def api_employee_add(b: EmployeeIn, u=Depends(act_as("hr"))):
+    c = db()
+    out = create_employee(c, b, u["name"])
+    c.commit()
+    return out
 
 
 @router.patch("/api/hr/employees/{eid}")
@@ -598,6 +604,8 @@ def expiry_items(c, as_of: dt.date, horizon: int = 90) -> list[dict]:
             if 0 <= days <= ALERT_DAYS[1]:
                 items.append({"source": "probation", "ref_id": r["id"], "employee_id": r["id"], "number": r["number"], "name": r["name"], "kind": "probation_end", "label": "نهاية فترة التجربة",
                               "date": r["probation_end"], "days_left": days, "level": level_of(days)})
+    from .hr_perf import training_expiry_items
+    items += training_expiry_items(c, as_of, horizon)  # 0.27.0: a training certificate that ends is an alert like a passport
     return sorted(items, key=lambda i: (i["days_left"], i["name"]))
 
 
@@ -699,6 +707,8 @@ def alerts_due_all() -> int:
                 last = c.execute("SELECT v FROM settings WHERE k='hr:alerts_last_run'").fetchone()
                 if not last or last["v"][:10] < today().isoformat():
                     n += alerts_run(c)
+                    from .hr_recruit import purge, retention_days
+                    purge(c, retention_days(c))  # 0.27.0: candidates who were not hired are erased after the retention period
                     c.execute("INSERT OR REPLACE INTO settings VALUES(?,?)", ("hr:alerts_last_run", now_s()))
                     c.commit()
             finally:
