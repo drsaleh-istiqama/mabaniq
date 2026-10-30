@@ -321,3 +321,36 @@ def test_non_leasing_roles_and_modules_are_refused(cl):
         assert cl.get("/api/lea/overview").status_code == 404  # module off ⟵ same 404 as an unknown path
     finally:
         cl.post("/api/modules", json={"modules": __import__("backend.registry", fromlist=["x"]).available()})
+
+
+def test_a_lump_payment_without_a_chosen_due_pays_the_rent_before_the_deposit(cl):
+    login_as(cl, "admin", "bayan")
+    lid = _new_lease(cl, start="2038-01-01", months=12, annual_rent=1200, frequency=4, prep_free_days=30, deposit=100)
+    d = cl.get(f"/api/lea/leases/{lid}").json()
+    dep = next(x for x in d["dues"] if x["kind"] == "deposit")
+    first_rent = min((x for x in d["dues"] if x["kind"] == "rent"), key=lambda x: x["due"])
+    assert dep["due"] <= first_rent["due"], "the deposit falls due first — the case the old ordering got wrong"
+    r = cl.post("/api/lea/payments", json={"lease_id": lid, "amount": 50}).json()
+    assert r["applied"][0]["due_id"] == first_rent["id"]
+    assert cl.post("/api/lea/payments", json={"lease_id": lid, "amount": 50, "due_id": dep["id"]}).status_code == 200   # the deposit is still payable when chosen
+
+
+def test_two_simultaneous_receipts_for_one_due_cannot_both_succeed(cl):
+    """0.28.2: on PostgreSQL two requests used to read the same unpaid balance and both write against it (a double payment); the per-lease lock queues them."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    from starlette.testclient import TestClient as TC
+
+    from backend.app import app as application
+    login_as(cl, "admin", "bayan")
+    lid = _new_lease(cl, start="2039-01-01", months=12, annual_rent=1200, frequency=12)
+    due = cl.get(f"/api/lea/leases/{lid}").json()["dues"][0]
+
+    def pay(_):
+        c2 = TC(application, base_url="https://testserver")   # not entered as a context: leaving one would shut the shared connection pool under the other threads
+        login_as(c2, "admin", "bayan")
+        return c2.post("/api/lea/payments", json={"lease_id": lid, "amount": due["amount"], "due_id": due["id"]}).status_code
+    with ThreadPoolExecutor(4) as ex:
+        codes = sorted(ex.map(pay, range(4)))
+    assert codes.count(200) == 1 and all(x in (409, 429) for x in codes if x != 200), codes
+    assert cl.get(f"/api/lea/leases/{lid}").json()["dues"][0]["paid"] == due["amount"]

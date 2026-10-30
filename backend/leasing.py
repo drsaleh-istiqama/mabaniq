@@ -22,7 +22,7 @@ from pydantic import BaseModel, Field
 
 from . import ledger, pii
 from .auth import need
-from .common import ACTOR, act_as, audit, db, now_s, rows, today
+from .common import ACTOR, act_as, audit, db, now_s, rows, today, xlock
 from .db import TENANT, connect, tenants
 from .modules import one
 
@@ -134,7 +134,8 @@ def refresh_due(c, due_id: int) -> float:
 
 
 def outstanding(c, lease_id: int) -> list[dict]:
-    return rows(c.execute("SELECT id, due, amount, paid, kind, label FROM rent_dues WHERE lease_id=? AND amount-paid>? ORDER BY due, id", (lease_id, EPS)))
+    """Oldest first, the deposit last: a lump payment without a chosen due pays the rent, not the refundable deposit (before 0.28.2 an early deposit due swallowed it)."""
+    return rows(c.execute("SELECT id, due, amount, paid, kind, label FROM rent_dues WHERE lease_id=? AND amount-paid>? ORDER BY CASE WHEN COALESCE(kind,'rent')='deposit' THEN 1 ELSE 0 END, due, id", (lease_id, EPS)))
 
 
 def apply_payment(c, lease_id: int, amount: float, paid_on: dt.date, method: str | None, reference: str | None, by: str, due_id: int | None = None,
@@ -151,6 +152,7 @@ def apply_payment(c, lease_id: int, amount: float, paid_on: dt.date, method: str
     lease = one(c, "SELECT * FROM leases WHERE id=?", (lease_id,), "العقد غير موجود")
     if lease["status"] in ("draft",):
         raise HTTPException(409, "العقد مسودة — وقّعه أولًا")
+    xlock(c, f"lease:{lease_id}")   # the balances below are read after the lock: a concurrent receipt on this lease cannot also see them unpaid
     if due_id is not None:
         d = one(c, "SELECT * FROM rent_dues WHERE id=? AND lease_id=?", (due_id, lease_id), "الاستحقاق غير موجود في هذا العقد")
         todo = [dict(d)]
@@ -185,6 +187,7 @@ def reverse_payment(c, payment_id: int, reason: str, by: str) -> dict:
     p = one(c, "SELECT * FROM rent_payments WHERE id=?", (payment_id,), "الحركة غير موجودة")
     if p["amount"] <= 0:
         raise HTTPException(409, "هذه حركة عكسية أصلًا")
+    xlock(c, f"lease:{p['lease_id']}")   # two reversals of one receipt cannot both pass the check below
     if c.execute("SELECT 1 FROM rent_payments WHERE reverses_id=?", (payment_id,)).fetchone():
         raise HTTPException(409, "عُكست هذه الحركة سابقًا")
     rid = c.execute("INSERT INTO rent_payments(due_id,lease_id,amount,paid_on,method,reference,cheque_id,receipt_no,recorded_by,reverses_id,note,created) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",

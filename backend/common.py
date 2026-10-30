@@ -8,6 +8,13 @@ from .auth import ensure_schema, need
 from .db import TENANT, audit_insert, connect, init  # OPEN lives in db.py since Unit 4 (every connect() registers itself)
 
 ACTOR = contextvars.ContextVar("actor", default="النظام")
+
+
+def xlock(c, key: str) -> None:
+    """0.28.2: a transaction-scoped advisory lock on `key` (PostgreSQL only; SQLite has one writer). Two requests that would read the same balance and both write against it
+    (a receipt and a reversal on one lease, two postings with one source_key) queue instead of racing; the lock is released at commit/rollback."""
+    if getattr(c, "dialect", "") == "postgres":
+        c.execute("SELECT pg_advisory_xact_lock(hashtext(?))", (f"{getattr(c, 'tenant', '')}|{key}",))
 _ready: set = set()
 
 

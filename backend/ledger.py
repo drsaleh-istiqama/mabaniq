@@ -23,7 +23,7 @@ from pathlib import Path
 
 from fastapi import HTTPException
 
-from .common import ACTOR, audit, now_s, rows, today
+from .common import ACTOR, audit, now_s, rows, today, xlock
 from .db import setting
 
 EPS = 0.0005
@@ -220,8 +220,10 @@ def post(c, *, date: dt.date, lines: list[dict], memo: str, source_kind: str | N
     """Write one balanced journal and post it. Returns the journal id, or None when `source_key` has already been posted (idempotent)."""
     by = by or ACTOR.get() or "النظام"
     ctx = ctx or Ctx(c)
-    if source_key and c.execute("SELECT 1 FROM acc_journals WHERE source_key=?", (source_key,)).fetchone():
-        return None
+    if source_key:
+        xlock(c, f"jkey:{source_key}")   # 0.28.2: two workers posting the same source cannot both pass the check (the unique index would turn the loser into a 500)
+        if c.execute("SELECT 1 FROM acc_journals WHERE source_key=?", (source_key,)).fetchone():
+            return None
     _open_period(c, date)
     jid = insert_draft(c, ctx, d=date, memo=memo, lines=lines, kind=kind, by=by, source_kind=source_kind, source_ref=source_ref, source_key=source_key)
     finalize(c, jid, by)

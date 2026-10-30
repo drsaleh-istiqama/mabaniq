@@ -451,6 +451,11 @@ def api_employee_edit(eid: int, b: EmployeePatch, u=Depends(act_as("hr"))):
             changed.append(k)
             new[k] = pii.enc(v) if v else None
     new = {k: v for k, v in new.items() if k in changed}
+    if {"iban", "bank_name"} & set(changed) and "hr_payroll" not in u["perms"]:
+        # 0.28.2: the account a salary goes to is not rewritten between a run's approval and its payment by someone who cannot see the payment
+        pend = c.execute("SELECT r.period FROM payroll_runs r JOIN payslips s ON s.run_id=r.id WHERE r.status='approved' AND s.employee_id=? AND s.net>0 LIMIT 1", (eid,)).fetchone()             if c.has_table("payroll_runs") else None
+        if pend:
+            raise HTTPException(409, f"مسيّر {pend['period']} معتمد ولم يُدفع بعد — لا يُعدَّل الحساب البنكي الآن؛ يعدّله من لديه صلاحية الرواتب أو بعد الدفع")
     if changed:
         c.execute("UPDATE employees SET " + ", ".join(f"{k}=?" for k in new) + " WHERE id=?", (*new.values(), eid))
         # the audit line names the fields, never the values of the sensitive ones
@@ -493,6 +498,10 @@ def api_employee_status(eid: int, b: StatusIn, u=Depends(act_as("hr"))):
     if e["status"] == "terminated":
         raise HTTPException(409, "الملف منتهي الخدمة — يُنشأ ملف جديد عند إعادة التعيين")
     if b.status == "terminated":
+        owed = c.execute("SELECT 1 FROM salary_structures WHERE employee_id=? UNION ALL SELECT 1 FROM payslips WHERE employee_id=? UNION ALL SELECT 1 FROM employee_loans WHERE employee_id=? AND status='active'",
+                         (eid, eid, eid)).fetchone() if c.has_table("salary_structures") else None
+        if owed:   # 0.28.2: pay, end-of-service and loan balances are settled by the settlement, whose approval is the act that ends the service
+            raise HTTPException(409, "لهذا الموظف راتب أو سلفة — تُنهى خدمته من «مخالصة نهاية الخدمة» (تعتمدها صلاحية الرواتب) حتى لا تضيع مستحقاته")
         terminate(c, e, pdate(b.date or today().isoformat(), "تاريخ انتهاء الخدمة").isoformat(), b.note, u["name"])
     else:
         c.execute("UPDATE employees SET status=? WHERE id=?", (b.status, eid))
@@ -514,9 +523,7 @@ def api_account_create(eid: int, u=Depends(act_as("hr"))):
     username = "emp" + e["number"].split("-")[-1].lower()
     if c.execute("SELECT 1 FROM users WHERE username=?", (username,)).fetchone():
         raise HTTPException(409, "اسم المستخدم المقترح مستخدم")
-    email = (e["email"] or "").strip().lower() or None
-    if email and c.execute("SELECT 1 FROM users WHERE lower(email)=?", (email,)).fetchone():
-        email = None  # the address belongs to another login; the account is still created, without e-mail sign-in
+    email = None   # 0.28.2: the address HR typed in the file is not a verified identity — whoever controls that Google account would otherwise be linked to the login; the employee links their own after signing in
     temp = A.temp_password()
     c.execute("INSERT INTO users(username,name,role,pw,must_change,email,employee_id) VALUES(?,?,?,?,1,?,?)", (username, e["name"], "employee", A.hash_pw(temp), email, eid))
     audit(c, "حساب موظف جديد", f"{username} ↔ {e['number']}")

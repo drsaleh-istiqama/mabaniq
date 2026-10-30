@@ -745,8 +745,10 @@ def post_run(c, ctx, run: dict) -> None:
         gl = c.execute("SELECT account_id FROM bank_accounts WHERE id=?", (run["bank_account_id"],)).fetchone()["account_id"]
         net = r3(sum(s["net"] for s in sl))
         if net > EPS:
+            # 0.28.2: the debit side names each employee (as the accrual's credit side does), so every person's payable account closes to zero on its own
+            pay = [dict(account="payroll_payable", debit=s["net"], party_type="employee", party_id=s["employee_id"]) for s in sl if s["net"] > EPS]
             jid = ledger.post(c, date=dt.date.fromisoformat(run["paid_on"]), memo=f"دفع رواتب {run['period']}", source_kind="payroll_pay", source_ref=str(run["id"]), source_key=f"payroll_pay:{run['id']}",
-                              ctx=ctx, lines=[dict(account="payroll_payable", debit=net), dict(account=gl, credit=net)])
+                              ctx=ctx, lines=pay + [dict(account=gl, credit=net)])
             if jid:
                 c.execute("UPDATE payroll_runs SET payment_journal_id=? WHERE id=?", (jid, run["id"]))
 

@@ -564,3 +564,55 @@ def test_loans_split_without_negative_instalments_and_a_third_person_cancels_an_
     assert cl.post(f"/api/hr/payroll/loans/{one_omr}/cancel", json={"reason": "تراجع"}).status_code == 403   # the approver does not cancel what he approved
     login_as(cl, _user(cl, "hrt-pay3", "payroll"))
     assert cl.post(f"/api/hr/payroll/loans/{one_omr}/cancel", json={"reason": "تراجع"}).status_code == 200
+
+
+# ----------------------------------------------------------------------------------------------------- 0.28.2 — the accepted-risk items of the audit
+def test_a_leaver_with_pay_is_ended_by_the_settlement_and_not_by_the_status_switch(cl):
+    _rates(cl)
+    paid = _staff(cl, "موظف براتب", 400, omani=False)
+    login_as(cl, "admin")
+    bare = cl.post("/api/hr/employees", json={"name": "ملف بلا راتب", "omani": False, "hire_date": "2024-01-01"}).json()["id"]
+    body = {"status": "terminated", "note": "استقالة", "date": TODAY.isoformat()}
+    r = cl.post(f"/api/hr/employees/{paid}/status", json=body)
+    assert r.status_code == 409 and "مخالصة" in r.json()["detail"]
+    assert _sql("SELECT status FROM employees WHERE id=?", (paid,))[0]["status"] != "terminated"
+    assert cl.post(f"/api/hr/employees/{bare}/status", json=body).status_code == 200   # nothing to settle: the switch is enough
+
+
+def test_the_bank_account_of_a_run_awaiting_payment_is_not_rewritten_by_hr_alone(cl):
+    _rates(cl)
+    e = _staff(cl, "صاحب حساب", 400, omani=False)
+    rid = _approved_run(cl)
+    hr = _user(cl, "hrt-hr1", "hr")
+    login_as(cl, hr)
+    other = "OM110180000001299999999"
+    r = cl.patch(f"/api/hr/employees/{e}", json={"iban": other})
+    assert r.status_code == 409 and "معتمد" in r.json()["detail"]
+    assert cl.patch(f"/api/hr/employees/{e}", json={"phone": "+968 90000009"}).status_code == 200   # other fields are not frozen
+    login_as(cl, "admin")
+    assert cl.patch(f"/api/hr/employees/{e}", json={"iban": other}).status_code == 200            # a payroll holder sees the payment and may correct the account
+    assert cl.post(f"/api/hr/payroll/runs/{rid}/pay", json={"paid_on": TODAY.isoformat()}).status_code == 200
+    login_as(cl, hr)
+    assert cl.patch(f"/api/hr/employees/{e}", json={"iban": "OM810180000001299123456"}).status_code == 200   # once paid, HR edits again
+
+
+def test_the_payment_journal_names_each_employee_and_the_portal_account_takes_no_unverified_email(cl):
+    _rates(cl)
+    login_as(cl, "admin")
+    assert cl.post("/api/acc/activate", json={"start": (PS - dt.timedelta(days=40)).isoformat(), "confirm": True}).status_code == 200
+    a = _staff(cl, "موظف أ", 500, omani=False)
+    b = _staff(cl, "موظف ب", 300, omani=False)
+    rid = _approved_run(cl)
+    login_as(cl, "admin")
+    bank = next(x["id"] for x in cl.get("/api/acc/banks").json() if x["kind"] == "bank")
+    assert cl.post(f"/api/hr/payroll/runs/{rid}/pay", json={"paid_on": TODAY.isoformat(), "bank_account_id": bank}).status_code == 200
+    jid = cl.get(f"/api/hr/payroll/runs/{rid}").json()["payment_journal_id"]
+    lines = _sql("""SELECT l.party_id p, l.debit d FROM acc_lines l JOIN acc_accounts x ON x.id=l.account_id WHERE l.journal_id=? AND x.system_key='payroll_payable'""", (jid,))
+    assert sorted(r["p"] for r in lines) == sorted([a, b]) and all(r["d"] > 0 for r in lines)
+    by_emp = _sql("""SELECT l.party_id p, SUM(l.debit - l.credit) s FROM acc_lines l JOIN acc_accounts x ON x.id=l.account_id JOIN acc_journals j ON j.id=l.journal_id
+                     WHERE x.system_key='payroll_payable' AND l.party_type='employee' AND j.status IN ('posted','reversed') GROUP BY l.party_id""")
+    assert all(abs(r["s"]) < 1e-6 for r in by_emp), "each person's payable closes to nil on its own"
+    # a portal login does not inherit the e-mail typed in the file (nobody has verified it)
+    c2 = cl.post("/api/hr/employees", json={"name": "موظف بريد", "omani": False, "hire_date": "2024-01-01", "email": "typed-by-hr@example.test"}).json()["id"]
+    assert cl.post(f"/api/hr/employees/{c2}/account").status_code == 200
+    assert _sql("SELECT email FROM users WHERE employee_id=?", (c2,))[0]["email"] is None
