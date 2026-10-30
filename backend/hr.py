@@ -460,6 +460,25 @@ class StatusIn(BaseModel):
     note: str = Field(default="", max_length=300)
 
 
+def terminate(c, e: dict, day: str, note: str, by: str) -> int:
+    """End a person's service on `day`: final, closes the login, cancels later leave. Shared by the status endpoint and the approval of a settlement. Returns the leave requests cancelled."""
+    if day < e["hire_date"]:
+        raise HTTPException(400, "تاريخ انتهاء الخدمة قبل التعيين")
+    if not (note or "").strip():
+        raise HTTPException(400, "سبب انتهاء الخدمة مطلوب")
+    if c.execute("SELECT 1 FROM employees WHERE manager_id=? AND status!='terminated'", (e["id"],)).fetchone():
+        raise HTTPException(409, "له مرؤوسون على رأس العمل — أسند لهم مديرًا آخر أولًا")
+    from . import hr_leave
+    n = hr_leave.cancel_after(c, e["id"], day, "إنهاء الخدمة", by)
+    c.execute("UPDATE employees SET status='terminated', terminated_on=?, termination_note=? WHERE id=?", (day, note.strip(), e["id"]))
+    c.execute("UPDATE departments SET head_employee_id=NULL WHERE head_employee_id=?", (e["id"],))
+    for r in c.execute("SELECT id FROM users WHERE employee_id=?", (e["id"],)).fetchall():
+        c.execute("UPDATE users SET active=0 WHERE id=?", (r["id"],))
+        A.kill_sessions(c, r["id"])
+    audit(c, "إنهاء خدمة موظف", f"{e['number']} · {e['name']} · {day} · إجازات أُلغيت {n}")
+    return n
+
+
 @router.post("/api/hr/employees/{eid}/status")
 def api_employee_status(eid: int, b: StatusIn, u=Depends(act_as("hr"))):
     """Termination is final: the login is closed, future leave is cancelled, and the file stays (service history is kept). The end-of-service settlement arrives in 0.26.0."""
@@ -468,21 +487,7 @@ def api_employee_status(eid: int, b: StatusIn, u=Depends(act_as("hr"))):
     if e["status"] == "terminated":
         raise HTTPException(409, "الملف منتهي الخدمة — يُنشأ ملف جديد عند إعادة التعيين")
     if b.status == "terminated":
-        d = pdate(b.date or today().isoformat(), "تاريخ انتهاء الخدمة")
-        if d.isoformat() < e["hire_date"]:
-            raise HTTPException(400, "تاريخ انتهاء الخدمة قبل التعيين")
-        if not b.note.strip():
-            raise HTTPException(400, "سبب انتهاء الخدمة مطلوب")
-        if c.execute("SELECT 1 FROM employees WHERE manager_id=? AND status!='terminated'", (eid,)).fetchone():
-            raise HTTPException(409, "له مرؤوسون على رأس العمل — أسند لهم مديرًا آخر أولًا")
-        from . import hr_leave
-        n = hr_leave.cancel_after(c, eid, d.isoformat(), "إنهاء الخدمة", u["name"])
-        c.execute("UPDATE employees SET status='terminated', terminated_on=?, termination_note=? WHERE id=?", (d.isoformat(), b.note.strip(), eid))
-        c.execute("UPDATE departments SET head_employee_id=NULL WHERE head_employee_id=?", (eid,))
-        for r in c.execute("SELECT id FROM users WHERE employee_id=?", (eid,)).fetchall():
-            c.execute("UPDATE users SET active=0 WHERE id=?", (r["id"],))
-            A.kill_sessions(c, r["id"])
-        audit(c, "إنهاء خدمة موظف", f"{e['number']} · {e['name']} · {d.isoformat()} · إجازات أُلغيت {n}")
+        terminate(c, e, pdate(b.date or today().isoformat(), "تاريخ انتهاء الخدمة").isoformat(), b.note, u["name"])
     else:
         c.execute("UPDATE employees SET status=? WHERE id=?", (b.status, eid))
         audit(c, "حالة موظف", f"{e['number']} ← {STATUSES[b.status]}")

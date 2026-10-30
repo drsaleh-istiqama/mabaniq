@@ -483,6 +483,56 @@ CREATE TABLE IF NOT EXISTS hr_requests(
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected','done')), requested_at TEXT, decided_by TEXT, decided_at TEXT, decision_note TEXT);
 CREATE INDEX IF NOT EXISTS ix_hr_requests_emp ON hr_requests(employee_id);
 
+-- 0.26.0 — الرواتب: هياكل الرواتب والمسيّر والقسائم، معدلات التأمينات (لا تُخمَّن)، السلف والقروض الحسنة بلا فائدة، مكافأة نهاية الخدمة والمخالصة.
+CREATE TABLE IF NOT EXISTS hr_rates(
+  id INTEGER PRIMARY KEY, key TEXT NOT NULL, value REAL, valid_from TEXT NOT NULL, provisional INTEGER NOT NULL DEFAULT 1, note TEXT, created_by TEXT, UNIQUE(key, valid_from));
+CREATE TABLE IF NOT EXISTS pay_components(
+  id INTEGER PRIMARY KEY, key TEXT NOT NULL UNIQUE, name TEXT NOT NULL, kind TEXT NOT NULL CHECK (kind IN ('earning','deduction')), pasi_base INTEGER NOT NULL DEFAULT 0,
+  system INTEGER NOT NULL DEFAULT 0, active INTEGER NOT NULL DEFAULT 1);
+CREATE TABLE IF NOT EXISTS salary_structures(
+  id INTEGER PRIMARY KEY, employee_id INTEGER NOT NULL REFERENCES employees(id), effective_from TEXT NOT NULL, basic REAL NOT NULL CHECK (basic >= 0), currency TEXT NOT NULL DEFAULT 'OMR',
+  note TEXT, created_by TEXT, UNIQUE(employee_id, effective_from));
+CREATE TABLE IF NOT EXISTS salary_lines(
+  id INTEGER PRIMARY KEY, structure_id INTEGER NOT NULL REFERENCES salary_structures(id), component_id INTEGER NOT NULL REFERENCES pay_components(id), amount REAL NOT NULL CHECK (amount >= 0),
+  UNIQUE(structure_id, component_id));
+CREATE TABLE IF NOT EXISTS payroll_runs(
+  id INTEGER PRIMARY KEY, period TEXT NOT NULL UNIQUE, status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','computed','approved','paid')),
+  headcount INTEGER NOT NULL DEFAULT 0, gross REAL NOT NULL DEFAULT 0, net REAL NOT NULL DEFAULT 0, pasi_employee REAL NOT NULL DEFAULT 0, pasi_employer REAL NOT NULL DEFAULT 0,
+  blockers INTEGER NOT NULL DEFAULT 0, created_by TEXT, computed_by TEXT, computed_at TEXT, approved_by TEXT, approved_at TEXT, paid_on TEXT, bank_account_id INTEGER REFERENCES bank_accounts(id),
+  journal_id INTEGER, payment_journal_id INTEGER, wps_sha TEXT, wps_at TEXT);
+CREATE TABLE IF NOT EXISTS payslips(
+  id INTEGER PRIMARY KEY, run_id INTEGER NOT NULL REFERENCES payroll_runs(id), employee_id INTEGER NOT NULL REFERENCES employees(id), basic REAL NOT NULL DEFAULT 0, factor REAL NOT NULL DEFAULT 1,
+  earnings TEXT, gross REAL NOT NULL DEFAULT 0, absence_days REAL NOT NULL DEFAULT 0, absence_ded REAL NOT NULL DEFAULT 0, adj_earn REAL NOT NULL DEFAULT 0, adj_ded REAL NOT NULL DEFAULT 0,
+  pasi_base REAL NOT NULL DEFAULT 0, pasi_employee REAL NOT NULL DEFAULT 0, pasi_employer REAL NOT NULL DEFAULT 0, loan_ded REAL NOT NULL DEFAULT 0, net REAL NOT NULL DEFAULT 0, warnings TEXT,
+  cost_center_id INTEGER REFERENCES acc_cost_centers(id), UNIQUE(run_id, employee_id));
+CREATE INDEX IF NOT EXISTS ix_payslips_emp ON payslips(employee_id);
+CREATE TABLE IF NOT EXISTS payroll_adjustments(
+  id INTEGER PRIMARY KEY, employee_id INTEGER NOT NULL REFERENCES employees(id), period TEXT NOT NULL, kind TEXT NOT NULL CHECK (kind IN ('earning','deduction')), name TEXT NOT NULL,
+  amount REAL NOT NULL CHECK (amount > 0), note TEXT, created_by TEXT);
+CREATE INDEX IF NOT EXISTS ix_payroll_adj_period ON payroll_adjustments(period);
+CREATE TABLE IF NOT EXISTS employee_loans(
+  id INTEGER PRIMARY KEY, employee_id INTEGER NOT NULL REFERENCES employees(id), kind TEXT NOT NULL CHECK (kind IN ('advance','qard_hasan')), amount REAL NOT NULL CHECK (amount > 0),
+  installments INTEGER NOT NULL CHECK (installments >= 1), start_period TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','active','paid','cancelled')),
+  reason TEXT, request_id INTEGER, created_by TEXT, approved_by TEXT, approved_at TEXT, disbursed_on TEXT, bank_account_id INTEGER REFERENCES bank_accounts(id), disburse_journal_id INTEGER);
+CREATE INDEX IF NOT EXISTS ix_employee_loans_emp ON employee_loans(employee_id);
+CREATE TABLE IF NOT EXISTS loan_installments(
+  id INTEGER PRIMARY KEY, loan_id INTEGER NOT NULL REFERENCES employee_loans(id), no INTEGER NOT NULL, period TEXT NOT NULL, amount REAL NOT NULL CHECK (amount > 0),
+  status TEXT NOT NULL DEFAULT 'due' CHECK (status IN ('due','deducted','waived','settled')), payslip_id INTEGER REFERENCES payslips(id), UNIQUE(loan_id, no));
+CREATE TABLE IF NOT EXISTS eosb_rules(
+  id INTEGER PRIMARY KEY, grp TEXT NOT NULL CHECK (grp IN ('omani','expat')), valid_from TEXT NOT NULL, tiers TEXT NOT NULL, cap_months REAL, note TEXT, created_by TEXT, UNIQUE(grp, valid_from));
+CREATE TABLE IF NOT EXISTS terminations(
+  id INTEGER PRIMARY KEY, employee_id INTEGER NOT NULL UNIQUE REFERENCES employees(id), end_date TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('resignation','termination','end_of_contract','retirement','death','other')), note TEXT, status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','approved','paid')),
+  service_years REAL NOT NULL DEFAULT 0, last_basic REAL NOT NULL DEFAULT 0, eosb_amount REAL NOT NULL DEFAULT 0, eosb_steps TEXT, leave_days REAL NOT NULL DEFAULT 0, leave_payout REAL NOT NULL DEFAULT 0,
+  loans_due REAL NOT NULL DEFAULT 0, other_dues REAL NOT NULL DEFAULT 0, other_deductions REAL NOT NULL DEFAULT 0, net REAL NOT NULL DEFAULT 0, warnings TEXT, clearance TEXT,
+  created_by TEXT, approved_by TEXT, approved_at TEXT, paid_on TEXT, bank_account_id INTEGER REFERENCES bank_accounts(id), journal_id INTEGER, payment_journal_id INTEGER);
+CREATE TRIGGER IF NOT EXISTS payslip_frozen_i BEFORE INSERT ON payslips WHEN (SELECT status FROM payroll_runs WHERE id = NEW.run_id) NOT IN ('draft','computed')
+BEGIN SELECT RAISE(ABORT, 'an approved payslip is immutable'); END;
+CREATE TRIGGER IF NOT EXISTS payslip_frozen_u BEFORE UPDATE ON payslips WHEN (SELECT status FROM payroll_runs WHERE id = OLD.run_id) NOT IN ('draft','computed')
+BEGIN SELECT RAISE(ABORT, 'an approved payslip is immutable'); END;
+CREATE TRIGGER IF NOT EXISTS payslip_frozen_d BEFORE DELETE ON payslips WHEN (SELECT status FROM payroll_runs WHERE id = OLD.run_id) NOT IN ('draft','computed')
+BEGIN SELECT RAISE(ABORT, 'an approved payslip is immutable'); END;
+
 CREATE INDEX IF NOT EXISTS ix_units_project ON units(project_id);
 CREATE INDEX IF NOT EXISTS ix_inst_booking ON installments(booking_id);
 CREATE INDEX IF NOT EXISTS ix_book_unit ON bookings(unit_id);

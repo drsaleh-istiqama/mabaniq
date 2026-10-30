@@ -70,7 +70,7 @@ class SqliteConn(sqlite3.Connection):
         """Allow the demo reseed to clear the append-only audit table (triggers are re-created by init)."""
         self.execute("DROP TRIGGER IF EXISTS audit_no_update")
         self.execute("DROP TRIGGER IF EXISTS audit_no_delete")
-        for t in ("acc_journal_no_delete", "acc_journal_frozen", "acc_journal_balance", "acc_lines_no_insert", "acc_lines_no_update", "acc_lines_no_delete"):
+        for t in ("acc_journal_no_delete", "acc_journal_frozen", "acc_journal_balance", "acc_lines_no_insert", "acc_lines_no_update", "acc_lines_no_delete", "payslip_frozen_i", "payslip_frozen_u", "payslip_frozen_d"):
             self.execute(f"DROP TRIGGER IF EXISTS {t}")  # 0.23.0: the ledger guards; init() recreates them
 
     def end_maintenance(self) -> None:

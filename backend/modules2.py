@@ -756,7 +756,7 @@ def users(_=Depends(need("users"))):
 class UserIn(BaseModel):
     username: str = Field(min_length=3, max_length=30, pattern=r"^[a-z][a-z0-9._-]+$")
     name: str = Field(min_length=3, max_length=60)
-    role: str = Field(pattern="^(admin|sales|finance|engineer|investor|property_manager|accountant|hr)$")
+    role: str = Field(pattern="^(admin|sales|finance|engineer|investor|property_manager|accountant|hr|payroll)$")
     email: str | None = Field(default=None, max_length=120)  # 0.10.0: enables recovery links, e-mail sign-in and Google matching
 
 

@@ -46,20 +46,20 @@ const scoreC = v => v >= 75 ? 'p-ok' : v >= 50 ? 'p-w' : 'p-b';
 
 /* ---------------- الحالة والتنقل ---------------- */
 const S = {screen: 'ov', projects: [], proj: null, bld: null, plan: 0, me: null};
-const SCREEN_PERM = {hr: 'hr', me: 'hr_self', acc: 'accounting', pmg: 'leasing_pm', lea: 'leasing', ov: 'view', inv: 'inventory', crm: 'leads', fin: 'finance', con: 'construction', svc: 'service', log: 'audit', pre: 'permits', sal: 'kyc', bill: 'invoices', post: 'handover', rep: 'reports', mk: 'leads', adm: 'view'};
+const SCREEN_PERM = {hr: 'hr', pay: 'hr_payroll', me: 'hr_self', acc: 'accounting', pmg: 'leasing_pm', lea: 'leasing', ov: 'view', inv: 'inventory', crm: 'leads', fin: 'finance', con: 'construction', svc: 'service', log: 'audit', pre: 'permits', sal: 'kyc', bill: 'invoices', post: 'handover', rep: 'reports', mk: 'leads', adm: 'view'};
 const SCREEN_ANY = {pre: ['permits', 'land'], post: ['handover', 'oa', 'leasing', 'service'], sal: ['kyc', 'brokers', 'market'], rep: ['reports', 'finance', 'view'], mk: ['leads', 'inventory', 'reports']};  // Unit 7: reports for every staff role (the API filters by permission), marketing for sales/inventory/reports
 const can = p => S.me?.perms.includes(p);
-const SCREEN_MOD = {hr: ['hr'], me: ['hr'], acc: ['accounting'], pmg: ['leasing'], lea: ['leasing'], pre: ['land'], inv: [], crm: ['sales'], mk: ['marketing'], sal: ['sales'], con: ['construction'], post: ['handover', 'leasing'], svc: ['handover'], fin: ['finance'], bill: ['finance'], rep: ['reports']};  // 0.20.0: a screen needs one of its modules (none listed = core)
+const SCREEN_MOD = {hr: ['hr'], pay: ['hr'], me: ['hr'], acc: ['accounting'], pmg: ['leasing'], lea: ['leasing'], pre: ['land'], inv: [], crm: ['sales'], mk: ['marketing'], sal: ['sales'], con: ['construction'], post: ['handover', 'leasing'], svc: ['handover'], fin: ['finance'], bill: ['finance'], rep: ['reports']};  // 0.20.0: a screen needs one of its modules (none listed = core)
 const modOn = m => (S.me?.modules || []).includes(m);
 const canS = s => (SCREEN_ANY[s] || [SCREEN_PERM[s]]).some(can) && (!(SCREEN_MOD[s] || []).length || SCREEN_MOD[s].some(modOn)) && (s !== 'me' || !!S.me?.employee_id);  // 0.25.0: the portal needs a login that is linked to an employee file
 function go(s) {
-  if (!canS(s)) s = canS('ov') ? 'ov' : canS('me') ? 'me' : 'rep';
+  if (!canS(s)) s = canS('ov') ? 'ov' : canS('me') ? 'me' : canS('pay') ? 'pay' : 'rep';
   S.screen = s;
   $$('[data-s]').forEach(b => b.classList.toggle('on', b.dataset.s === s));
   $$('.scr').forEach(x => x.classList.toggle('on', x.id === s));
   localStorage.setItem('mbq-screen', s);
   ({ov: loadOverview, inv: loadInventory, crm: loadCRM, fin: loadFinance, con: () => { loadIPC(); EXT.l_conx(); }, svc: loadService, log: loadAudit,
-    acc: () => EXT.l_acc(), hr: () => EXT.l_hr(), me: () => EXT.l_me(), pmg: () => EXT.l_pm(), lea: () => EXT.l_lea(), pre: () => EXT.l_pre(), sal: () => EXT.l_sal(), bill: () => EXT.l_bill(), post: () => EXT.l_post(), rep: () => EXT.l_rep(), mk: () => EXT.l_mk(), adm: () => EXT.l_adm()})[s]?.()?.catch?.(e => toast(e.message, 1));
+    acc: () => EXT.l_acc(), hr: () => EXT.l_hr(), pay: () => EXT.l_pay(), me: () => EXT.l_me(), pmg: () => EXT.l_pm(), lea: () => EXT.l_lea(), pre: () => EXT.l_pre(), sal: () => EXT.l_sal(), bill: () => EXT.l_bill(), post: () => EXT.l_post(), rep: () => EXT.l_rep(), mk: () => EXT.l_mk(), adm: () => EXT.l_adm()})[s]?.()?.catch?.(e => toast(e.message, 1));
   crumb(); shell(s);
 }
 $$('[data-s]').forEach(b => b.onclick = e => { e.preventDefault(); document.body.classList.remove('nav-open'); go(b.dataset.s); });
@@ -73,6 +73,7 @@ const META = {
   fin: ['عبر الدورة · المالية', 'السيولة والتعثر', 'أرصدة حسابات الضمان المتوقعة لاثني عشر شهرًا، والعملاء المعرّضون للتعثر.'],
   bill: ['عبر الدورة · المالية', 'الفواتير والضمان', 'الفواتير والضريبة، والغرامات والفسخ، والمطابقة البنكية وحساب الضمان والتصدير المحاسبي.'],
   hr: ['عبر الدورة · الموارد البشرية', 'الموارد البشرية', 'الهيكل والموظفون ووثائقهم وتنبيهات انتهائها، والإجازات والحضور وطلبات الموظفين.'],
+  pay: ['عبر الدورة · الموارد البشرية', 'الرواتب', 'مسيّر الرواتب والتأمينات وملف تحويل الأجور، والسلف والقروض الحسنة بلا فائدة، ومكافأة نهاية الخدمة والمخالصة.'],
   me: ['عبر الدورة · الموارد البشرية', 'بوابتي', 'ملفي وأرصدة إجازاتي وطلباتي، وفريقي إن كان لي مرؤوسون.'],
   acc: ['عبر الدورة · المالية', 'المحاسبة', 'دليل الحسابات والقيود المزدوجة وميزان المراجعة ودفتر الأستاذ، مع ترحيل أحداث التأجير تلقائيًا.'],
   pmg: ['3 · التسليم والتشغيل', 'محفظتي (مدير عقاري)', 'العقود والتحصيل داخل نطاقك فقط.'],
@@ -512,6 +513,7 @@ function groupsVis() { $$('.side .grp').forEach(g => { if (g.id === 'pfSec') ret
     if (S.me.role === 'investor') { S.screen = 'rep'; }
     if (S.me.role === 'property_manager') { S.screen = 'pmg'; }
     if (S.me.role === 'employee') { S.screen = 'me'; }
+    if (S.me.role === 'payroll' && !S.me.employee_id) { S.screen = 'pay'; }
     if (S.me.must_change) { EXT.changePw(true); return; }
     if (S.me.needs_2fa) { await EXT.setup2fa(); $('#mbox').insertAdjacentHTML('afterbegin', '<div class="ai"><b class="k">مطلوب:</b> التحقق الثنائي إلزامي لدورك قبل الوصول إلى البيانات.</div>'); return; }
     await refreshAll(); } catch (e) { toast('تعذّر الاتصال بالخادم: ' + e.message, 1); }
@@ -543,7 +545,7 @@ const tryDo = async (fn, ok) => { try { const r = await fn(); if (ok) toast(type
 const projOpts = (cur) => S.projects.map(p => `<option value="${p.id}" ${p.id === cur ? 'selected' : ''}>${esc(p.name)}</option>`).join('');
 
 const EXT = {
-  cur: {hr: 'ov', me: 'me', lea: 'ov', pre: 'land', post: 'hand', sal: 'kyc', bill: 'inv', adm: 'users', rep: 'ready', mk: 'board'},
+  cur: {hr: 'ov', pay: 'runs', me: 'me', lea: 'ov', pre: 'land', post: 'hand', sal: 'kyc', bill: 'inv', adm: 'users', rep: 'ready', mk: 'board'},
   data: {},
   sub(id, k) { this.cur[id] = k; this.load(id); },
   load(id) { return this['l_' + id](); },
@@ -1634,7 +1636,7 @@ EXT.l_acc = async function () {
     const u = s.unposted, bad = Math.abs(s.ledger_diff) > 0.0005, jc = s.journals;
     B.innerHTML = KP([['بدء المحاسبة', fmtDate(s.start)], ['الحسابات', N(s.accounts)], ['قيود مرحَّلة', N((jc.posted || 0) + (jc.reversed || 0))], ['بانتظار الاعتماد', N(jc.pending || 0)], ['مسودات', N(jc.draft || 0)],
         ['توازن الدفتر', bad ? pill('مختل ' + A3(s.ledger_diff), 'p-b') : pill('متوازن', 'p-ok')]])
-      + BOX('أحداث لم تُرحَّل بعد', u.total ? T(['النوع', 'العدد'], Object.entries(u.counts).filter(([, v]) => v).map(([a, v]) => `<tr><td>${esc({dues: 'استحقاقات مستحقة', payments: 'حركات تحصيل', charity: 'تبرعات التأخير', expenses: 'مصروفات عقارات', statements: 'كشوف الملاك', deposits: 'تسويات التأمين'}[a])}</td><td>${pill(N(v), 'p-w')}</td></tr>`))
+      + BOX('أحداث لم تُرحَّل بعد', u.total ? T(['النوع', 'العدد'], Object.entries(u.counts).filter(([, v]) => v).map(([a, v]) => `<tr><td>${esc({dues: 'استحقاقات مستحقة', payments: 'حركات تحصيل', charity: 'تبرعات التأخير', expenses: 'مصروفات عقارات', statements: 'كشوف الملاك', deposits: 'تسويات التأمين', payroll: 'رواتب وسلف ومخالصات'}[a])}</td><td>${pill(N(v), 'p-w')}</td></tr>`))
         : '<p class="muted">كل أحداث التأجير مرحَّلة إلى الدفاتر.</p>', can('accounting') ? '<button class="btn p" data-call="EXT.accSync">ترحيل الآن</button>' : '')
       + BOX('الرصيد الافتتاحي', s.opening ? `<p>مرحَّل بالقيد <span class="num">${esc(s.opening.number)}</span> بتاريخ ${fmtDate(s.opening.jdate)}.</p>` : '<p class="muted">لم يُدخل بعد — من تبويب «الافتتاحي والفترات».</p>');
   } else if (k === 'tb') {
@@ -2113,7 +2115,7 @@ EXT.hrEmpForm = async id => {
 
 /* ---- بوابة الموظف */
 EXT.l_me = async function () {
-  const tabs = [['me', 'بياناتي'], ['lv', 'إجازاتي'], ['rq', 'طلباتي']].concat(can('hr_manager') ? [['tm', 'فريقي']] : []), el = $('#me'), k = this.cur.me;
+  const tabs = [['me', 'بياناتي'], ['lv', 'إجازاتي'], ['pay', 'قسائمي'], ['rq', 'طلباتي']].concat(can('hr_manager') ? [['tm', 'فريقي']] : []), el = $('#me'), k = this.cur.me;
   el.innerHTML = SUB0('me', tabs, k) + '<div id="meB">…</div>';
   const B = $('#meB');
   if (k === 'me') {
@@ -2131,6 +2133,8 @@ EXT.l_me = async function () {
     const note = () => { const t = ty.find(x => x.key === $('#ltk').value); $('#ltN').textContent = t ? [t.needs_doc ? 'يلزمه مرفق بعد الإرسال.' : '', t.needs_hr ? 'تعتمده الموارد البشرية بعد مديرك.' : '', t.provisional ? 'قيمه مبدئية.' : ''].filter(Boolean).join(' ') : ''; };
     $('#ltk').onchange = note; note();
     $('#ltGo').onclick = async () => { try { await post('/hr/me/leave', {type_key: $('#ltk').value, from_date: $('#ltf').value, to_date: $('#ltu').value, reason: $('#ltr').value.trim()}); toast('أُرسل الطلب'); EXT.l_me(); } catch (e) { $('#ltE').textContent = e.message; } };
+  } else if (k === 'pay') {
+    await EXT.mePayslips(B);
   } else if (k === 'rq') {
     const R = await api('/hr/me/requests');
     B.innerHTML = BOX('طلب جديد', `<div class="grid2">${HS('rqk', 'النوع', [['letter', 'خطاب (تعريف، شهادة عمل)'], ['advance', 'سلفة'], ['other', 'أخرى (تغيير بيانات، استفسار)']], 'letter')}${HF('rqa', 'المبلغ (للسلفة فقط)', '', 'number', 'min="0" step="0.001"')}</div>${HF('rqd', 'التفاصيل', '', 'text', 'maxlength="500"')}<div class="err" id="rqE"></div><div class="btns" style="margin-top:10px"><button class="btn p" id="rqGo">إرسال</button></div>`)
@@ -2144,3 +2148,188 @@ EXT.l_me = async function () {
   }
 };
 EXT.meSave = async () => { await tryDo(() => api('/hr/me', {method: 'PATCH', body: {phone: $('#mp').value, email: $('#me_').value, address: $('#ma').value, emergency_contact: $('#mem').value}}), r => r.changed.length ? 'حُفظت بياناتك' : 'لا تغيير'); };
+
+/* ================================================================ الرواتب (0.26.0) */
+EXT.cur.pay = 'runs';
+const PAY_ST = {draft: ['مسودة', 'p-bl'], computed: ['محتسب', 'p-w'], approved: ['معتمد', 'p-ok'], paid: ['مدفوع', 'p-ok']};
+const PAY_LOAN = {pending: ['بانتظار الاعتماد', 'p-w'], active: ['جارٍ', 'p-ok'], paid: ['مسدَّد', 'p-bl'], cancelled: ['ملغى', 'p-b']};
+const PAY_TST = {draft: ['مسودة', 'p-w'], approved: ['معتمدة', 'p-ok'], paid: ['مدفوعة', 'p-bl']};
+const P3 = v => new Intl.NumberFormat('ar-OM-u-nu-latn', {minimumFractionDigits: 3, maximumFractionDigits: 3}).format(+v || 0);
+const payMonth = () => new Date().toISOString().slice(0, 7);
+const payPrev = () => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1); return d.toISOString().slice(0, 7); };
+const payBanks = () => api('/acc/banks').catch(() => []);
+const payWarn = w => (w || []).map(x => `<small class="${x.blocker ? 'bad' : 'muted'}">${x.blocker ? '⛔ ' : ''}${esc(x.msg)}</small>`).join('<br>');
+
+EXT.l_pay = async function () {
+  const tabs = [['runs', 'المسيّرات'], ['sal', 'هياكل الرواتب'], ['adj', 'التسويات'], ['loan', 'السلف والقروض الحسنة'], ['rates', 'المعدلات'], ['end', 'نهاية الخدمة']], el = $('#pay'), k = this.cur.pay;
+  el.innerHTML = SUB0('pay', tabs, k) + '<div id="payB">…</div>';
+  const B = $('#payB');
+  if (k === 'runs') {
+    const rid = this.payRun;
+    if (rid) return EXT.payRunView(rid);
+    const R = await api('/hr/payroll/runs');
+    B.innerHTML = `<div class="toolbar"><input id="prp" type="month" value="${payPrev()}" max="${payMonth()}"> <button class="btn p" data-call="EXT.payRunNew">+ مسيّر</button></div>`
+      + T(['الشهر', 'الحال', 'القسائم', 'الإجمالي', 'الصافي', 'عوائق', 'أُحتسب بواسطة', 'اعتُمد بواسطة'], R.map(r => `<tr data-call="EXT.payRunOpen" data-args="${J([r.id])}" style="cursor:pointer"><td>${esc(r.period)}</td><td>${pill(...PAY_ST[r.status])}</td><td>${N(r.headcount)}</td><td>${P3(r.gross)}</td><td>${P3(r.net)}</td><td>${r.blockers ? pill(N(r.blockers), 'p-b') : '0'}</td><td>${esc(r.computed_by || '—')}</td><td>${esc(r.approved_by || '—')}</td></tr>`), 'لا مسيّرات بعد.');
+  } else if (k === 'sal') {
+    const S_ = await api('/hr/payroll/salaries');
+    B.innerHTML = hrNote('فتح هذه القائمة مسجَّل في التدقيق. الراتب لا يراه إلا من لديه صلاحية الرواتب وصاحبه.') + `<div class="toolbar"><button class="btn p" data-call="EXT.paySalForm">+ هيكل راتب جديد</button></div>`
+      + T(['الرقم', 'الموظف', 'القسم', 'سريان الهيكل', 'الأساسي', 'البدلات', 'الإجمالي', 'التأمينات', ''], S_.map(s => `<tr><td>${esc(s.number)}</td><td>${esc(s.name)}</td><td>${esc(s.department || '—')}</td><td>${s.effective_from ? fmtDate(s.effective_from) : pill('بلا هيكل', 'p-b')}</td><td>${s.basic == null ? '—' : P3(s.basic)}</td><td>${s.allowances == null ? '—' : P3(s.allowances)}</td><td><b>${s.total == null ? '—' : P3(s.total)}</b></td><td>${s.pasi_applies ? 'نعم' : '—'}</td>
+        <td><button class="btn" data-call="EXT.paySalForm" data-args="${J([s.employee_id])}">هيكل جديد</button></td></tr>`), 'لا موظفين.');
+  } else if (k === 'adj') {
+    const p = this.payAdjP || payMonth(), A_ = await api(`/hr/payroll/adjustments?period=${p}`);
+    B.innerHTML = `<div class="toolbar"><label>الشهر</label> <input id="adp" type="month" value="${p}"> <button class="btn p" data-call="EXT.payAdjForm" data-args="${J([p])}">+ تسوية</button></div>${hrNote('استحقاق أو استقطاع لمرة واحدة في شهر لم يُعتمد مسيّره (مكافأة، جزاء، تصحيح). بعد الاعتماد تُسجَّل في الشهر التالي.')}`
+      + T(['الموظف', 'النوع', 'البند', 'المبلغ', 'ملاحظة', ''], A_.map(a => `<tr><td>${esc(a.name)} <small class="muted">${esc(a.number)}</small></td><td>${a.kind === 'earning' ? pill('استحقاق', 'p-ok') : pill('استقطاع', 'p-w')}</td><td>${esc(a.item)}</td><td>${P3(a.amount)}</td><td>${esc(a.note || '')}</td><td><button class="btn" data-call="EXT.payAdjDel" data-args="${J([a.id])}">حذف</button></td></tr>`), 'لا تسويات في هذا الشهر.');
+    $('#adp').onchange = e => { EXT.payAdjP = e.target.value; EXT.l_pay(); };
+  } else if (k === 'loan') {
+    const L = await api('/hr/payroll/loans');
+    B.innerHTML = hrNote('لا فائدة ولا رسوم على أي سلفة أو قرض حسن: يُسدَّد المبلغ المصروف بالتمام، ويُخصم قسطه من الراتب. يعتمد القرضَ شخصٌ غير من أنشأه.') + `<div class="toolbar"><button class="btn p" data-call="EXT.payLoanForm">+ سلفة / قرض حسن</button></div>`
+      + T(['الموظف', 'النوع', 'المبلغ', 'الأقساط', 'يبدأ', 'المتبقي', 'الحال', ''], L.map(l => `<tr><td>${esc(l.name)} <small class="muted">${esc(l.number)}</small></td><td>${l.kind === 'advance' ? 'سلفة' : 'قرض حسن'}</td><td>${P3(l.amount)}</td><td>${N(l.installments)}</td><td>${esc(l.start_period)}</td><td>${P3(l.outstanding)}</td><td>${pill(...PAY_LOAN[l.status])}</td>
+        <td>${l.status === 'pending' ? `<button class="btn p" data-call="EXT.payLoanApprove" data-args="${J([l.id])}">اعتماد وصرف</button> ` : ''}${l.status === 'pending' || (l.status === 'active' && !l.disburse_journal_id) ? `<button class="btn" data-call="EXT.payLoanCancel" data-args="${J([l.id])}">إلغاء</button>` : ''}<button class="btn" data-call="EXT.payLoanView" data-args="${J([l.id])}">الجدول</button></td></tr>`), 'لا سلف أو قروض.');
+  } else if (k === 'rates') {
+    const R = await api('/hr/payroll/rates'), unset = R.filter(r => r.current && r.value == null);
+    B.innerHTML = (unset.length ? BOX('معدلات لم تُدخَل بعد', `<p>${unset.map(r => esc(r.label)).join('، ')} — لا يُعتمد مسيّر لعامل خاضع للتأمينات الاجتماعية قبل إدخالها. تُدخَل بمصدرها (نشرة أو لائحة أو مراجعة مختص)؛ لا تضع المنصة رقمًا من عندها.</p>`) : '')
+      + `<div class="toolbar"><button class="btn p" data-call="EXT.payRateForm">+ معدل جديد</button></div>`
+      + T(['المعدل', 'القيمة', 'سريان', 'الحال', 'المصدر', 'أدخله'], R.map(r => `<tr><td>${esc(r.label)}</td><td>${r.value == null ? pill('لم يُدخَل', 'p-b') : F2(r.value)}</td><td>${fmtDate(r.valid_from)}${r.current ? ' ' + pill('الحالي', 'p-ok') : ''}</td><td>${r.provisional ? pill('مبدئي', 'p-w') : pill('مؤكد', 'p-ok')}</td><td>${esc(r.note || '')}</td><td>${esc(r.created_by || '—')}</td></tr>`), 'لا معدلات.')
+      + BOX('بدلات الرواتب', T(['البدل', 'يدخل في وعاء التأمينات'], (await api('/hr/payroll/components')).map(c => `<tr><td>${esc(c.name)}</td><td>${c.pasi_base ? 'نعم' : '—'}</td></tr>`)), '<button class="btn" data-call="EXT.payCompForm">+ بدل</button>');
+  } else if (k === 'end') {
+    const [R, Tm] = await Promise.all([api('/hr/eosb/rules'), api('/hr/terminations')]);
+    if (this.payTerm) return EXT.payTermView(this.payTerm);
+    B.innerHTML = BOX('قواعد مكافأة نهاية الخدمة', hrNote('لا تضع المنصة قاعدة من عندها: بلا قاعدة تكون المكافأة «غير معلومة» ولا تُعتمد مخالصة. تُدخَل القاعدة بشرائح (أيام من الأجر الأساسي عن كل سنة) ومصدرها.')
+        + T(['الفئة', 'سريان', 'الشرائح', 'سقف (أشهر)', 'المصدر'], R.map(r => `<tr><td>${r.grp === 'omani' ? 'العُمانيون' : 'الوافدون'}</td><td>${fmtDate(r.valid_from)}${r.current ? ' ' + pill('الحالية', 'p-ok') : ''}</td><td>${r.tiers.map(t => (t.to_years == null ? 'ما بعد ذلك' : 'حتى ' + N(t.to_years) + ' سنوات') + ': ' + F2(t.days_per_year) + ' يومًا').join(' · ')}</td><td>${r.cap_months ? F2(r.cap_months) : '—'}</td><td>${esc(r.note || '')}</td></tr>`), 'لا قواعد مُدخَلة.'), '<button class="btn p" data-call="EXT.payRuleForm">+ قاعدة</button>')
+      + BOX('المخالصات', `<div class="toolbar"><button class="btn p" data-call="EXT.payTermForm">+ مخالصة نهاية خدمة</button></div>` + T(['الموظف', 'تاريخ النهاية', 'السبب', 'المكافأة', 'الصافي', 'الحال'], Tm.map(t => `<tr data-call="EXT.payTermOpen" data-args="${J([t.id])}" style="cursor:pointer"><td>${esc(t.name)} <small class="muted">${esc(t.number)}</small></td><td>${fmtDate(t.end_date)}</td><td>${({resignation: 'استقالة', termination: 'إنهاء من صاحب العمل', end_of_contract: 'انتهاء العقد', retirement: 'تقاعد', death: 'وفاة', other: 'أخرى'})[t.kind]}</td><td>${P3(t.eosb_amount)}</td><td>${P3(t.net)}</td><td>${pill(...PAY_TST[t.status])}</td></tr>`), 'لا مخالصات.'));
+  }
+};
+EXT.payRunOpen = id => { EXT.payRun = id; EXT.l_pay(); };
+EXT.payRunBack = () => { EXT.payRun = null; EXT.l_pay(); };
+EXT.payRunNew = async () => { const r = await tryDo(() => post('/hr/payroll/runs', {period: $('#prp').value}), 'أُنشئ المسيّر'); EXT.payRun = r.id; EXT.l_pay(); };
+EXT.payRunView = async function (rid) {
+  const B = $('#payB'), r = await api('/hr/payroll/runs/' + rid), me = S.me.username;
+  B.innerHTML = `<div class="toolbar"><button class="btn" data-call="EXT.payRunBack">← المسيّرات</button> <b>${esc(r.period)}</b> ${pill(...PAY_ST[r.status])}
+      ${r.status === 'draft' || r.status === 'computed' ? `<button class="btn p" data-call="EXT.payRunDo" data-args="${J([rid, 'compute'])}">${r.status === 'draft' ? 'احتساب' : 'إعادة الاحتساب'}</button>` : ''}
+      ${r.status === 'computed' ? `<button class="btn p" data-call="EXT.payRunDo" data-args="${J([rid, 'approve'])}" ${r.computed_by === me ? 'disabled title="لا تعتمد مسيّرًا احتسبته"' : ''}>اعتماد</button>` : ''}
+      ${r.status === 'approved' ? `<button class="btn p" data-call="EXT.payRunPay" data-args="${J([rid])}">تسجيل الدفع</button>` : ''}
+      ${r.status === 'approved' || r.status === 'paid' ? `<button class="btn" data-call="EXT.payWps" data-args="${J([rid])}">ملف تحويل الأجور</button>` : ''}</div>`
+    + KP([['القسائم', N(r.headcount)], ['الإجمالي', P3(r.gross)], ['الصافي', P3(r.net)], ['تأمينات العامل', P3(r.pasi_employee)], ['تأمينات صاحب العمل', P3(r.pasi_employer)], ['عوائق', N(r.blockers)]])
+    + (r.computed_by ? hrNote(`احتسبه ${esc(r.computed_by)}${r.approved_by ? ' · اعتمده ' + esc(r.approved_by) : ' · يعتمده شخص آخر لديه صلاحية الرواتب'}${r.paid_on ? ' · دُفع ' + fmtDate(r.paid_on) : ''}`) : '')
+    + (r.missing.length ? BOX('خارج المسيّر', T(['الموظف', 'السبب'], r.missing.map(m => `<tr><td>${esc(m.name)} <small class="muted">${esc(m.number)}</small></td><td>${esc(m.reason)}</td></tr>`))) : '')
+    + T(['الموظف', 'الإجمالي', 'تسويات', 'غياب', 'تأمينات العامل', 'قسط سلفة', 'الصافي', 'تنبيهات', ''], r.payslips.map(s => `<tr><td>${esc(s.name)} <small class="muted">${esc(s.number)}</small></td><td>${P3(s.gross)}</td><td>${P3(s.adj_earn - s.adj_ded)}</td><td>${P3(s.absence_ded)}${s.absence_days ? ' <small class="muted">(' + F2(s.absence_days) + ' يوم)</small>' : ''}</td><td>${P3(s.pasi_employee)}</td><td>${P3(s.loan_ded)}</td><td><b>${P3(s.net)}</b></td><td>${payWarn(s.warnings)}</td>
+      <td><a class="btn" href="/api/hr/payroll/payslips/${s.id}.pdf" target="_blank" rel="noopener">قسيمة</a></td></tr>`), 'اضغط «احتساب».');
+};
+EXT.payRunDo = async (rid, what) => {
+  try { const r = await tryDo(() => post(`/hr/payroll/runs/${rid}/${what}`), what === 'compute' ? (x => `احتُسب: ${N(x.headcount)} قسيمة${x.blockers ? ' — عوائق ' + N(x.blockers) : ''}`) : (x => x.note || 'اعتُمد المسيّر')); if (what === 'compute' && r.skipped.length) toast(`${N(r.skipped.length)} موظفًا بلا هيكل راتب`, 1); } catch (e) { /* toast shown */ }
+  EXT.payRunView(rid);
+};
+EXT.payRunPay = async rid => {
+  const banks = (await payBanks()).filter(b => b.active);
+  modal(`<h3>تسجيل دفع الرواتب</h3>${HF('ppd', 'تاريخ الدفع', hrDay(), 'date')}${banks.length ? HS('ppb', 'الحساب البنكي (يُرحَّل منه الدفع إلى المحاسبة)', [['', '— بلا ترحيل —']].concat(banks.map(b => [b.id, b.name])), '') : hrNote('المحاسبة غير مفعَّلة أو لا صلاحية لك عليها: يُسجَّل الدفع بلا قيد.')}<div class="err" id="ppE"></div>
+    <div class="btns" style="margin-top:12px"><button class="btn p" id="ppGo">تسجيل</button> <button class="btn" data-call="closeModal">إلغاء</button></div>`);
+  $('#ppGo').onclick = async () => { try { const r = await post(`/hr/payroll/runs/${rid}/pay`, {paid_on: $('#ppd').value, bank_account_id: $('#ppb') ? (+$('#ppb').value || null) : null}); closeModal(); toast(r.note || 'سُجّل الدفع', !!r.note); EXT.payRunView(rid); } catch (e) { $('#ppE').textContent = e.message; } };
+};
+EXT.payWps = async rid => {
+  const w = await tryDo(() => api(`/hr/payroll/runs/${rid}/wps`));
+  modal(`<h3>ملف تحويل الأجور — ${esc(w.period)}</h3>${KP([['السطور', N(w.lines.length)], ['الإجمالي', P3(w.total)], ['الحالة', w.ready ? 'جاهز' : 'يحتاج إصلاحًا']])}
+    ${w.problems.length ? T(['الموظف', 'المشكلة', 'الخطورة'], w.problems.map(p => `<tr><td>${esc(p.name)} <small class="muted">${esc(p.number)}</small></td><td>${esc(p.msg)}</td><td>${p.error ? pill('يمنع التصدير', 'p-b') : pill('تنبيه', 'p-w')}</td></tr>`)) : '<p>لا مشكلات.</p>'}
+    ${hrNote('الصيغة ملف CSV عام؛ تُضبط صيغة كل بنك عند تزويدنا بها. الملف يحمل بصمة تُسجَّل في التدقيق.')}<div class="btns" style="margin-top:12px">${w.ready ? `<a class="btn p" href="/api/hr/payroll/runs/${rid}/wps?fmt=csv">تنزيل الملف</a>` : ''} <button class="btn" data-call="closeModal">إغلاق</button></div>`);
+};
+EXT.paySalForm = async eid => {
+  const [S_, C] = await Promise.all([api('/hr/payroll/salaries'), api('/hr/payroll/components')]), cur = S_.find(x => x.employee_id === eid), allow = C.filter(c => c.kind === 'earning' && !c.system);
+  modal(`<h3>هيكل راتب جديد</h3>${HS('psE', 'الموظف', S_.map(s => [s.employee_id, `${s.number} — ${s.name}`]), eid || '')}${HF('psD', 'يسري من', hrDay(), 'date')}${HF('psB', 'الأجر الأساسي (ر.ع)', cur && cur.basic != null ? cur.basic : '', 'number', 'min="0" step="0.001"')}
+    ${allow.map(c => HF('psL' + c.id, c.name + (c.pasi_base ? ' (في وعاء التأمينات)' : ''), '', 'number', 'min="0" step="0.001"')).join('')}${HF('psN', 'ملاحظة', '', 'text', 'maxlength="200"')}<div class="err" id="psErr"></div>
+    <div class="btns" style="margin-top:12px"><button class="btn p" id="psGo">حفظ</button> <button class="btn" data-call="closeModal">إلغاء</button></div>`);
+  $('#psGo').onclick = async () => {
+    try { await post('/hr/payroll/structures', {employee_id: +$('#psE').value, effective_from: $('#psD').value, basic: +$('#psB').value || 0, note: $('#psN').value.trim(), lines: allow.map(c => ({component_id: c.id, amount: +$('#psL' + c.id).value || 0})).filter(l => l.amount > 0)}); closeModal(); toast('حُفظ الهيكل'); EXT.l_pay(); } catch (e) { $('#psErr').textContent = e.message; }
+  };
+};
+EXT.payAdjForm = async p => {
+  const S_ = await api('/hr/payroll/salaries');
+  modal(`<h3>تسوية راتب — ${esc(p)}</h3>${HS('paE', 'الموظف', S_.map(s => [s.employee_id, `${s.number} — ${s.name}`]), '')}${HS('paK', 'النوع', [['earning', 'استحقاق'], ['deduction', 'استقطاع']], 'earning')}${HF('paN', 'البند', '', 'text', 'maxlength="60"')}${HF('paA', 'المبلغ (ر.ع)', '', 'number', 'min="0" step="0.001"')}${HF('paT', 'ملاحظة', '', 'text')}
+    <div class="err" id="paErr"></div><div class="btns" style="margin-top:12px"><button class="btn p" id="paGo">إضافة</button> <button class="btn" data-call="closeModal">إلغاء</button></div>`);
+  $('#paGo').onclick = async () => { try { await post('/hr/payroll/adjustments', {employee_id: +$('#paE').value, period: p, kind: $('#paK').value, name: $('#paN').value.trim(), amount: +$('#paA').value || 0, note: $('#paT').value.trim()}); closeModal(); toast('أُضيفت التسوية'); EXT.l_pay(); } catch (e) { $('#paErr').textContent = e.message; } };
+};
+EXT.payAdjDel = async id => { if (!confirm('حذف التسوية؟')) return; await tryDo(() => api('/hr/payroll/adjustments/' + id, {method: 'DELETE'}), 'حُذفت'); EXT.l_pay(); };
+EXT.payLoanForm = async () => {
+  const S_ = await api('/hr/payroll/salaries');
+  modal(`<h3>سلفة / قرض حسن</h3>${HS('plE', 'الموظف', S_.map(s => [s.employee_id, `${s.number} — ${s.name}`]), '')}${HS('plK', 'النوع', [['advance', 'سلفة (حتى 12 قسطًا)'], ['qard_hasan', 'قرض حسن']], 'advance')}${HF('plA', 'المبلغ (ر.ع)', '', 'number', 'min="0" step="0.001"')}${HF('plN', 'عدد الأقساط', '3', 'number', 'min="1" max="60"')}${HF('plS', 'أول قسط في شهر', payMonth(), 'month')}${HF('plR', 'السبب', '', 'text', 'maxlength="200"')}
+    ${hrNote('لا فائدة ولا رسوم: يُسدَّد المبلغ بالتمام.')}<div class="err" id="plErr"></div><div class="btns" style="margin-top:12px"><button class="btn p" id="plGo">إنشاء الطلب</button> <button class="btn" data-call="closeModal">إلغاء</button></div>`);
+  $('#plGo').onclick = async () => { try { await post('/hr/payroll/loans', {employee_id: +$('#plE').value, kind: $('#plK').value, amount: +$('#plA').value || 0, installments: +$('#plN').value || 1, start_period: $('#plS').value, reason: $('#plR').value.trim()}); closeModal(); toast('أُنشئ الطلب — يعتمده شخص آخر'); EXT.l_pay(); } catch (e) { $('#plErr').textContent = e.message; } };
+};
+EXT.payLoanApprove = async id => {
+  const banks = (await payBanks()).filter(b => b.active);
+  modal(`<h3>اعتماد وصرف</h3>${HF('plD', 'تاريخ الصرف', hrDay(), 'date')}${banks.length ? HS('plB', 'يُصرف من', [['', '— بلا ترحيل —']].concat(banks.map(b => [b.id, b.name])), '') : ''}<div class="err" id="plE2"></div>
+    <div class="btns" style="margin-top:12px"><button class="btn p" id="plGo2">اعتماد</button> <button class="btn" data-call="closeModal">إلغاء</button></div>`);
+  $('#plGo2').onclick = async () => { try { const r = await post(`/hr/payroll/loans/${id}/approve`, {disbursed_on: $('#plD').value, bank_account_id: $('#plB') ? (+$('#plB').value || null) : null}); closeModal(); toast(r.note || 'اعتُمد وصُرف', !!r.note); EXT.l_pay(); } catch (e) { $('#plE2').textContent = e.message; } };
+};
+EXT.payLoanCancel = async id => { const reason = prompt('سبب الإلغاء:', ''); if (!reason || reason.trim().length < 3) return; await tryDo(() => post(`/hr/payroll/loans/${id}/cancel`, {reason}), 'أُلغي'); EXT.l_pay(); };
+EXT.payLoanView = async id => {
+  const l = await api('/hr/payroll/loans/' + id);
+  modal(`<h3>جدول السداد</h3>${KP([['المبلغ', P3(l.amount)], ['الأقساط', N(l.installments)], ['الحال', PAY_LOAN[l.status][0]]])}${T(['القسط', 'الشهر', 'المبلغ', 'الحال'], l.schedule.map(s => `<tr><td>${N(s.no)}</td><td>${esc(s.period)}</td><td>${P3(s.amount)}</td><td>${({due: 'مستحق', deducted: 'خُصم', waived: 'أُسقط', settled: 'سُوّي في المخالصة'})[s.status]}</td></tr>`), 'لم يُعتمد بعد.')}<div class="btns"><button class="btn p" data-call="closeModal">إغلاق</button></div>`);
+};
+EXT.payRateForm = () => {
+  modal(`<h3>معدل جديد</h3>${HS('prK', 'المعدل', [['pasi_employee_pct', 'حصة العامل من التأمينات ٪'], ['pasi_employer_pct', 'حصة صاحب العمل من التأمينات ٪'], ['pasi_ceiling', 'سقف الأجر الخاضع للتأمينات (ر.ع)'], ['day_divisor', 'قاسم الأجر اليومي']], 'pasi_employee_pct')}${HF('prV', 'القيمة', '', 'number', 'step="0.001"')}${HF('prD', 'يسري من', hrDay(), 'date')}${HF('prN', 'المصدر (نشرة، لائحة، مختص)', '', 'text', 'maxlength="200"')}
+    <div class="err" id="prE"></div><div class="btns" style="margin-top:12px"><button class="btn p" id="prGo">حفظ</button> <button class="btn" data-call="closeModal">إلغاء</button></div>`);
+  $('#prGo').onclick = async () => { try { await post('/hr/payroll/rates', {key: $('#prK').value, value: +$('#prV').value, valid_from: $('#prD').value, note: $('#prN').value.trim()}); closeModal(); toast('حُفظ المعدل'); EXT.l_pay(); } catch (e) { $('#prE').textContent = e.message; } };
+};
+EXT.payCompForm = () => {
+  modal(`<h3>بدل جديد</h3>${HF('pcK', 'المفتاح (حروف لاتينية)', '', 'text', 'maxlength="30" dir="ltr"')}${HF('pcN', 'الاسم', '', 'text')}<label><input type="checkbox" id="pcP"> يدخل في وعاء التأمينات</label><div class="err" id="pcE"></div>
+    <div class="btns" style="margin-top:12px"><button class="btn p" id="pcGo">حفظ</button> <button class="btn" data-call="closeModal">إلغاء</button></div>`);
+  $('#pcGo').onclick = async () => { try { await post('/hr/payroll/components', {key: $('#pcK').value.trim(), name: $('#pcN').value.trim(), pasi_base: $('#pcP').checked}); closeModal(); toast('أُضيف البدل'); EXT.l_pay(); } catch (e) { $('#pcE').textContent = e.message; } };
+};
+EXT.payRuleForm = () => {
+  modal(`<h3>قاعدة مكافأة نهاية الخدمة</h3>${HS('pgG', 'الفئة', [['expat', 'الوافدون'], ['omani', 'العُمانيون']], 'expat')}${HF('pgD', 'يسري من', hrDay(), 'date')}
+    <label>الشرائح (أيام من الأجر الأساسي عن كل سنة خدمة)</label><div id="pgT"><div class="grid2"><input class="pgY" type="number" step="0.5" placeholder="حتى سنة (فارغ = ما بعده)"><input class="pgP" type="number" step="0.5" placeholder="أيام عن كل سنة"></div></div><button class="btn" id="pgAdd">+ شريحة</button>
+    ${HF('pgC', 'سقف بأشهر الأجر (اختياري)', '', 'number', 'step="0.5"')}${HF('pgN', 'المصدر (مادة القانون، تعميم، مختص)', '', 'text', 'maxlength="300"')}<div class="err" id="pgE"></div>
+    <div class="btns" style="margin-top:12px"><button class="btn p" id="pgGo">حفظ</button> <button class="btn" data-call="closeModal">إلغاء</button></div>`);
+  $('#pgAdd').onclick = () => $('#pgT').insertAdjacentHTML('beforeend', '<div class="grid2"><input class="pgY" type="number" step="0.5" placeholder="حتى سنة (فارغ = ما بعده)"><input class="pgP" type="number" step="0.5" placeholder="أيام عن كل سنة"></div>');
+  $('#pgGo').onclick = async () => {
+    const ys = $$('.pgY'), ps = $$('.pgP'), tiers = ys.map((y, i) => ({to_years: y.value === '' ? null : +y.value, days_per_year: +ps[i].value || 0})).filter(t => t.days_per_year > 0);
+    try { await post('/hr/eosb/rules', {grp: $('#pgG').value, valid_from: $('#pgD').value, tiers, cap_months: +$('#pgC').value || null, note: $('#pgN').value.trim()}); closeModal(); toast('حُفظت القاعدة'); EXT.l_pay(); } catch (e) { $('#pgE').textContent = e.message; }
+  };
+};
+EXT.payTermForm = async () => {
+  const S_ = await api('/hr/payroll/salaries');
+  modal(`<h3>مخالصة نهاية خدمة</h3>${HS('ptE', 'الموظف', S_.map(s => [s.employee_id, `${s.number} — ${s.name}`]), '')}${HF('ptD', 'تاريخ النهاية', hrDay(), 'date')}${HS('ptK', 'السبب', [['resignation', 'استقالة'], ['termination', 'إنهاء من صاحب العمل'], ['end_of_contract', 'انتهاء العقد'], ['retirement', 'تقاعد'], ['death', 'وفاة'], ['other', 'أخرى']], 'resignation')}${HF('ptN', 'ملاحظة', '', 'text', 'maxlength="300"')}
+    ${HF('ptU', 'مستحقات أخرى (ر.ع)', '0', 'number', 'min="0" step="0.001"')}${HF('ptX', 'استقطاعات أخرى (ر.ع)', '0', 'number', 'min="0" step="0.001"')}<div class="err" id="ptErr"></div>
+    <div class="btns" style="margin-top:12px"><button class="btn p" id="ptGo">إعداد المسودة</button> <button class="btn" data-call="closeModal">إلغاء</button></div>`);
+  $('#ptGo').onclick = async () => { try { const r = await post('/hr/terminations', {employee_id: +$('#ptE').value, end_date: $('#ptD').value, kind: $('#ptK').value, note: $('#ptN').value.trim(), other_dues: +$('#ptU').value || 0, other_deductions: +$('#ptX').value || 0}); closeModal(); EXT.payTerm = r.id; EXT.l_pay(); } catch (e) { $('#ptErr').textContent = e.message; } };
+};
+EXT.payTermOpen = id => { EXT.payTerm = id; EXT.l_pay(); };
+EXT.payTermBack = () => { EXT.payTerm = null; EXT.l_pay(); };
+EXT.payTermView = async function (id) {
+  const t = await api('/hr/terminations/' + id), me = S.me.username, B = $('#payB'), bad = t.warnings.some(w => w.blocker);
+  B.innerHTML = `<div class="toolbar"><button class="btn" data-call="EXT.payTermBack">← المخالصات</button> <b>${esc(t.name)}</b> ${pill(...PAY_TST[t.status])}
+      ${t.status === 'draft' ? `<button class="btn" data-call="EXT.payTermEdit" data-args="${J([id])}">تعديل المبالغ</button> <button class="btn p" data-call="EXT.payTermApprove" data-args="${J([id])}" ${bad || t.created_by === me ? 'disabled' : ''} title="${bad ? 'عوائق' : t.created_by === me ? 'لا تعتمد مخالصة أعددتها' : ''}">اعتماد وإنهاء الخدمة</button>` : ''}
+      ${t.status === 'approved' ? `<button class="btn p" data-call="EXT.payTermPay" data-args="${J([id])}">تسجيل الدفع</button>` : ''}<a class="btn" href="/api/hr/terminations/${id}.pdf" target="_blank" rel="noopener">المخالصة PDF</a></div>`
+    + KP([['تاريخ النهاية', fmtDate(t.end_date)], ['سنوات الخدمة', F2(t.service_years)], ['آخر أجر أساسي', P3(t.last_basic)], ['صافي المخالصة', P3(t.net)]])
+    + (t.warnings.length ? BOX('تنبيهات', t.warnings.map(w => `<p class="${w.blocker ? 'bad' : 'muted'}">${w.blocker ? '⛔ ' : ''}${esc(w.msg)}</p>`).join('')) : '')
+    + BOX('الحساب خطوة بخطوة', T(['البند', 'التفصيل', 'المبلغ'], t.eosb_steps.map(s => `<tr><td>مكافأة نهاية الخدمة</td><td>${F2(s.years)} سنة × ${F2(s.days_per_year)} يومًا = ${F2(s.days)} يومًا</td><td>${P3(s.amount)}</td></tr>`).concat([
+        `<tr><td>مكافأة نهاية الخدمة — المجموع</td><td></td><td><b>${P3(t.eosb_amount)}</b></td></tr>`, `<tr><td>بدل رصيد الإجازة</td><td>${F2(t.leave_days)} يومًا</td><td>${P3(t.leave_payout)}</td></tr>`, `<tr><td>مستحقات أخرى</td><td></td><td>${P3(t.other_dues)}</td></tr>`,
+        `<tr><td>أقساط سلف وقروض حسنة</td><td>تُخصم</td><td>−${P3(t.loans_due)}</td></tr>`, `<tr><td>استقطاعات أخرى</td><td>تُخصم</td><td>−${P3(t.other_deductions)}</td></tr>`])))
+    + BOX('إخلاء الطرف', t.clearance.map((x, i) => `<label style="display:block"><input type="checkbox" class="ptC" data-i="${i}" ${x.done ? 'checked' : ''} ${t.status === 'paid' ? 'disabled' : ''}> ${esc(x.item)}</label>`).join('') + (t.status !== 'paid' ? '<div class="btns" style="margin-top:8px"><button class="btn" data-call="EXT.payTermClear" data-args="' + J([id]) + '">حفظ الإخلاء</button></div>' : ''));
+};
+EXT.payTermClear = async id => {
+  const t = await api('/hr/terminations/' + id), items = t.clearance.map((x, i) => ({item: x.item, done: $$('.ptC')[i].checked}));
+  await tryDo(() => post(`/hr/terminations/${id}/recalc`, {clearance: items}), 'حُفظ الإخلاء'); EXT.payTermView(id);
+};
+EXT.payTermEdit = async id => {
+  const t = await api('/hr/terminations/' + id);
+  modal(`<h3>تعديل المبالغ</h3>${HF('peD', 'تاريخ النهاية', t.end_date, 'date')}${HF('peU', 'مستحقات أخرى', t.other_dues, 'number', 'min="0" step="0.001"')}${HF('peX', 'استقطاعات أخرى', t.other_deductions, 'number', 'min="0" step="0.001"')}<div class="err" id="peE"></div>
+    <div class="btns" style="margin-top:12px"><button class="btn p" id="peGo">إعادة الحساب</button> <button class="btn" data-call="closeModal">إلغاء</button></div>`);
+  $('#peGo').onclick = async () => { try { await post(`/hr/terminations/${id}/recalc`, {end_date: $('#peD').value, other_dues: +$('#peU').value || 0, other_deductions: +$('#peX').value || 0}); closeModal(); EXT.payTermView(id); } catch (e) { $('#peE').textContent = e.message; } };
+};
+EXT.payTermApprove = async id => {
+  if (!confirm('الاعتماد ينهي خدمة الموظف نهائيًا: يُغلق حسابه وتُلغى إجازاته اللاحقة وتُسوّى أقساطه. متابعة؟')) return;
+  const r = await tryDo(() => post(`/hr/terminations/${id}/approve`), x => x.note || 'اعتُمدت المخالصة وانتهت الخدمة'); EXT.payTermView(id);
+};
+EXT.payTermPay = async id => {
+  const banks = (await payBanks()).filter(b => b.active);
+  modal(`<h3>تسجيل دفع المخالصة</h3>${HF('pyD', 'تاريخ الدفع', hrDay(), 'date')}${banks.length ? HS('pyB', 'من حساب', [['', '— بلا ترحيل —']].concat(banks.map(b => [b.id, b.name])), '') : ''}<div class="err" id="pyE"></div>
+    <div class="btns" style="margin-top:12px"><button class="btn p" id="pyGo">تسجيل</button> <button class="btn" data-call="closeModal">إلغاء</button></div>`);
+  $('#pyGo').onclick = async () => { try { const r = await post(`/hr/terminations/${id}/pay`, {paid_on: $('#pyD').value, bank_account_id: $('#pyB') ? (+$('#pyB').value || null) : null}); closeModal(); toast(r.note || 'سُجّل الدفع', !!r.note); EXT.payTermView(id); } catch (e) { $('#pyE').textContent = e.message; } };
+};
+
+/* ---- قسائمي في بوابة الموظف */
+EXT.mePayslips = async function (B) {
+  const L = await api('/hr/me/payslips'), sal = await api('/hr/me/salary');
+  B.innerHTML = (sal ? BOX('راتبي الحالي', KP([['الأساسي', P3(sal.basic)], ['البدلات', P3(sal.total - sal.basic)], ['الإجمالي', P3(sal.total)], ['سريان الهيكل', fmtDate(sal.effective_from)]])) : '')
+    + BOX('قسائمي', T(['الشهر', 'الإجمالي', 'الاستقطاعات', 'الصافي', 'الحال', ''], L.map(s => `<tr><td>${esc(s.period)}</td><td>${P3(s.gross + s.adj_earn)}</td><td>${P3(s.absence_ded + s.pasi_employee + s.loan_ded + s.adj_ded)}</td><td><b>${P3(s.net)}</b></td><td>${s.status === 'paid' ? pill('مدفوعة', 'p-ok') : pill('معتمدة', 'p-bl')}</td><td><a class="btn" href="/api/hr/me/payslips/${s.id}.pdf" target="_blank" rel="noopener">القسيمة PDF</a></td></tr>`), 'لا قسائم معتمدة بعد.'));
+};

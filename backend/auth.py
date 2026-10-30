@@ -39,6 +39,7 @@ ROLES = {
     "accountant": "محاسب",
     "hr": "موارد بشرية",
     "employee": "موظف",
+    "payroll": "مسؤول رواتب",
 }
 ALL_STAFF = {"view", "inventory", "book", "leads", "finance", "confirm", "decide", "construction", "approve_ipc",
              "service", "admin", "audit", "land", "permits", "kyc", "brokers", "invoices", "handover", "oa",
@@ -57,9 +58,10 @@ PERMS = {
     "accountant": {"view", "finance", "invoices", "accounting", "docs", "reports", "audit"},  # 0.23.0 — books and statements; approval stays with the manager
     # 0.25.0 — HR officer: the whole people file but no payroll (`hr_payroll` is the manager's, and the employee's own payslip is `hr_self`); every HR user may also be an employee
     "hr": {"view", "hr", "hr_manager", "hr_self", "docs", "reports", "audit", "notify"},
+    "payroll": {"hr_payroll", "hr_self", "hr_manager"},  # 0.26.0 — the payroll officer: salaries, payroll runs, loans and settlements; no people file
     "employee": {"hr_self", "hr_manager"},  # the employee portal: own file, own leave; `hr_manager` only matters for someone who has direct reports (checked per request)
 }
-TWO_FA_REQUIRED = {"admin", "finance", "accountant", "hr"}
+TWO_FA_REQUIRED = {"admin", "finance", "accountant", "hr", "payroll"}
 
 USERS_SQL = """
 CREATE TABLE IF NOT EXISTS users(

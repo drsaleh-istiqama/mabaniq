@@ -466,7 +466,14 @@ def sync_deposits(c, ctx: Ctx, start: str, dry: bool, res: dict) -> None:
         res["posted"]["deposits"] += 1
 
 
-SECTIONS = ("dues", "payments", "charity", "expenses", "statements", "deposits")
+SECTIONS = ("dues", "payments", "charity", "expenses", "statements", "deposits", "payroll")
+
+
+def sync_payroll(c, ctx: Ctx, start: str, dry: bool, res: dict) -> None:
+    """0.26.0: approved payroll runs, loan disbursements and settlements (backend/hr_payroll.py owns the rules). A tenant without the HR tables has nothing to post."""
+    if c.has_table("payroll_runs"):
+        from .hr_payroll import sync_payroll as hr_sync
+        hr_sync(c, ctx, start, dry, res)
 
 
 def autopost(c, lease_id: int | None = None, dry: bool = False, as_of: dt.date | None = None, only: set[str] | None = None) -> dict:
@@ -485,7 +492,7 @@ def autopost(c, lease_id: int | None = None, dry: bool = False, as_of: dt.date |
     if "payments" in want:
         sync_payments(c, ctx, start, lease_id, dry, res)
     if lease_id is None:
-        for name, fn in (("charity", sync_charity), ("expenses", sync_expenses), ("statements", sync_statements), ("deposits", sync_deposits)):
+        for name, fn in (("charity", sync_charity), ("expenses", sync_expenses), ("statements", sync_statements), ("deposits", sync_deposits), ("payroll", sync_payroll)):
             if name in want:
                 fn(c, ctx, start, dry, res)
     return res

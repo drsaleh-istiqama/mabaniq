@@ -926,7 +926,9 @@ from .acc_assets import router as acc_assets_router  # noqa: E402
 from .acc_bank import router as acc_bank_router  # noqa: E402
 from .acc_reports import router as acc_reports_router  # noqa: E402
 from .hr import router as hr_router  # noqa: E402
+from .hr_end import router as hr_end_router  # noqa: E402
 from .hr_leave import router as hr_leave_router  # noqa: E402
+from .hr_payroll import router as hr_payroll_router  # noqa: E402
 from .hr_self import router as hr_self_router  # noqa: E402
 
 app.include_router(acc_ap_router)  # 0.24.0: الذمم الدائنة والبنوك
@@ -936,6 +938,8 @@ app.include_router(acc_reports_router)  # 0.24.0: القوائم المالية 
 app.include_router(hr_router)  # 0.25.0: الموارد البشرية — الهيكل والموظفون والوثائق
 app.include_router(hr_leave_router)  # 0.25.0: الإجازات والعطل والحضور
 app.include_router(hr_self_router)  # 0.25.0: بوابة الموظف وفريق المدير
+app.include_router(hr_payroll_router)  # 0.26.0: الرواتب والسلف والقروض الحسنة
+app.include_router(hr_end_router)  # 0.26.0: مكافأة نهاية الخدمة والمخالصة
 from .appearance import router as appearance_router  # noqa: E402
 from .assistant import router as assistant_router  # noqa: E402
 from .identity import router as identity_router  # noqa: E402
