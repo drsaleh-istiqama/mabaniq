@@ -89,3 +89,65 @@ def test_audit_log_search_actor_dates_and_paging(cl):
     assert len(p1) == 2 and {r["id"] for r in p1}.isdisjoint({r["id"] for r in p2})
     assert p1[0]["id"] > p1[1]["id"] > p2[0]["id"]      # newest first, the second page continues where the first stopped
     assert cl.get("/api/audit", params={"offset": -1}).status_code == 422
+
+
+def test_owner_edit_with_blank_identity_and_iban_keeps_the_stored_values(cl):
+    oid = cl.post("/api/lea/owners", json={"name": "مالك اختبار 0291", "kind": "third_party", "id_number": "99887766", "iban": "OM12ABCD0000123456789", "mgmt_fee_pct": 5}).json()["id"]
+    try:
+        before = next(o for o in cl.get("/api/lea/owners").json() if o["id"] == oid)
+        assert cl.post(f"/api/lea/owners/{oid}", json={"name": "مالك اختبار 0291 (معدَّل)", "id_number": "", "iban": "", "mgmt_fee_pct": 7}).status_code == 200
+        after = next(o for o in cl.get("/api/lea/owners").json() if o["id"] == oid)
+        assert after["name"].endswith("(معدَّل)") and after["mgmt_fee_pct"] == 7
+        assert after["id_number"] == before["id_number"] and after["iban"] == before["iban"] and after["iban"].endswith("6789")
+        assert cl.post(f"/api/lea/owners/{oid}", json={"name": "مالك اختبار 0291", "id_number": "11223344", "iban": "", "mgmt_fee_pct": 7}).status_code == 200
+        assert next(o for o in cl.get("/api/lea/owners").json() if o["id"] == oid)["id_number"].endswith("3344")   # a typed value replaces
+    finally:
+        tok = TENANT.set("bayan")
+        try:
+            c = connect()
+            c.execute("DELETE FROM owners WHERE id=?", (oid,))
+            c.commit()
+            c.close()
+        finally:
+            TENANT.reset(tok)
+
+
+def test_a_pending_payment_certificate_can_be_rejected_once_with_a_reason(cl):
+    tok = TENANT.set("bayan")
+    try:
+        c = connect()
+        pid = c.execute("SELECT id FROM projects ORDER BY id LIMIT 1").fetchone()["id"]
+        kid = c.execute("SELECT id FROM contractors ORDER BY id LIMIT 1").fetchone()["id"]
+        pg = getattr(c, "dialect", "sqlite") == "postgres"
+        if pg:
+            c.maintenance()      # the app role may not write `ipcs` directly; the row is scoped to the organisation by hand
+        cols, ph = ("project_id,contractor_id,no,stage,claimed_pct,stage_value,status,approved_pct,created", "?,?,?,?,?,?,?,?,?")
+        if pg:
+            cols, ph = cols + ",org_id", ph + ",current_setting('app.org_id', true)"
+        iid = c.execute(f"INSERT INTO ipcs({cols}) VALUES({ph})", (pid, kid, 990, "اختبار", 50, 1000, "pending", None, "2026-10-01")).lastrowid
+        c.commit()
+        c.close()
+    finally:
+        TENANT.reset(tok)
+    try:
+        assert cl.post(f"/api/ipcs/{iid}/reject", json={"reason": "قص"}).status_code == 422                       # a reason is mandatory
+        assert cl.post(f"/api/ipcs/{iid}/reject", json={"reason": "الأعمال لا تطابق الصور المرفقة"}).status_code == 200
+        assert cl.post(f"/api/ipcs/{iid}/reject", json={"reason": "الأعمال لا تطابق الصور المرفقة"}).status_code == 409   # not pending any more
+        assert cl.post(f"/api/ipcs/{iid}/approve").status_code == 409
+        row = next(i for i in cl.get("/api/ipcs").json() if i["id"] == iid)
+        assert row["status"] == "rejected"
+        assert any(a["action"] == "رفض مستخلص" and "لا تطابق الصور" in a["detail"] for a in cl.get("/api/audit", params={"q": "رفض مستخلص"}).json())
+    finally:
+        tok = TENANT.set("bayan")
+        try:
+            c = connect()
+            pg = getattr(c, "dialect", "sqlite") == "postgres"
+            if pg:
+                c.maintenance()
+            sc = " AND org_id = current_setting('app.org_id', true)" if pg else ""
+            c.execute(f"DELETE FROM decisions_log WHERE key=?{sc}", (f"ipc:{iid}",))
+            c.execute(f"DELETE FROM ipcs WHERE id=?{sc}", (iid,))
+            c.commit()
+            c.close()
+        finally:
+            TENANT.reset(tok)

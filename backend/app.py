@@ -414,6 +414,24 @@ def approve_ipc_ep(ipc_id: int, _=Depends(act_as("approve_ipc"))):
     return approve_ipc(ipc_id)
 
 
+class IpcRejectIn(BaseModel):
+    reason: str = Field(min_length=5, max_length=200)
+
+
+@app.post("/api/ipcs/{ipc_id}/reject")
+def reject_ipc_ep(ipc_id: int, b: IpcRejectIn, _=Depends(act_as("approve_ipc"))):
+    """0.29.2 — رفض مستخلص معلّق بسبب مكتوب (كان الاعتماد وحده ممكنًا). لا يُصرف شيء ويُسجَّل السبب في سجل التدقيق."""
+    c = db()
+    i = c.execute("SELECT * FROM ipcs WHERE id=?", (ipc_id,)).fetchone()
+    if not i or i["status"] != "pending":
+        raise HTTPException(409, "المستخلص غير معلق")
+    c.execute("UPDATE ipcs SET status='rejected' WHERE id=?", (ipc_id,))
+    c.execute("INSERT OR IGNORE INTO decisions_log VALUES(?,?,?)", (f"ipc:{ipc_id}", "reject", dt.datetime.now().isoformat(timespec="seconds")))
+    audit(c, "رفض مستخلص", f"المستخلص {i['no']} · {b.reason.strip()}")
+    c.commit()
+    return {"ok": True}
+
+
 def approve_ipc(ipc_id: int, c=None):
     c = c or db()
     i = c.execute("SELECT * FROM ipcs WHERE id=?", (ipc_id,)).fetchone()

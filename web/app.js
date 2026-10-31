@@ -250,6 +250,7 @@ async function showUnit(code) {
     const b = u.booking;
     h += `<dl class="kv"><dt>العميل</dt><dd>${esc(b.cname)}</dd><dt>الهاتف</dt><dd><span class="num">${esc(b.phone)}</span></dd><dt>خطة الدفع</dt><dd>${PLANS[b.plan][0]}</dd><dt>المسدَّد</dt><dd>${OMR(b.paid)} من ${OMR(b.total)}</dd>${b.status === 'pending' ? `<dt>مهلة الحجز</dt><dd>حتى ${fmtDate(b.expires)}</dd>` : ''}</dl>`;
     if (b.status === 'pending') h += `<div class="btns" style="margin-bottom:12px">${can('confirm') ? `<button class="btn p" data-call="confirmBooking" data-args="${J([b.id, u.code])}">تسجيل سداد العربون وتأكيد البيع</button>` : '<span class="muted">تأكيد البيع من صلاحية المالية.</span>'}${can('book') ? `<button class="btn" data-call="cancelBooking" data-args="${J([b.id, u.code])}">إلغاء الحجز</button>` : ''}</div>`;
+    if (can('book')) h += `<div class="btns" style="margin-bottom:12px"><button class="btn" data-call="EXT.discReq" data-args="${J([b.id, u.code])}">طلب خصم</button></div>`;
     h += `<b>جدول الأقساط</b>` + b.installments.map(i => {
       const st = i.paid_amount >= i.amount - 1 ? pill('مدفوع', 'p-ok') : i.paid_amount > 0 ? pill('جزئي', 'p-w') : new Date(i.due_date) < new Date() ? pill('متأخر', 'p-b') : pill('قادم', '');
       return `<div class="inst"><span>${esc(i.label)}<br><span class="muted">${fmtDate(i.due_date)}</span></span><span>${OMR(i.amount)} ${st}</span></div>`;
@@ -311,6 +312,7 @@ async function loadCRM() {
   $('#pipe').innerHTML = STAGES.map((s, i) => `<div><small>${s}</small><b>${N(LEADS.filter(l => l.stage === i).length)}</b></div>`).join('');
   $('#leads').innerHTML = LEADS.map((l, i) => `<tr data-i="${i}"><td><b>${esc(l.name)}</b></td><td>${esc(l.interest)}</td><td>${esc(l.pname)}</td><td>${STAGES[l.stage]}</td><td>${esc(l.channel)}</td><td>${fmtDate(l.last_contact)}</td><td>${pill(N(l.score) + '٪', scoreC(l.score))}</td></tr>`).join('');
   $$('#leads tr').forEach(tr => tr.onclick = () => { sel(tr); showLead(LEADS[+tr.dataset.i]); });
+  $('#leadNew').hidden = !can('leads');
 }
 async function showLead(l) {
   const m = await api(`/leads/${l.id}/matches`);
@@ -371,7 +373,7 @@ let IPC = [];
 async function loadIPC() {
   IPC = await api('/ipcs');
   $('#ipc').innerHTML = IPC.map((i, k) => { const v = i.verification, gap = v.items.length && i.claimed_pct - v.verified_pct >= 3;
-    return `<tr data-k="${k}"><td>${N(i.no)}</td><td>${esc(i.pname)}</td><td>${esc(i.contractor)}</td><td>${esc(i.stage)}</td><td>${N(i.claimed_pct)}٪</td><td>${v.items.length ? pill(N(v.verified_pct) + '٪', gap ? 'p-b' : 'p-ok') : (i.approved_pct != null ? N(i.approved_pct) + '٪' : '—')}</td><td>${OMR(i.stage_value * i.claimed_pct / 100)}</td><td>${i.status === 'pending' ? pill('بانتظار الاعتماد', 'p-w') : pill('معتمد ' + N(i.approved_pct) + '٪', 'p-ok')}</td></tr>`; }).join('');
+    return `<tr data-k="${k}"><td>${N(i.no)}</td><td>${esc(i.pname)}</td><td>${esc(i.contractor)}</td><td>${esc(i.stage)}</td><td>${N(i.claimed_pct)}٪</td><td>${v.items.length ? pill(N(v.verified_pct) + '٪', gap ? 'p-b' : 'p-ok') : (i.approved_pct != null ? N(i.approved_pct) + '٪' : '—')}</td><td>${OMR(i.stage_value * i.claimed_pct / 100)}</td><td>${i.status === 'pending' ? pill('بانتظار الاعتماد', 'p-w') : i.status === 'rejected' ? pill('مرفوض', 'p-b') : pill('معتمد ' + N(i.approved_pct) + '٪', 'p-ok')}</td></tr>`; }).join('');
   $$('#ipc tr').forEach(tr => tr.onclick = () => { sel(tr); showIPC(IPC[+tr.dataset.k]); });
 }
 function showIPC(i) {
@@ -383,8 +385,15 @@ function showIPC(i) {
       <p class="muted">${esc(v.note)}</p>`;
   }
   if (i.status === 'pending') h += can('approve_ipc') ? `<button class="btn p w" data-call="approveIPC" data-args="${J([i.id])}">اعتماد المستخلص بالنسبة المُتحققة</button>` : '<p class="muted">الاعتماد من صلاحية المدير العام. يمكنك مراجعة الأدلة وإرفاق ملاحظاتك.</p>';
+  else if (i.status === 'rejected') h += pill('✕ مرفوض', 'p-b');
   else h += pill('✓ معتمد بنسبة ' + N(i.approved_pct) + '٪', 'p-ok');
+  if (i.status === 'pending' && can('approve_ipc')) h += `<button class="btn w" style="margin-top:8px" data-call="rejectIPC" data-args="${J([i.id])}">رفض المستخلص</button>`;
   insp('مستخلص', h);
+}
+// 0.29.2 — رفض مستخلص معلّق بسبب مكتوب يُحفظ في سجل التدقيق.
+function rejectIPC(id) {
+  modal(`<h3>رفض المستخلص</h3><p class="muted">لا يُصرف شيء. السبب يُسجَّل باسمك في سجل التدقيق.</p><label>السبب</label><input id="rjr" maxlength="200"><div class="err" id="rje"></div><div class="btns" style="margin-top:12px"><button class="btn p" id="rjgo">رفض</button><button class="btn" data-call="closeModal">إلغاء</button></div>`);
+  $('#rjgo').onclick = async () => { try { await api(`/ipcs/${id}/reject`, {method: 'POST', body: {reason: $('#rjr').value.trim()}}); closeModal(); toast('رُفض المستخلص'); await loadIPC(); showIPC(IPC.find(x => x.id === id)); loadSide(); } catch (e) { $('#rje').textContent = e.message; } };
 }
 async function approveIPC(id) { try { const r = await api(`/ipcs/${id}/approve`, {method: 'POST'}); toast(r.detail + ' · ' + OMR(r.amount)); await loadIPC(); showIPC(IPC.find(x => x.id === id)); loadSide(); } catch (e) { toast(e.message, 1); } }
 
@@ -657,6 +666,21 @@ EXT.l_conx = async function () {
   $('#conP').onchange = e => { EXT.conP = +e.target.value; EXT.l_conx(); };
 };
 EXT.co = async (id, a) => { await tryDo(() => api(`/change-orders/${id}/decide`, {method: 'POST', body: {action: a}}), 'سُجّل القرار'); EXT.l_conx(); };
+// 0.29.2 — طلب خصم على حجز من الواجهة: ضمن صلاحية الدور يُطبَّق فورًا، وما زاد يذهب لاعتماد المدير (الخادم يقرر).
+EXT.discReq = (bid, code) => {
+  modal(`<h3>طلب خصم على الوحدة <span class="num">${esc(code)}</span></h3><p class="muted">المبيعات حتى 2٪ · المالية حتى 5٪ · ما زاد يعتمده المدير. لا يُعدَّل السعر بعد توقيع العقد.</p>
+   <label>نسبة الخصم (٪ من السعر، حتى 25)</label><input id="dsc_pct" inputmode="decimal" value="1"><label>السبب</label><input id="dr" maxlength="200" placeholder="مثال: سداد الدفعة الأولى نقدًا">
+   <div class="err" id="de"></div><div class="btns" style="margin-top:12px"><button class="btn p" id="dgo">إرسال</button><button class="btn" data-call="closeModal">إلغاء</button></div>`);
+  $('#dgo').onclick = async () => { try { const r = await api(`/bookings/${bid}/discount`, {method: 'POST', body: {pct: +$('#dsc_pct').value / 100, reason: $('#dr').value.trim()}}); closeModal(); toast(r.status === 'approved' ? 'طُبّق الخصم: ' + OMR(r.amount) : 'رُفع الطلب لاعتماد المدير'); refreshAll(); showUnit(code); } catch (e) { $('#de').textContent = e.message; } };
+};
+// 0.29.2 — تسجيل عميل محتمل يدويًا (زائر، مكالمة، حملة) — كان الخادم يقبله بلا زر.
+EXT.newLead = () => {
+  modal(`<h3>عميل محتمل جديد</h3><label>الاسم</label><input id="nl_ln"><label>الهاتف</label><input id="nl_lp" inputmode="tel" dir="ltr"><label>البريد (اختياري)</label><input id="nl_le" type="email" dir="ltr">
+   <label>المشروع</label><select id="nl_lj">${projOpts(S.projects[0]?.id)}</select><label>القناة</label><select id="nl_lc">${['مباشر', 'مكالمة', 'زيارة', 'واتساب', 'إنستجرام', 'معرض', 'إحالة'].map(x => `<option>${x}</option>`).join('')}</select>
+   <label>الاهتمام</label><input id="nl_li" maxlength="120" placeholder="مثال: شقة غرفتين"><label>الميزانية (ر.ع)</label><input id="nl_lb" inputmode="numeric" value="0"><label>غرف النوم (اختياري)</label><input id="nl_lbr" inputmode="numeric">
+   <div class="err" id="nl_lerr"></div><div class="btns" style="margin-top:12px"><button class="btn p" id="nl_lgo">حفظ</button><button class="btn" data-call="closeModal">إلغاء</button></div>`);
+  $('#nl_lgo').onclick = async () => { try { await api('/leads', {method: 'POST', body: {name: $('#nl_ln').value.trim(), phone: $('#nl_lp').value.trim(), email: $('#nl_le').value.trim() || null, project_id: +$('#nl_lj').value, channel: $('#nl_lc').value, interest: $('#nl_li').value.trim(), budget: +$('#nl_lb').value || 0, bedrooms: num($('#nl_lbr').value)}}); closeModal(); toast('سُجّل العميل المحتمل'); await loadCRM(); } catch (e) { $('#nl_lerr').textContent = e.message; } };
+};
 // 0.29.1 — إنشاء تقرير عدم مطابقة من الواجهة (كان الخادم يقبله دون زر).
 EXT.newNcr = () => { modal(`<h3>تقرير عدم مطابقة جديد</h3><label>وصف المخالفة</label><input id="nct"><label>الموقع (طابق / منطقة)</label><input id="ncl" maxlength="40"><label>الخطورة</label><select id="ncs"><option value="minor">بسيطة</option><option value="major">جسيمة</option><option value="critical">حرجة</option></select><div class="err" id="nce"></div><div class="btns" style="margin-top:12px"><button class="btn p" id="ncgo">حفظ</button><button class="btn" data-call="closeModal">إلغاء</button></div>`);
   $('#ncgo').onclick = async () => { try { await api('/ncrs', {method: 'POST', body: {project_id: EXT.conP || activeProj().id, title: $('#nct').value.trim(), severity: $('#ncs').value, location: $('#ncl').value.trim()}}); closeModal(); toast('سُجّل تقرير عدم المطابقة'); EXT.l_conx(); } catch (e) { $('#nce').textContent = e.message; } }; };
@@ -997,10 +1021,11 @@ EXT.leaStatement = async id => {
   modal(`<h3>كشف حساب ${esc(s.tenant)}</h3>${s.leases.map(l => `<b>${esc(l.number)} · ${esc(l.unit)}</b>${T(['التاريخ', 'البيان', 'مدين', 'دائن'], l.entries.map(e => `<tr><td>${fmtDate(e.date)}</td><td>${esc(e.label)}</td><td>${e.debit ? OMR(e.debit) : ''}</td><td>${e.credit ? OMR(e.credit) : ''}</td></tr>`))}`).join('')}<p><b>الرصيد المستحق: ${OMR(s.balance)}</b></p><div class="btns"><button class="btn" data-call="closeModal">إغلاق</button></div>`);
 };
 
-EXT.leaOwnerForm = () => {
-  modal(`<h3>مالك جديد</h3><label>الاسم</label><input id="on"><label>الهاتف</label><input id="op"><label>رقم الهوية / السجل</label><input id="oi"><label>الآيبان</label><input id="ob"><label>عمولة الإدارة (٪)</label><input id="of" inputmode="decimal" value="0"><label>أساس العمولة</label><select id="ox"><option value="collected">المحصَّل</option><option value="invoiced">المفوتَر</option></select>
+EXT.leaOwnerForm = (o) => {
+  const ed = !!(o && o.id), keep = ed ? ' placeholder="اتركه فارغًا للإبقاء على المحفوظ"' : '';
+  modal(`<h3>${ed ? 'تعديل مالك' : 'مالك جديد'}</h3><label>الاسم</label><input id="on" value="${esc(ed ? o.name : '')}"><label>الهاتف</label><input id="op" value="${esc(ed ? o.phone || '' : '')}"><label>البريد</label><input id="om" value="${esc(ed ? o.email || '' : '')}" dir="ltr"><label>رقم الهوية / السجل</label><input id="oi"${keep}><label>الآيبان</label><input id="ob"${keep}><label>عمولة الإدارة (٪)</label><input id="of" inputmode="decimal" value="${ed ? o.mgmt_fee_pct : 0}"><label>أساس العمولة</label><select id="ox"><option value="collected" ${ed && o.mgmt_basis === 'collected' ? 'selected' : ''}>المحصَّل</option><option value="invoiced" ${ed && o.mgmt_basis === 'invoiced' ? 'selected' : ''}>المفوتَر</option></select><label>ملاحظات</label><input id="oN" maxlength="500" value="${esc(ed ? o.notes || '' : '')}">
    <div class="err" id="oe"></div><div class="btns" style="margin-top:12px"><button class="btn p" id="ogo">حفظ</button> <button class="btn" data-call="closeModal">إلغاء</button></div>`);
-  $('#ogo').onclick = async () => { try { await api('/lea/owners', {method: 'POST', body: {name: $('#on').value, phone: $('#op').value, id_number: $('#oi').value, iban: $('#ob').value, mgmt_fee_pct: +$('#of').value, mgmt_basis: $('#ox').value}}); closeModal(); toast('أُضيف المالك'); EXT.l_lea(); } catch (e) { $('#oe').textContent = e.message; } };
+  $('#ogo').onclick = async () => { try { await api('/lea/owners' + (ed ? '/' + o.id : ''), {method: 'POST', body: {name: $('#on').value, phone: $('#op').value, email: $('#om').value, id_number: $('#oi').value, iban: $('#ob').value, mgmt_fee_pct: +$('#of').value, mgmt_basis: $('#ox').value, notes: $('#oN').value}}); closeModal(); toast(ed ? 'حُفظ المالك' : 'أُضيف المالك'); EXT.l_lea(); } catch (e) { $('#oe').textContent = e.message; } };
 };
 
 EXT.leaNew = async function () {
@@ -1166,7 +1191,7 @@ EXT.leaExpenseForm = async () => {
 /* الملاك وكشوفهم */
 EXT.leaOwnersTab = async B => {
   const O = await api('/lea/owners'), W = can('leasing');
-  B.innerHTML = BOX('الملاك', T(['المالك', 'النوع', 'الهاتف', 'الهوية', 'عمولة الإدارة', 'وحدات', ''], O.map(o => `<tr><td><b>${esc(o.name)}</b></td><td>${o.kind === 'own' ? 'الشركة (مملوك)' : 'مالك آخر'}</td><td>${esc(o.phone || '—')}</td><td><span class="num">${esc(o.id_number || '—')}</span></td><td>${o.kind === 'own' ? '—' : pct(o.mgmt_fee_pct) + ' من ' + (o.mgmt_basis === 'collected' ? 'المحصَّل' : 'المفوتَر')}</td><td>${N(o.units)}</td><td><button class="btn" data-call="EXT.leaOwnerStmt" data-args="${J([o.id, o.name])}">كشف شهري</button></td></tr>`)),
+  B.innerHTML = BOX('الملاك', T(['المالك', 'النوع', 'الهاتف', 'الهوية', 'عمولة الإدارة', 'وحدات', ''], O.map(o => `<tr><td><b>${esc(o.name)}</b></td><td>${o.kind === 'own' ? 'الشركة (مملوك)' : 'مالك آخر'}</td><td>${esc(o.phone || '—')}</td><td><span class="num">${esc(o.id_number || '—')}</span></td><td>${o.kind === 'own' ? '—' : pct(o.mgmt_fee_pct) + ' من ' + (o.mgmt_basis === 'collected' ? 'المحصَّل' : 'المفوتَر')}</td><td>${N(o.units)}</td><td><button class="btn" data-call="EXT.leaOwnerStmt" data-args="${J([o.id, o.name])}">كشف شهري</button>${W ? ` <button class="btn" data-call="EXT.leaOwnerForm" data-args="${J([o])}">تعديل</button>` : ''}</td></tr>`)),
     W ? '<button class="btn p" data-call="EXT.leaOwnerForm">+ مالك</button>' : '');
   if (A_()) { const S_ = await api('/lea/scopes'); B.insertAdjacentHTML('beforeend', BOX('نطاق المديرين العقاريين الخارجيين', `<p class="muted">المدير العقاري يرى ويحصّل داخل نطاقه فقط (مشروع و/أو مالك). أنشئ حسابه من «الإدارة ← المستخدمون» بدور «مدير عقاري».</p>` + T(['المستخدم', 'المشروع', 'المالك', ''], S_.map(s => `<tr><td>${esc(s.user)} <span class="muted">${esc(s.username)}</span></td><td>${esc(s.project || 'كل المشاريع')}</td><td>${esc(s.owner || 'كل الملاك')}</td><td><button class="btn" data-call="EXT.leaScopeDel" data-args="${J([s.id])}">إلغاء</button></td></tr>`), 'لا نطاقات.'), '<button class="btn p" data-call="EXT.leaScopeForm">+ نطاق</button>')); }
 };
@@ -1467,7 +1492,7 @@ EXT.changePw = forced => {
 
 
 /* ---- Unit 3: delegated handlers are registered here (module scope, nothing on window) */
-Object.assign(CALLS, {approveIPC, cancelBooking, closeModal, confirmBooking, decide, go, openBooking, resaleAct, setStage, showUnit, svcSet, EXT});
+Object.assign(CALLS, {approveIPC, rejectIPC, cancelBooking, closeModal, confirmBooking, decide, go, openBooking, resaleAct, setStage, showUnit, svcSet, EXT});
 applyI18n();
 const langBtn = document.getElementById('lang');
 if (langBtn) { langBtn.textContent = lang() === 'ar' ? 'EN' : 'ع'; langBtn.onclick = () => toggleLang(); }

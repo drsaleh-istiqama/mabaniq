@@ -473,9 +473,12 @@ def api_owner_add(b: OwnerIn, _=Depends(act_as("leasing"))):
 @router.post("/api/lea/owners/{oid}")
 def api_owner_edit(oid: int, b: OwnerIn, _=Depends(act_as("leasing"))):
     c = db()
-    one(c, "SELECT 1 FROM owners WHERE id=?", (oid,), "المالك غير موجود")
+    cur = one(c, "SELECT id_number, iban FROM owners WHERE id=?", (oid,), "المالك غير موجود")
+    # 0.29.2 — الهوية والآيبان تُعرضان مقنَّعتين، فحقل فارغ يعني «أبقِ القائم» لا «امسح» (النموذج لا يستطيع إعادة إرسال القيمة الأصلية)
+    id_number = pii.enc(b.id_number) if b.id_number.strip() else cur["id_number"]
+    iban = pii.enc(b.iban) if b.iban.strip() else cur["iban"]
     c.execute("UPDATE owners SET name=?, id_number=?, phone=?, email=?, iban=?, mgmt_fee_pct=?, mgmt_basis=?, notes=? WHERE id=?",
-              (b.name, pii.enc(b.id_number), b.phone, b.email, pii.enc(b.iban), b.mgmt_fee_pct, b.mgmt_basis, b.notes, oid))
+              (b.name, id_number, b.phone, b.email, iban, b.mgmt_fee_pct, b.mgmt_basis, b.notes, oid))
     audit(c, "تعديل مالك", f"{b.name}")
     c.commit()
     return {"ok": True}
