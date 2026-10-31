@@ -822,7 +822,7 @@ EXT.l_post = async function () {
   if (k === 'hand') {
     const H = await api('/handover');
     B.innerHTML = BOX('مواعيد التسليم <span class="muted">شروط التسليم: سداد كامل + إغلاق الملاحظات + عقد موقَّع</span>', T(['العميل', 'الوحدة', 'الموعد', 'المسدد', 'ملاحظات مفتوحة', 'الحالة'],
-      H.map((h, i) => { const o = h.snags.filter(s => s.status === 'open').length; return `<tr data-i="${i}"><td>${esc(h.customer)}</td><td><span class="num">${esc(h.unit)}</span></td><td>${fmtDate(h.appointment)}</td><td>${pct(h.paid_ratio)}</td><td>${o ? pill(N(o), 'p-b') : pill('0', 'p-ok')}</td><td>${h.status === 'done' ? pill('سُلّمت', 'p-ok') : (() => { const r = []; if (h.paid_ratio < 100) r.push('متبقٍ ' + pct(100 - h.paid_ratio)); if (o) r.push(N(o) + ' ملاحظات'); return r.length ? pill('موقوف · ' + r.join(' · '), 'p-b') : pill('جاهز للتسليم', 'p-ok'); })()}</td></tr>`; })));
+      H.map((h, i) => { const o = h.snags.filter(s => s.status === 'open').length; return `<tr data-i="${i}"><td>${esc(h.customer)}</td><td><span class="num">${esc(h.unit)}</span></td><td>${fmtDate(h.appointment)}</td><td>${pct(h.paid_ratio)}</td><td>${o ? pill(N(o), 'p-b') : pill('0', 'p-ok')}</td><td>${h.status === 'done' ? pill('سُلّمت', 'p-ok') : (() => { const r = []; if (h.paid_ratio < 100) r.push('متبقٍ ' + pct(100 - h.paid_ratio)); if (o) r.push(N(o) + ' ملاحظات'); return r.length ? pill('موقوف · ' + r.join(' · '), 'p-b') : pill('جاهز للتسليم', 'p-ok'); })()}</td></tr>`; })), can('handover') ? '<button class="btn p" data-call="EXT.handNew">+ موعد تسليم</button>' : '');
     $$('#postB tr[data-i]').forEach(tr => tr.onclick = () => { sel(tr); EXT.showHand(H[+tr.dataset.i]); });
   } else if (k === 'title') {
     const Ti = await api('/titles');
@@ -907,7 +907,7 @@ EXT.l_lea = async function () {
   } else if (k === 'un') {
     const U = (await api('/lea/units')).units;
     B.innerHTML = KP([['وحدات المحفظة', N(U.length)], ['مؤجَّرة', N(U.filter(u => u.state === 'leased').length)], ['شاغرة', N(U.filter(u => u.state === 'vacant').length)], ['صيانة / غير قابلة', N(U.filter(u => ['maintenance', 'not_leasable'].includes(u.state)).length)]])
-      + BOX('الوحدات', T(['الوحدة', 'المشروع', 'الاستخدام', 'الحالة', 'المستأجر', 'المالك', 'عدّادات', 'شاغرة منذ'], U.map((u, i) => `<tr data-i="${i}"><td><span class="num">${esc(u.code)}</span><br><span class="muted">${esc(u.type || '')}${u.area ? ' · ' + N(u.area) + ' م²' : ''}</span></td><td>${esc(u.project)}</td><td>${esc(LUSE[u.use] || u.use || '—')}</td><td>${pill(esc(u.state_label), LSTP[u.state])}</td><td>${u.lease ? esc(u.lease.tenant) : '—'}</td><td>${esc(u.owner || '—')}</td><td>${N(u.meters.length)}</td><td>${u.vacant_since ? fmtDate(u.vacant_since) + ` <span class="muted">(${N(u.vacant_days)} يومًا)</span>` : '—'}</td></tr>`)));
+      + BOX('الوحدات', T(['الوحدة', 'المشروع', 'الاستخدام', 'الحالة', 'المستأجر', 'المالك', 'عدّادات', 'شاغرة منذ'], U.map((u, i) => `<tr data-i="${i}"><td><span class="num">${esc(u.code)}</span><br><span class="muted">${esc(u.type || '')}${u.area ? ' · ' + N(u.area) + ' م²' : ''}</span></td><td>${esc(u.project)}</td><td>${esc(LUSE[u.use] || u.use || '—')}</td><td>${pill(esc(u.state_label), LSTP[u.state])}</td><td>${u.lease ? esc(u.lease.tenant) : '—'}</td><td>${esc(u.owner || '—')}</td><td>${N(u.meters.length)}</td><td>${u.vacant_since ? fmtDate(u.vacant_since) + ` <span class="muted">(${N(u.vacant_days)} يومًا)</span>` : '—'}</td></tr>`)), W ? '<button class="btn p" data-call="EXT.leaUnitAdd">+ وحدة للمحفظة</button>' : '');
     $$('#leaB tr[data-i]').forEach(tr => tr.onclick = () => { sel(tr); EXT.leaUnit(U[+tr.dataset.i]); });
   } else if (k === 'tn') {
     const q = this.leaTq || '', T_ = await api(`/lea/tenants?q=${encodeURIComponent(q)}`);
@@ -965,11 +965,26 @@ EXT.leaPay = (lid, did, bal) => {
 
 EXT.leaReverse = async id => { const reason = prompt('سبب عكس الحركة (يُسجَّل في التدقيق):'); if (!reason) return; await tryDo(() => api(`/lea/payments/${id}/reverse`, {method: 'POST', body: {reason}}), 'سُجّلت حركة عكسية'); EXT.l_lea(); };
 
-EXT.leaCheque = lid => {
-  modal(`<h3>استلام شيك</h3><label>رقم الشيك</label><input id="qn"><label>البنك</label><input id="qb"><label>الفرع</label><input id="qf"><label>القيمة (ر.ع)</label><input id="qa" inputmode="decimal"><label>تاريخ استحقاق الشيك</label><input id="qd" type="date"><label>الساحب (إن اختلف عن المستأجر)</label><input id="qw">
-   <div class="err" id="qe"></div><p class="muted">استلام الشيك حفظ لدى الشركة فقط؛ لا يُحتسب سدادًا قبل صرفه.</p><div class="btns" style="margin-top:12px"><button class="btn p" id="qgo">تسجيل الاستلام</button> <button class="btn" data-call="closeModal">إلغاء</button></div>`);
-  $('#qgo').onclick = async () => { try { const r = await api('/lea/cheques', {method: 'POST', body: {lease_id: lid, number: $('#qn').value, bank: $('#qb').value, branch: $('#qf').value, amount: +$('#qa').value, due_date: $('#qd').value, drawer: $('#qw').value}});
+// 0.29.3 — الشيك يُربط باستحقاق بعينه (اختياريًا): الخادم يمنع تجاوز المتبقي، والصرف يسدّد ذلك الاستحقاق نفسه لا الأقدم.
+EXT.leaCheque = async lid => {
+  const d = await api('/lea/leases/' + lid), open = d.dues.filter(x => x.balance > 0.0005);
+  modal(`<h3>استلام شيك</h3><label>الاستحقاق الذي يسدّده (اختياري)</label><select id="qk_due"><option value="">غير مرتبط باستحقاق</option>${open.map(x => `<option value="${x.id}" data-bal="${x.balance}" data-due="${esc(String(x.due).slice(0, 10))}">${fmtDate(x.due)} · متبقٍ ${OMR(x.balance)}${x.label ? ' · ' + esc(x.label) : ''}</option>`).join('')}</select>
+   <label>رقم الشيك</label><input id="qn"><label>البنك</label><input id="qb"><label>الفرع</label><input id="qf"><label>القيمة (ر.ع)</label><input id="qa" inputmode="decimal"><label>تاريخ استحقاق الشيك</label><input id="qd" type="date"><label>الساحب (إن اختلف عن المستأجر)</label><input id="qw">
+   <div class="err" id="qe"></div><p class="muted">استلام الشيك حفظ لدى الشركة فقط؛ لا يُحتسب سدادًا قبل صرفه. باختيار استحقاق تُملأ القيمة والتاريخ منه ويمكن تعديلهما.</p><div class="btns" style="margin-top:12px"><button class="btn p" id="qgo">تسجيل الاستلام</button> <button class="btn" data-call="closeModal">إلغاء</button></div>`);
+  $('#qk_due').onchange = e => { const o = e.target.selectedOptions[0]; if (o && o.dataset.bal) { $('#qa').value = o.dataset.bal; $('#qd').value = o.dataset.due; } };
+  $('#qgo').onclick = async () => { try { const r = await api('/lea/cheques', {method: 'POST', body: {lease_id: lid, due_id: +$('#qk_due').value || null, number: $('#qn').value, bank: $('#qb').value, branch: $('#qf').value, amount: +$('#qa').value, due_date: $('#qd').value, drawer: $('#qw').value}});
     modal(`<h3>✓ سُجّل الشيك</h3><p>إيصال الاستلام <b class="num">${esc(r.receipt_no)}</b></p><div class="btns">${LDOC('cheque_receipt', r.id, 'فتح الإيصال PDF')} <button class="btn" data-call="closeModal">إغلاق</button></div>`); EXT.l_lea(); EXT.leaOpen(lid); } catch (e) { $('#qe').textContent = e.message; } };
+};
+
+// 0.29.3 — إضافة وحدة إلى محفظة التأجير (كان الخادم يقبل retained بلا زر): تُعرض الوحدات غير المباعة خارج المحفظة.
+EXT.leaUnitAdd = async () => {
+  const [C, O] = await Promise.all([api('/lea/units/candidates'), api('/lea/owners')]);
+  if (!C.length) return toast('لا وحدات خارج المحفظة غير مباعة', 1);
+  modal(`<h3>إضافة وحدة إلى محفظة التأجير</h3><label>الوحدة</label><select id="ua_u">${C.map(x => `<option value="${x.id}">${esc(x.project)} · ${esc(x.code)}${x.type ? ' · ' + esc(x.type) : ''}${x.area ? ' · ' + N(x.area) + ' م²' : ''}</option>`).join('')}</select>
+   <label>المالك</label><select id="ua_o"><option value="">المالك المباشر (الافتراضي)</option>${O.map(o => `<option value="${o.id}">${esc(o.name)}</option>`).join('')}</select>
+   <label>الاستخدام</label><select id="ua_s">${Object.entries(LUSE).map(([a, b]) => `<option value="${a}">${b}</option>`).join('')}</select>
+   <p class="muted">لا تدخل المحفظة وحدة مباعة. بعد الإضافة تظهر شاغرة حتى يُوقَّع عقد عليها.</p><div class="err" id="ua_e"></div><div class="btns" style="margin-top:12px"><button class="btn p" id="ua_go">إضافة</button> <button class="btn" data-call="closeModal">إلغاء</button></div>`);
+  $('#ua_go').onclick = async () => { try { const body = {retained: true, use: $('#ua_s').value}; if ($('#ua_o').value) body.owner_id = +$('#ua_o').value; await post('/lea/units/' + $('#ua_u').value, body); closeModal(); toast('أُضيفت الوحدة إلى المحفظة'); EXT.l_lea(); } catch (e) { $('#ua_e').textContent = e.message; } };
 };
 
 EXT.leaCheqAct = async (id, act) => {
@@ -1409,7 +1424,9 @@ EXT.l_adm = async function () {
     $('#nrun').onclick = async () => { const r = await tryDo(() => api('/notifications/run', {method: 'POST'})); toast(`أُنشئ ${N(r.created)} إشعار`); EXT.l_adm(); };
   } else if (k === 'priv' && can('admin')) {
     const P = await api('/privacy');
-    B.innerHTML = BOX('طلبات أصحاب البيانات (قانون حماية البيانات الشخصية)', T(['العميل', 'النوع', 'التاريخ', 'الحالة', 'ملاحظة'], P.map(p => `<tr><td>${esc(p.name)}</td><td>${esc({export: 'نسخة من بياناتي', erase: 'حذف', correct: 'تصحيح'}[p.kind])}</td><td>${fmtDate(p.created)}</td><td>${pill('مفتوح', 'p-w')}</td><td>${esc(p.note)}</td></tr>`)));
+
+    const PV = {open: ['مفتوح', 'p-w'], done: ['نُفِّذ', 'p-ok'], rejected: ['مرفوض', 'p-b']}, KIND = {export: 'نسخة من بياناتي', erase: 'حذف', correct: 'تصحيح'};
+    B.innerHTML = BOX('طلبات أصحاب البيانات (قانون حماية البيانات الشخصية)', T(['العميل', 'النوع', 'التاريخ', 'الحالة', 'ملاحظة العميل', 'القرار', ''], P.map(p => `<tr><td>${esc(p.name)}</td><td>${esc(KIND[p.kind] || p.kind)}</td><td>${fmtDate(p.created)}</td><td>${pill(...(PV[p.status] || [esc(p.status), 'p-w']))}</td><td>${esc(p.note || '')}</td><td>${p.decision_note ? esc(p.decision_note) + `<br><span class="muted">${esc(p.decided_by || '')} · ${fmtDate(p.decided_at)}</span>` : '—'}</td><td>${p.status === 'open' ? `<button class="btn p" data-call="EXT.privAct" data-args="${J([p.id, 'complete', p.kind])}">تنفيذ</button> <button class="btn" data-call="EXT.privAct" data-args="${J([p.id, 'reject', p.kind])}">رفض</button>` : ''}</td></tr>`), 'لا طلبات.'));
   } else {
     EXT.cur.adm = 'sec';
     const [SS, ID] = await Promise.all([api('/me/sessions'), api('/me/identity')]);
@@ -1799,7 +1816,7 @@ const ACCAP = () => can('accounting_approve');
 const accToday = () => new Date().toISOString().slice(0, 10);
 
 EXT.l_acc = async function () {
-  const tabs = [['ov', 'نظرة عامة'], ['tb', 'ميزان المراجعة'], ['jr', 'القيود'], ['gl', 'دفتر الأستاذ'], ['ap', 'الذمم الدائنة'], ['bk', 'البنوك والمطابقة'], ['rp', 'القوائم المالية'], ['as', 'الأصول والتمويل والضريبة'], ['ch', 'دليل الحسابات'], ['st', 'الافتتاحي والفترات']], el = $('#acc'), k = this.cur.acc;
+  const tabs = [['ov', 'نظرة عامة'], ['tb', 'ميزان المراجعة'], ['jr', 'القيود'], ['gl', 'دفتر الأستاذ'], ['ap', 'الذمم الدائنة'], ['bk', 'البنوك والمطابقة'], ['rp', 'القوائم المالية'], ['bg', 'الموازنات'], ['as', 'الأصول والتمويل والضريبة'], ['ch', 'دليل الحسابات'], ['st', 'الافتتاحي والفترات']], el = $('#acc'), k = this.cur.acc;
   el.innerHTML = SUB0('acc', tabs, k) + '<div id="accB">…</div>';
   const B = $('#accB');
   if (k === 'ov') {
@@ -1852,6 +1869,7 @@ EXT.l_acc = async function () {
   } else if (k === 'ap') { await EXT.accAp(B);
   } else if (k === 'bk') { await EXT.accBk(B);
   } else if (k === 'rp') { await EXT.accRp(B);
+  } else if (k === 'bg') { await EXT.accBg(B);
   } else if (k === 'as') { await EXT.accAs(B);
   }
 };
@@ -1978,7 +1996,7 @@ EXT.accBk = async function (B) {
       ACCAP() ? '<button class="btn p" data-call="EXT.accBankNew">+ حساب بنكي</button>' : '')
     + (id ? BOX('كشف الحساب والمطابقة', `<div class="toolbar">${W ? `<input id="bkF" type="file" accept=".csv,.xlsx"> <button class="btn p" data-call="EXT.accStmtImport" data-args="${J([id])}">استيراد كشف</button> <button class="btn" data-call="EXT.accAutoMatch" data-args="${J([id])}">مطابقة آلية</button>` : ''}</div>
         <p class="muted">أعمدة الملف: التاريخ، البيان، المرجع، المبلغ (موجب داخل وسالب خارج) — أو عمودا مدين ودائن — والرصيد اختياريًا. استيراد الملف نفسه مرتين لا يكرّر شيئًا.</p>`
-        + T(['التاريخ', 'البيان', 'المرجع', 'المبلغ', 'الحالة', ''], lines.map(l => `<tr><td>${fmtDate(l.line_date)}</td><td>${esc(l.description || '')}</td><td>${esc(l.reference || '')}</td><td>${A3(l.amount)}</td><td>${pill({unmatched: 'غير مطابَق', matched: 'مطابَق ' + (l.journal_number || ''), ignored: 'متجاوَز'}[l.status], {unmatched: 'p-w', matched: 'p-ok', ignored: 'p-b'}[l.status])}</td><td>${l.status === 'matched' && W ? `<button class="btn" data-call="EXT.accUnmatch" data-args="${J([id, l.id])}">فك</button>` : ''}</td></tr>`), 'لا أسطر مستوردة.'))
+        + T(['التاريخ', 'البيان', 'المرجع', 'المبلغ', 'الحالة', ''], lines.map(l => `<tr><td>${fmtDate(l.line_date)}</td><td>${esc(l.description || '')}</td><td>${esc(l.reference || '')}</td><td>${A3(l.amount)}</td><td>${pill({unmatched: 'غير مطابَق', matched: 'مطابَق ' + (l.journal_number || ''), ignored: 'متجاوَز'}[l.status], {unmatched: 'p-w', matched: 'p-ok', ignored: 'p-b'}[l.status])}</td><td>${l.status === 'matched' && W ? `<button class="btn" data-call="EXT.accUnmatch" data-args="${J([id, l.id])}">فك</button>` : ''}${l.status === 'unmatched' && W ? `<button class="btn" data-call="EXT.accMatch" data-args="${J([id, l.id, l.amount, l.description || ''])}">مطابقة يدوية</button>${ACCAP() ? ` <button class="btn" data-call="EXT.accIgnore" data-args="${J([id, l.id])}">تجاوز</button>` : ''}` : ''}</td></tr>`), 'لا أسطر مستوردة.'))
       + BOX('مطابقة نهاية الفترة', `<div class="toolbar"><label>حتى</label> <input id="rcE" type="date" value="${accToday()}"> <label>رصيد الكشف</label> <input id="rcS" inputmode="decimal" placeholder="0.000"> <button class="btn" data-call="EXT.accRecon" data-args="${J([id])}">احسب</button></div><div id="rcOut"></div>`
         + T(['حتى', 'رصيد الكشف', 'رصيد الدفاتر', 'أُغلقت بواسطة'], rec.map(r => `<tr><td>${fmtDate(r.period_end)}</td><td>${A3(r.statement_balance)}</td><td>${A3(r.book_balance)}</td><td>${esc(r.closed_by || '')}</td></tr>`), 'لا مطابقات مغلقة.'))
       + BOX('الشيكات الصادرة', T(['الشيك', 'المستفيد', 'المبلغ', 'الاستحقاق', 'الحالة', ''], cq.map(q => `<tr><td><span class="num">${esc(q.number)}</span><br><span class="muted">${esc(q.bank || '')}</span></td><td>${esc(q.payee || '')}</td><td>${A3(q.amount)}</td><td>${fmtDate(q.due_date)}</td><td>${pill({issued: 'صادر', cleared: 'صُرف', cancelled: 'ملغى'}[q.status] || esc(q.status), q.status === 'cleared' ? 'p-ok' : 'p-w')}</td><td>${q.status === 'issued' && W ? `<button class="btn" data-call="EXT.accChequeCleared" data-args="${J([q.id])}">صُرف</button>` : ''}</td></tr>`), 'لا شيكات صادرة.')) : '');
@@ -2004,6 +2022,59 @@ EXT.accRecon = async id => {
     + (r.balanced && ACCAP() ? `<div class="btns"><button class="btn p" data-call="EXT.accReconClose" data-args="${J([id, end, +sb])}">إغلاق المطابقة</button></div>` : '<p class="muted">لا تُغلق المطابقة حتى يكون الفرق صفرًا: سجّل في الدفاتر ما ظهر في الكشف ولم يُسجَّل، أو طابق ما تبقّى.</p>');
 };
 EXT.accReconClose = async (id, end, sb) => { await tryDo(() => post(`/acc/banks/${id}/recon/close`, {end, statement_balance: sb}), 'أُغلقت المطابقة'); EXT.l_acc(); };
+
+// 0.29.3 — المطابقة اليدوية لسطر كشف ملتبس: الخادم يقترح الأقرب مبلغًا وتاريخًا ولا يقبل مبلغين مختلفين.
+EXT.accMatch = async (bid, sid, amount, desc) => {
+  const S = await tryDo(() => api(`/acc/banks/${bid}/suggest/${sid}`));
+  modal(`<h3>مطابقة سطر الكشف</h3><p>${esc(desc)} · <b>${A3(amount)}</b></p>${T(['التاريخ', 'القيد', 'البيان', 'المبلغ', ''], S.map(x => { const ok = Math.abs(x.amount - amount) < 0.0005; return `<tr><td>${fmtDate(x.jdate)}</td><td><span class="num">${esc(x.number || '')}</span></td><td>${esc(x.memo || '')}</td><td>${pill(A3(x.amount), ok ? 'p-ok' : 'p-w')}</td><td>${ok ? `<button class="btn p" data-call="EXT.accMatchDo" data-args="${J([bid, sid, x.id])}">اختيار</button>` : '<span class="muted">مبلغ مختلف</span>'}</td></tr>`; }), 'لا قيود مرشّحة على هذا الحساب.')}
+   <p class="muted">لا تتم المطابقة إلا بمبلغ مطابق للبيزة؛ إن اختلف المبلغان سجّل الفرق بقيد ثم طابق.</p><div class="btns" style="margin-top:12px"><button class="btn" data-call="closeModal">إغلاق</button></div>`);
+};
+EXT.accMatchDo = async (bid, sid, aid) => { await tryDo(() => post(`/acc/banks/${bid}/lines/${sid}/match`, {acc_line_id: aid}), 'طُوبق السطر'); closeModal(); EXT.l_acc(); };
+EXT.accIgnore = (bid, sid) => {
+  modal(`<h3>تجاوز سطر الكشف</h3><p class="muted">لسطر لا يُطابَق أبدًا (مثل مكرّر أرسله البنك مرتين). يلزم سبب ويُسجَّل باسمك.</p><label>السبب</label><input id="mt_note" maxlength="200"><div class="err" id="mt_err"></div><div class="btns" style="margin-top:12px"><button class="btn p" id="mt_go">تجاوز</button> <button class="btn" data-call="closeModal">إلغاء</button></div>`);
+  $('#mt_go').onclick = async () => { try { await post(`/acc/banks/${bid}/lines/${sid}/ignore`, {note: $('#mt_note').value.trim()}); closeModal(); toast('تُجوّز السطر'); EXT.l_acc(); } catch (e) { $('#mt_err').textContent = e.message; } };
+};
+
+// 0.29.3 — الموازنات: الموازنة مقابل الفعلي حتى شهر، وتعيين موازنة سنوية لحساب (تُوزَّع على 12 شهرًا).
+EXT.accBg = async function (B) {
+  const yr = this.accBgY || +accToday().slice(0, 4), tm = this.accBgM || +accToday().slice(5, 7), cc = this.accBgC || 0;
+  const [C, R] = await Promise.all([api('/acc/cost-centers'), api(`/acc/budget-report?year=${yr}&to_month=${tm}${cc ? '&cc=' + cc : ''}`)]), t = R.totals;
+  const net = k => A3(t.revenue[k] - t.expense[k]);
+  B.innerHTML = `<div class="toolbar"><label>السنة</label> <input id="bgY" inputmode="numeric" value="${yr}" style="width:80px"> <label>حتى شهر</label> <select id="bgM">${Array.from({length: 12}, (_, i) => `<option value="${i + 1}" ${i + 1 === tm ? 'selected' : ''}>${i + 1}</option>`).join('')}</select> <label>مركز التكلفة</label> <select id="bgC"><option value="">الكل</option>${C.map(x => `<option value="${x.id}" ${x.id === cc ? 'selected' : ''}>${esc(x.code)} — ${esc(x.name)}</option>`).join('')}</select>${ACCAP() ? ' <button class="btn p" data-call="EXT.accBgSet">تعيين موازنة…</button>' : ''}</div>`
+    + KP([['إيرادات (موازنة)', A3(t.revenue.budget), 'الفعلي ' + A3(t.revenue.actual)], ['مصروفات (موازنة)', A3(t.expense.budget), 'الفعلي ' + A3(t.expense.actual)], ['الصافي', net('budget'), 'الفعلي ' + net('actual')]])
+    + BOX(`الموازنة مقابل الفعلي — ${yr}، حتى الشهر ${N(tm)}`, T(['الحساب', 'النوع', 'الموازنة', 'الفعلي', 'الفرق', 'نسبة الفعلي'], R.rows.map(x => `<tr><td><span class="num">${esc(x.code)}</span> ${esc(x.name)}</td><td>${x.type === 'revenue' ? 'إيراد' : 'مصروف'}</td><td>${A3(x.budget)}</td><td>${A3(x.actual)}</td><td>${pill(A3(x.variance), x.variance >= 0 ? 'p-ok' : 'p-b')}</td><td>${x.pct == null ? '—' : N(x.pct) + '٪'}</td></tr>`), 'لا موازنة ولا حركة لهذه الفترة.'))
+    + '<p class="muted">الفرق الموجب في صالحك: إيراد فاق موازنته أو مصروف دونها.</p>';
+  const re = () => { EXT.accBgY = +$('#bgY').value || yr; EXT.accBgM = +$('#bgM').value; EXT.accBgC = +$('#bgC').value || 0; EXT.l_acc(); };
+  ['#bgY', '#bgM', '#bgC'].forEach(x => $(x).onchange = re);
+};
+EXT.accBgSet = async () => {
+  const [A, C] = await Promise.all([api('/acc/accounts'), api('/acc/cost-centers')]), as = A.filter(a => a.postable && a.active && ['revenue', 'expense'].includes(a.type));
+  modal(`<h3>تعيين موازنة سنوية</h3><p class="muted">يُوزَّع المبلغ السنوي بالتساوي على اثني عشر شهرًا ويستبدل خلايا هذا الحساب ومركز التكلفة في السنة. مبلغ صفر يمسحها.</p><label>السنة</label><input id="bg_y" inputmode="numeric" value="${EXT.accBgY || accToday().slice(0, 4)}">
+   <label>الحساب (إيراد أو مصروف)</label><select id="bg_a">${as.map(a => `<option value="${a.id}">${esc(a.code)} — ${esc(a.name)}</option>`).join('')}</select><label>مركز التكلفة (اختياري)</label><select id="bg_c"><option value="">بلا</option>${C.map(x => `<option value="${x.id}">${esc(x.code)} — ${esc(x.name)}</option>`).join('')}</select>
+   <label>المبلغ السنوي (ر.ع)</label><input id="bg_m" inputmode="decimal"><div class="err" id="bg_e"></div><div class="btns" style="margin-top:12px"><button class="btn p" id="bg_go">حفظ</button> <button class="btn" data-call="closeModal">إلغاء</button></div>`);
+  $('#bg_go').onclick = async () => {
+    const tot = Math.round(+$('#bg_m').value * 1000); if (!(tot >= 0)) { $('#bg_e').textContent = 'اكتب مبلغًا صحيحًا'; return; }
+    const base = Math.floor(tot / 12), lines = Array.from({length: 12}, (_, i) => ({account: +$('#bg_a').value, cost_center_id: +$('#bg_c').value || null, month: i + 1, amount: (i === 11 ? tot - base * 11 : base) / 1000}));
+    try { const r = await post('/acc/budgets', {year: +$('#bg_y').value, lines}); closeModal(); toast(`حُفظت الموازنة (${N(r.cells)} خلية)`); EXT.accBgY = +$('#bg_y').value; EXT.l_acc(); } catch (e) { $('#bg_e').textContent = e.message; }
+  };
+};
+
+// 0.29.3 — تنفيذ طلب خصوصية أو رفضه بسبب يصل إلى العميل (الحذف إخفاء هوية، ويُرفض آليًا ما دامت التزامات قائمة).
+EXT.privAct = (rid, action, kind) => {
+  const erase = action === 'complete' && kind === 'erase';
+  modal(`<h3>${action === 'complete' ? 'تنفيذ الطلب' : 'رفض الطلب'}</h3>${erase ? '<p class="muted">الحذف إخفاءٌ لهوية العميل لا محوٌ للسجل المالي، ويُرفض آليًا ما دام عليه حجز غير مسلَّم أو أقساط أو رسوم اتحاد ملاك. ويُعطَّل حساب دخوله.</p>' : ''}<label>سبب القرار أو ما نُفِّذ (يصل العميل)</label><input id="pv_note" maxlength="300"><div class="err" id="pv_err"></div><div class="btns" style="margin-top:12px"><button class="btn p" id="pv_go">${action === 'complete' ? 'تنفيذ' : 'رفض'}</button> <button class="btn" data-call="closeModal">إلغاء</button></div>`);
+  $('#pv_go').onclick = async () => { try { await post(`/privacy/${rid}/process`, {action, note: $('#pv_note').value.trim()}); closeModal(); toast(action === 'complete' ? 'نُفِّذ الطلب' : 'رُفض الطلب'); EXT.l_adm(); } catch (e) { $('#pv_err').textContent = e.message; } };
+};
+
+// 0.29.3 — موعد تسليم لحجز مؤكد لا موعد له بعدُ.
+EXT.handNew = async () => {
+  const U = await api('/handover/unscheduled');
+  if (!U.length) return toast('لا حجوزات مؤكدة بلا موعد تسليم', 1);
+  modal(`<h3>موعد تسليم جديد</h3><label>الحجز</label><select id="hs_b">${U.map(x => `<option value="${x.booking_id}">${esc(x.project)} · ${esc(x.unit)} · ${esc(x.customer)}</option>`).join('')}</select><label>الموعد</label><input id="hs_d" type="date" min="${new Date().toISOString().slice(0, 10)}">
+   <div class="err" id="hs_e"></div><div class="btns" style="margin-top:12px"><button class="btn p" id="hs_go">حفظ الموعد</button> <button class="btn" data-call="closeModal">إلغاء</button></div>`);
+  $('#hs_go').onclick = async () => { try { await post(`/bookings/${$('#hs_b').value}/handover/schedule`, {appointment: $('#hs_d').value}); closeModal(); toast('حُفظ موعد التسليم'); EXT.l_post(); } catch (e) { $('#hs_e').textContent = e.message; } };
+};
+
 
 const STMT = {balance_sheet: 'قائمة المركز المالي', income_statement: 'قائمة الدخل', cash_flow: 'التدفقات النقدية', equity_changes: 'التغير في حقوق الملكية'};
 EXT.accRp = async function (B) {

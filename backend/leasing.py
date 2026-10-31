@@ -371,6 +371,13 @@ def api_units(_=Depends(need("leasing"))):
     return {"units": _units_state(db()), "states": UNIT_STATE, "uses": list(USES)}
 
 
+@router.get("/api/lea/units/candidates")
+def api_unit_candidates(_=Depends(need("leasing"))):
+    """0.29.3 — units that are not in the leasing portfolio yet and not sold: what «+ وحدة للمحفظة» offers."""
+    return rows(db().execute("""SELECT u.id, u.code, u.type, u.area, u.status, p.name project FROM units u JOIN projects p ON p.id=u.project_id
+                                WHERE COALESCE(u.retained,0)=0 AND u.status<>'s' ORDER BY p.id, u.code"""))
+
+
 class UnitPatch(BaseModel):
     owner_id: int | None = None
     lease_state: str | None = Field(default=None, pattern=r"^(prep|maintenance|not_leasable|none)$")

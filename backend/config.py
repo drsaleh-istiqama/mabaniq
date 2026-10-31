@@ -10,7 +10,7 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
-VERSION = "0.29.2"
+VERSION = "0.29.3"
 ROOT = Path(__file__).resolve().parent.parent
 
 

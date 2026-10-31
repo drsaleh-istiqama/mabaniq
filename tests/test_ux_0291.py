@@ -4,7 +4,7 @@ import tempfile
 
 os.environ.setdefault("MABANIQ_DB", os.path.join(tempfile.mkdtemp(), "ux.db"))
 os.environ["MABANIQ_FORCE_PW_CHANGE"] = "0"
-os.environ["MABANIQ_TENANTS"] = "bayan:بيان عمان;almaqsura:المقصورة العقارية"
+os.environ["MABANIQ_TENANTS"] = "almukhatat:المخطط العقارية;bayan:بيان عمان;almaqsura:المقصورة العقارية;view:رؤية العقارية"
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402

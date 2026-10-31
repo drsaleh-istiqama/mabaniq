@@ -43,6 +43,16 @@ def handover_list(_=Depends(need_any("handover", "service"))):
     return out
 
 
+@router.get("/api/handover/unscheduled")
+def handover_unscheduled(_=Depends(need_any("handover", "service"))):
+    """0.29.3 — confirmed, not yet delivered bookings that have no handover row (no appointment yet): what the «+ موعد تسليم» button offers."""
+    c = db()
+    return rows(c.execute("""SELECT b.id booking_id, u.code unit, cu.name customer, p.name project FROM bookings b JOIN units u ON u.id=b.unit_id
+                             JOIN customers cu ON cu.id=b.customer_id JOIN projects p ON p.id=u.project_id
+                             WHERE b.status='confirmed' AND b.handed_over IS NULL AND NOT EXISTS (SELECT 1 FROM handovers h WHERE h.booking_id=b.id)
+                             ORDER BY p.id, u.code"""))
+
+
 class ApptIn(BaseModel):
     appointment: dt.date
 
