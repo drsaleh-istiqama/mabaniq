@@ -937,6 +937,7 @@ from .hr_perf import router as hr_perf_router  # noqa: E402
 from .hr_recruit import router as hr_recruit_router  # noqa: E402
 from .hr_self import router as hr_self_router  # noqa: E402
 from .lessee import router as lessee_router  # noqa: E402
+from .policies import router as policies_router  # noqa: E402
 
 app.include_router(acc_ap_router)  # 0.24.0: الذمم الدائنة والبنوك
 app.include_router(acc_bank_router)  # 0.24.0: المطابقة البنكية والشيكات الصادرة
@@ -951,6 +952,7 @@ app.include_router(hr_recruit_router)  # 0.27.0: التوظيف
 app.include_router(hr_perf_router)  # 0.27.0: التقييم السنوي والتدريب
 app.include_router(hr_disc_router)  # 0.27.0: الجزاءات
 app.include_router(lessee_router)  # 0.28.0: بوابة المستأجر
+app.include_router(policies_router)  # 0.29.0: سجل السياسات واللوائح (الحوكمة)
 from .appearance import router as appearance_router  # noqa: E402
 from .assistant import router as assistant_router  # noqa: E402
 from .identity import router as identity_router  # noqa: E402

@@ -45,23 +45,23 @@ ROLES = {
 ALL_STAFF = {"view", "inventory", "book", "leads", "finance", "confirm", "decide", "construction", "approve_ipc",
              "service", "admin", "audit", "land", "permits", "kyc", "brokers", "invoices", "handover", "oa",
              "leasing", "leasing_approve", "market", "reports", "notify", "users", "docs", "accounting", "accounting_approve",
-             "hr", "hr_payroll", "hr_manager", "hr_self"}
+             "hr", "hr_payroll", "hr_manager", "hr_self", "policies", "policies_admin"}  # 0.29.0: policies = read + acknowledge, policies_admin = prepare / approve
 PERMS = {
     "admin": ALL_STAFF,
-    "sales": {"view", "inventory", "book", "leads", "service", "kyc", "brokers", "market", "notify", "docs"},
+    "sales": {"view", "inventory", "book", "leads", "service", "kyc", "brokers", "market", "notify", "docs", "policies"},
     "finance": {"view", "inventory", "finance", "confirm", "decide", "construction", "service", "audit", "kyc",
-                "invoices", "oa", "leasing", "reports", "notify", "brokers", "land", "docs", "accounting"},
-    "engineer": {"view", "construction", "permits", "handover", "docs"},
+                "invoices", "oa", "leasing", "reports", "notify", "brokers", "land", "docs", "accounting", "policies"},
+    "engineer": {"view", "construction", "permits", "handover", "docs", "policies"},
     "broker": {"broker_portal"},
     "investor": {"reports"},
     "customer": {"portal"},
     "property_manager": {"leasing_pm"},  # 0.22.0 — external manager: only /api/pm, only inside his user_scopes
-    "accountant": {"view", "finance", "invoices", "accounting", "docs", "reports", "audit"},  # 0.23.0 — books and statements; approval stays with the manager
+    "accountant": {"view", "finance", "invoices", "accounting", "docs", "reports", "audit", "policies"},  # 0.23.0 — books and statements; approval stays with the manager
     # 0.25.0 — HR officer: the whole people file but no payroll (`hr_payroll` is the manager's, and the employee's own payslip is `hr_self`); every HR user may also be an employee
-    "hr": {"view", "hr", "hr_manager", "hr_self", "docs", "reports", "audit", "notify"},
-    "payroll": {"hr_payroll", "hr_self", "hr_manager"},  # 0.26.0 — the payroll officer: salaries, payroll runs, loans and settlements; no people file
+    "hr": {"view", "hr", "hr_manager", "hr_self", "docs", "reports", "audit", "notify", "policies", "policies_admin"},
+    "payroll": {"hr_payroll", "hr_self", "hr_manager", "policies"},  # 0.26.0 — the payroll officer: salaries, payroll runs, loans and settlements; no people file
     "lessee": {"lessee"},  # 0.28.0 — the tenant's portal: only /api/lessee, only the leases of the file the login is linked to
-    "employee": {"hr_self", "hr_manager"},  # the employee portal: own file, own leave; `hr_manager` only matters for someone who has direct reports (checked per request)
+    "employee": {"hr_self", "hr_manager", "policies"},  # the employee portal: own file, own leave; `hr_manager` only matters for someone who has direct reports (checked per request)
 }
 TWO_FA_REQUIRED = {"admin", "finance", "accountant", "hr", "payroll"}
 

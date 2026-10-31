@@ -358,7 +358,7 @@ def post_settlement(c, ctx, t: dict) -> None:
     if t["status"] == "paid" and t["bank_account_id"] and not t["payment_journal_id"] and t["net"] > EPS:
         gl = c.execute("SELECT account_id FROM bank_accounts WHERE id=?", (t["bank_account_id"],)).fetchone()["account_id"]
         jid = ledger.post(c, date=dt.date.fromisoformat(t["paid_on"]), memo=f"دفع مخالصة — {t['number']}", source_kind="settlement_pay", source_ref=str(t["id"]),
-                          source_key=f"settlement_pay:{t['id']}", ctx=ctx, lines=[dict(account="payroll_payable", debit=t["net"]), dict(account=gl, credit=t["net"])])
+                          source_key=f"settlement_pay:{t['id']}", ctx=ctx, lines=[dict(account="payroll_payable", debit=t["net"], party_type="employee", party_id=t["employee_id"]), dict(account=gl, credit=t["net"])])   # 0.29.0: names the leaver, so his payable closes to zero
         if jid:
             c.execute("UPDATE terminations SET payment_journal_id=? WHERE id=?", (jid, t["id"]))
 

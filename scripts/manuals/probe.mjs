@@ -1,0 +1,12 @@
+import {chromium} from '@playwright/test';
+const [base, tenant, token, shot] = process.argv.slice(2);
+const b = await chromium.launch({channel: 'chrome'});
+const ctx = await b.newContext({viewport: {width: 1440, height: 900}, locale: 'ar-OM'});
+await ctx.addCookies([{name: 'mbq_session', value: token, url: base}, {name: 'mbq_tenant', value: tenant, url: base}]);
+const p = await ctx.newPage();
+p.on('console', (m) => m.type() === 'error' && console.log('CONSOLE', m.text().slice(0, 200)));
+await p.goto(base + '/', {waitUntil: 'networkidle'});
+await p.waitForTimeout(1500);
+console.log('URL', p.url(), 'TITLE', await p.title());
+await p.screenshot({path: shot});
+await b.close();

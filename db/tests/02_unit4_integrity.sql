@@ -2,7 +2,7 @@
 BEGIN;
 SELECT plan(
   (SELECT count(*)::int FROM pg_tables WHERE schemaname='public' AND tablename NOT IN ('schema_migrations','audit')) * 2
-  + 45 + 3 + 3 + 7 + 2 + 3 + 6 + 3 + 3
+  + 47 + 3 + 3 + 7 + 2 + 3 + 6 + 3 + 3 + 2
 );
 
 -- 1) every application table (audit excepted) has updated_at and the trigger
@@ -16,7 +16,7 @@ SELECT is((SELECT count(*) FROM pg_trigger tr JOIN pg_class c ON c.oid = tr.tgre
 -- 2) no DELETE on the ledgers for mabaniq_app (16 tables, incl. the issued-document registry since 0005)
 SELECT ok(NOT has_table_privilege('mabaniq_app', x, 'DELETE'), format('mabaniq_app has no DELETE on %s', x))
   FROM unnest(ARRAY['payments','installments','invoices','refunds','charity_dues','bank_lines','distributions','commissions',
-                    'resale_settlements','rent_dues','oa_charges','pay_intents','ipcs','ipc_items','doc_issues','doc_sends','rent_payments','arrears_notices','owner_statements','import_batches','acc_accounts','acc_cost_centers','acc_periods','bank_accounts','payment_orders','vat_returns','bank_recons','depreciation_runs','ap_payments','employees','leave_requests','hr_requests','leave_types','payroll_runs','salary_structures','employee_loans','loan_installments','eosb_rules','terminations','hr_rates','appraisals','disciplinary_cases','penalty_rules']) AS x;
+                    'resale_settlements','rent_dues','oa_charges','pay_intents','ipcs','ipc_items','doc_issues','doc_sends','rent_payments','arrears_notices','owner_statements','import_batches','acc_accounts','acc_cost_centers','acc_periods','bank_accounts','payment_orders','vat_returns','bank_recons','depreciation_runs','ap_payments','employees','leave_requests','hr_requests','leave_types','payroll_runs','salary_structures','employee_loans','loan_installments','eosb_rules','terminations','hr_rates','appraisals','disciplinary_cases','penalty_rules','policies','policy_acks']) AS x;
 -- 0.21.0: the rent payments ledger is also closed to UPDATE (a correction is a reversing row)
 SELECT ok(NOT has_table_privilege('mabaniq_app', 'rent_payments', 'UPDATE'), 'mabaniq_app has no UPDATE on rent_payments');
 -- 0.24.0: a supplier payment is a ledger row too
@@ -83,6 +83,10 @@ INSERT INTO users(username, name, role, pw, lessee_id) SELECT 'tap-l1', 'x', 'le
 SELECT throws_like($$ INSERT INTO users(username, name, role, pw, lessee_id) SELECT 'tap-l2', 'x', 'lessee', 'x', id FROM tenants_l WHERE name = 'tap-tenant' $$, '%duplicate key%', 'one login per tenant file');
 SELECT has_column('public', 'users', 'lessee_id', 'users.lessee_id links a login to a tenant file');
 SELECT has_column('public', 'tenants_l', 'consent_at', 'tenants_l.consent_at holds the tenant''s own acknowledgement');
+-- 0.29.0: the policy register — a known category and status, one row per code and version, one acknowledgement per person per version
+SELECT throws_like($$ INSERT INTO policies(code, title, category) VALUES ('tap-p', 't', 'secret') $$, '%check constraint%', 'a policy has a known category');
+INSERT INTO policies(code, title, category) VALUES ('tap-p', 't', 'hr');
+SELECT throws_like($$ INSERT INTO policies(code, title, category) VALUES ('tap-p', 't2', 'hr') $$, '%duplicate key%', 'one policy row per code and version');
 RESET ROLE;
 
 SELECT * FROM finish();

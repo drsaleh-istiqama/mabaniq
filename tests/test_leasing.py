@@ -341,7 +341,10 @@ def test_two_simultaneous_receipts_for_one_due_cannot_both_succeed(cl):
 
     from starlette.testclient import TestClient as TC
 
+    from backend import dbx
     from backend.app import app as application
+    if not dbx.is_postgres():
+        pytest.skip("the per-lease lock is a PostgreSQL advisory lock; SQLite (dev / demo only) has a single writer and reads outside a transaction, so two simultaneous receipts can race there")
     login_as(cl, "admin", "bayan")
     lid = _new_lease(cl, start="2039-01-01", months=12, annual_rent=1200, frequency=12)
     due = cl.get(f"/api/lea/leases/{lid}").json()["dues"][0]

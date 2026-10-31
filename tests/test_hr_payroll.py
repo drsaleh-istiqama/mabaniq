@@ -518,6 +518,9 @@ def test_a_run_whose_inputs_changed_after_the_compute_is_refreshed_not_approved(
 
 
 def test_a_month_that_has_not_ended_is_not_approved_and_nobody_is_silently_left_unpaid(cl):
+    import calendar
+    if TODAY.day == calendar.monthrange(TODAY.year, TODAY.month)[1]:
+        pytest.skip("on the last day of the month the running month may already be approved (the rule counts that day as the month's end), so the 'not ended yet' refusal cannot be shown")
     _rates(cl)
     _staff(cl, "موظف أول", 300, omani=False)
     login_as(cl, "admin")

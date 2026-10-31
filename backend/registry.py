@@ -57,7 +57,7 @@ for _k, _m in MODULES.items():
 SHARED_PREFIXES = {"/api/fm": ("handover", "leasing"), "/api/work-orders": ("handover", "leasing")}
 
 # permissions that belong to no module: always present for the roles that hold them
-CORE_PERMS = frozenset({"view", "inventory", "users", "audit", "admin", "docs", "notify", "portal"})
+CORE_PERMS = frozenset({"view", "inventory", "users", "audit", "admin", "docs", "notify", "portal", "policies", "policies_admin"})  # 0.29.0: the policy register is governance — never switched off with a module
 
 PERM_MODULE = {p: k for k, m in MODULES.items() for p in m["perms"]}
 

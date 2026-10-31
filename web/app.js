@@ -46,7 +46,7 @@ const scoreC = v => v >= 75 ? 'p-ok' : v >= 50 ? 'p-w' : 'p-b';
 
 /* ---------------- الحالة والتنقل ---------------- */
 const S = {screen: 'ov', projects: [], proj: null, bld: null, plan: 0, me: null};
-const SCREEN_PERM = {hr: 'hr', pay: 'hr_payroll', me: 'hr_self', lp: 'lessee', acc: 'accounting', pmg: 'leasing_pm', lea: 'leasing', ov: 'view', inv: 'inventory', crm: 'leads', fin: 'finance', con: 'construction', svc: 'service', log: 'audit', pre: 'permits', sal: 'kyc', bill: 'invoices', post: 'handover', rep: 'reports', mk: 'leads', adm: 'view'};
+const SCREEN_PERM = {hr: 'hr', pay: 'hr_payroll', me: 'hr_self', lp: 'lessee', acc: 'accounting', pmg: 'leasing_pm', lea: 'leasing', ov: 'view', inv: 'inventory', crm: 'leads', fin: 'finance', con: 'construction', svc: 'service', log: 'audit', pre: 'permits', sal: 'kyc', bill: 'invoices', post: 'handover', rep: 'reports', mk: 'leads', adm: 'view', pol: 'policies'};
 const SCREEN_ANY = {pre: ['permits', 'land'], post: ['handover', 'oa', 'leasing', 'service'], sal: ['kyc', 'brokers', 'market'], rep: ['reports', 'finance', 'view'], mk: ['leads', 'inventory', 'reports']};  // Unit 7: reports for every staff role (the API filters by permission), marketing for sales/inventory/reports
 const can = p => S.me?.perms.includes(p);
 const SCREEN_MOD = {hr: ['hr'], pay: ['hr'], me: ['hr'], lp: ['leasing'], acc: ['accounting'], pmg: ['leasing'], lea: ['leasing'], pre: ['land'], inv: [], crm: ['sales'], mk: ['marketing'], sal: ['sales'], con: ['construction'], post: ['handover', 'leasing'], svc: ['handover'], fin: ['finance'], bill: ['finance'], rep: ['reports']};  // 0.20.0: a screen needs one of its modules (none listed = core)
@@ -59,7 +59,7 @@ function go(s) {
   $$('.scr').forEach(x => x.classList.toggle('on', x.id === s));
   localStorage.setItem('mbq-screen', s);
   ({ov: loadOverview, inv: loadInventory, crm: loadCRM, fin: loadFinance, con: () => { loadIPC(); EXT.l_conx(); }, svc: loadService, log: loadAudit,
-    acc: () => EXT.l_acc(), hr: () => EXT.l_hr(), pay: () => EXT.l_pay(), me: () => EXT.l_me(), lp: () => EXT.l_lp(), pmg: () => EXT.l_pm(), lea: () => EXT.l_lea(), pre: () => EXT.l_pre(), sal: () => EXT.l_sal(), bill: () => EXT.l_bill(), post: () => EXT.l_post(), rep: () => EXT.l_rep(), mk: () => EXT.l_mk(), adm: () => EXT.l_adm()})[s]?.()?.catch?.(e => toast(e.message, 1));
+    acc: () => EXT.l_acc(), hr: () => EXT.l_hr(), pay: () => EXT.l_pay(), me: () => EXT.l_me(), lp: () => EXT.l_lp(), pmg: () => EXT.l_pm(), lea: () => EXT.l_lea(), pre: () => EXT.l_pre(), sal: () => EXT.l_sal(), bill: () => EXT.l_bill(), post: () => EXT.l_post(), rep: () => EXT.l_rep(), mk: () => EXT.l_mk(), adm: () => EXT.l_adm(), pol: () => EXT.l_pol()})[s]?.()?.catch?.(e => toast(e.message, 1));
   crumb(); shell(s);
 }
 $$('[data-s]').forEach(b => b.onclick = e => { e.preventDefault(); document.body.classList.remove('nav-open'); go(b.dataset.s); });
@@ -83,6 +83,7 @@ const META = {
   svc: ['3 · التسليم والتشغيل', 'خدمة العملاء', 'طلبات الصيانة وإعادة البيع الواردة من تطبيق العميل.'],
   mk: ['2 · البيع والإنشاء', 'تسويق المشاريع', 'حالة كل مشروع تسويقيًا، الحملات وقياسها، استوديو الإعلانات، والتنبيهات من حركة السوق.'],
   rep: ['الحوكمة', 'التقارير والتحليلات', 'تقرير البنك الممول بتقييم المخاطر، وتقرير المستثمرين بالربحية والتوزيعات.'],
+  pol: ['الحوكمة', 'السياسات واللوائح', 'سجل السياسات واللوائح المعتمدة بنسخها وتواريخ سريانها، وإقرار العاملين بالاطلاع عليها.'],
   log: ['الحوكمة', 'سجل التدقيق', 'كل إجراء مسجّل بوقته ومنفّذه في سجل متسلسل يكشف أي تعديل.'],
   adm: ['الحوكمة', 'الإدارة والأمان', 'المستخدمون والصلاحيات، والتحقق الثنائي، والنسخ الاحتياطي والإشعارات والخصوصية.']};
 const CYCLE = [['pre', 'الأرض والتراخيص'], ['inv', 'البيع والإنشاء'], ['post', 'التسليم والتشغيل']];
@@ -100,6 +101,8 @@ function shell(s) {
   document.title = m[1] + ' · مبانيك';
 }
 function stageOf(p) { return p.completed || p.build_pct >= 80 ? 2 : p.build_pct >= 10 ? 1 : 0; }
+// 0.29.0 — the projects list is sorted least-built first, so projects[0] is the newest plot (no certificates, no site reports yet): the construction and escrow screens open on the most advanced project still under construction
+function activeProj() { const live = S.projects.filter(p => !p.completed && p.build_pct >= 10); return live.length ? live[live.length - 1] : S.projects[0]; }
 function renderCycle(P) {
   const cols = [['1 · الأرض والتراخيص', 'دراسة جدوى وترخيص وإطلاق'], ['2 · البيع والإنشاء', 'بيع على الخارطة وتحصيل مربوط بالإنجاز'], ['3 · التسليم والتشغيل', 'تسليم ونقل ملكية واتحاد ملاك وتأجير']];
   $('#cycle').innerHTML = cols.map(([t, d], i) => { const L = P.filter(p => stageOf(p) === i);
@@ -598,7 +601,7 @@ EXT.showPermit = function (p) {
 /* ================================================================ الإنشاء (تفاصيل المشروع) */
 EXT.l_conx = async function () {
   const box = $('#conx'); if (!box) return;
-  const pid = EXT.conP || S.projects[0].id;
+  const pid = EXT.conP || activeProj().id;
   const d = await api(`/construction/${pid}`);
   const s = d.schedule;
   const min = Math.min(...s.tasks.map(t => +new Date(t.planned_start))), max = Math.max(...s.tasks.map(t => +new Date(t.planned_end)));
@@ -619,9 +622,9 @@ EXT.l_conx = async function () {
 EXT.co = async (id, a) => { await tryDo(() => api(`/change-orders/${id}/decide`, {method: 'POST', body: {action: a}}), 'سُجّل القرار'); EXT.l_conx(); };
 EXT.ncrClose = async id => { await tryDo(() => api(`/ncrs/${id}/close`, {method: 'POST'}), 'أُغلق التقرير'); EXT.l_conx(); };
 EXT.newCO = () => { modal(`<h3>أمر تغيير جديد</h3><label>العنوان</label><input id="ct"><label>السبب</label><input id="cr" value="طلب المالك"><label>التكلفة (ر.ع)</label><input id="cc" inputmode="numeric"><label>أثره على المدة (يوم)</label><input id="cd" value="0" inputmode="numeric"><div class="err" id="ce"></div><div class="btns" style="margin-top:12px"><button class="btn p" id="cgo">رفع للاعتماد</button><button class="btn" data-call="closeModal">إلغاء</button></div>`);
-  $('#cgo').onclick = async () => { try { await api('/change-orders', {method: 'POST', body: {project_id: EXT.conP || S.projects[0].id, title: $('#ct').value, reason: $('#cr').value, cost: +$('#cc').value, days: +$('#cd').value}}); closeModal(); toast('رُفع أمر التغيير'); EXT.l_conx(); } catch (e) { $('#ce').textContent = e.message; } }; };
+  $('#cgo').onclick = async () => { try { await api('/change-orders', {method: 'POST', body: {project_id: EXT.conP || activeProj().id, title: $('#ct').value, reason: $('#cr').value, cost: +$('#cc').value, days: +$('#cd').value}}); closeModal(); toast('رُفع أمر التغيير'); EXT.l_conx(); } catch (e) { $('#ce').textContent = e.message; } }; };
 EXT.newSite = () => { modal(`<h3>تقرير الموقع اليومي</h3><label>عدد العمالة</label><input id="sw" inputmode="numeric"><label>الطقس</label><input id="sh" value="مشمس"><label>الأعمال المنجزة</label><input id="sd"><label>المعوقات</label><input id="si"><label>عدد الصور</label><input id="sp" value="0" inputmode="numeric"><div class="err" id="se2"></div><div class="btns" style="margin-top:12px"><button class="btn p" id="sgo2">حفظ</button><button class="btn" data-call="closeModal">إلغاء</button></div>`);
-  $('#sgo2').onclick = async () => { try { await api('/site-reports', {method: 'POST', body: {project_id: EXT.conP || S.projects[0].id, workers: +$('#sw').value, weather: $('#sh').value, work_done: $('#sd').value, issues: $('#si').value, photos: +$('#sp').value}}); closeModal(); toast('حُفظ التقرير'); EXT.l_conx(); } catch (e) { $('#se2').textContent = e.message; } }; };
+  $('#sgo2').onclick = async () => { try { await api('/site-reports', {method: 'POST', body: {project_id: EXT.conP || activeProj().id, workers: +$('#sw').value, weather: $('#sh').value, work_done: $('#sd').value, issues: $('#si').value, photos: +$('#sp').value}}); closeModal(); toast('حُفظ التقرير'); EXT.l_conx(); } catch (e) { $('#se2').textContent = e.message; } }; };
 
 /* ================================================================ المبيعات الموسّعة */
 EXT.l_sal = async function () {
@@ -732,7 +735,7 @@ EXT.l_bill = async function () {
       toast(`مطابقة ${N(r.matched)} من ${N(r.imported)} · غير مطابقة ${N(r.unmatched)}`); EXT.l_bill();
     };
   } else if (k === 'esc') {
-    const pid = EXT.escP || S.projects[0].id, e = await api(`/escrow/${pid}`);
+    const pid = EXT.escP || activeProj().id, e = await api(`/escrow/${pid}`);
     B.innerHTML = `<div class="toolbar"><select id="escP">${projOpts(pid)}</select></div>` + KP([['حساب الضمان', e.account], ['مقبوضات المشترين', K(e.buyer_receipts_to_date) + ' ر.ع'], ['مصروف للمقاول', K(e.contractor_releases) + ' ر.ع'], ['ضمان حسن التنفيذ المحتجز', K(e.retention_held) + ' ر.ع']])
       + `<div class="ai">${esc(e.rule)}</div>` + BOX('المستخلصات المعتمدة المصروفة من الضمان', T(['رقم', 'المرحلة', 'النسبة المعتمدة', 'قيمة المرحلة'], e.certified_ipcs.map(i => `<tr><td>${N(i.no)}</td><td>${esc(i.stage)}</td><td>${pct(i.approved_pct)}</td><td>${OMR(i.stage_value)}</td></tr>`)));
     $('#escP').onchange = ev => { EXT.escP = +ev.target.value; EXT.l_bill(); };
@@ -767,7 +770,7 @@ EXT.l_post = async function () {
   } else if (k === 'oa') {
     const pid = EXT.oaP || (S.projects.find(p => p.completed) || S.projects.find(p => p.kind === 'villa') || S.projects[0]).id, o = await api(`/oa/${pid}`);
     B.innerHTML = `<div class="toolbar"><select id="oaP">${projOpts(pid)}</select>${can('oa') ? '<button class="btn p" id="oaBill">إصدار مطالبات السنة</button>' : ''}</div>`
-      + KP([['الملاك', N(o.owners)], ['ميزانية ' + N(o.year), OMR(o.budget_total)], ['المعدل', ND(o.rate_per_sqm) + ' ر.ع/م²'], ['المحصّل', OMR(o.collected), 'من ' + OMR(o.billed)]]) + `<div class="ai">${esc(o.rule)}</div>`
+      + KP([['الملاك', N(o.owners)], ['ميزانية ' + o.year, OMR(o.budget_total)], ['المعدل', ND(o.rate_per_sqm) + ' ر.ع/م²'], ['المحصّل', OMR(o.collected), 'من ' + OMR(o.billed)]]) + `<div class="ai">${esc(o.rule)}</div>`
       + BOX('بنود الميزانية', T(['البند', 'المبلغ'], o.budget.map(b => `<tr><td>${esc(b.line)}</td><td>${OMR(b.amount)}</td></tr>`)))
       + BOX('التصويت الإلكتروني', T(['البند', 'يغلق', 'المشاركة', 'نعم', 'لا', 'النتيجة'], o.motions.map(m => `<tr><td>${esc(m.title)}</td><td>${fmtDate(m.closes)}</td><td>${pct(m.turnout)} (${N(m.votes)})</td><td>${pct(m.yes)}</td><td>${pct(m.no)}</td><td>${!m.quorum_met ? pill('النصاب لم يكتمل', 'p-w') : m.passed ? pill('مُقر', 'p-ok') : pill('مرفوض', 'p-b')}</td></tr>`)))
       + BOX('مطالبات الملاك', T(['المالك', 'الوحدة', 'المطالبة', 'المسدد'], o.charges.slice(0, 50).map(c => `<tr><td>${esc(c.owner)}</td><td><span class="num">${esc(c.unit)}</span></td><td>${OMR(c.amount)}</td><td>${OMR(c.paid)}</td></tr>`), 'لم تصدر مطالبات لهذه السنة بعد.'));
@@ -2503,7 +2506,7 @@ EXT.recRetention = async () => {
 EXT.hrApr = async function (B) {
   const cyc = this.aprCycle || '', Cy = await api('/hr/appraisal-cycles'), A_ = await api('/hr/appraisals' + (cyc ? '?cycle_id=' + cyc : ''));
   B.innerHTML = `<div class="toolbar"><button class="btn p" data-call="EXT.aprCycleForm">+ دورة تقييم</button></div>` + hrNote('الدرجة الكلية تُحسب ولا تُكتب: 70٪ للأهداف الموزونة و30٪ للكفاءات على مقياس 1–5. القرار (ترقية، زيادة…) يُسجَّل هنا ولا يغيّر راتبًا.')
-    + T(['الدورة', 'السنة', 'الحال', 'التقييمات', 'اكتمل', ''], Cy.map(k => `<tr data-call="EXT.aprFilter" data-args="${J([k.id])}" style="cursor:pointer" class="${k.id == cyc ? 'sel' : ''}"><td>${esc(k.name)}</td><td>${N(k.year)}</td><td>${pill(...CYC_ST[k.status])}</td><td>${N(k.total)}</td><td>${N(k.done)}</td>
+    + T(['الدورة', 'السنة', 'الحال', 'التقييمات', 'اكتمل', ''], Cy.map(k => `<tr data-call="EXT.aprFilter" data-args="${J([k.id])}" style="cursor:pointer" class="${k.id == cyc ? 'sel' : ''}"><td>${esc(k.name)}</td><td>${k.year}</td><td>${pill(...CYC_ST[k.status])}</td><td>${N(k.total)}</td><td>${N(k.done)}</td>
       <td>${k.status !== 'closed' ? `<button class="btn p" data-call="EXT.aprCycleDo" data-args="${J([k.id, 'open'])}">${k.status === 'draft' ? 'فتح وتوليد التقييمات' : 'إضافة الناقص'}</button> ` : ''}${k.status === 'open' ? `<button class="btn" data-call="EXT.aprCycleDo" data-args="${J([k.id, 'close'])}">إغلاق</button>` : ''}</td></tr>`), 'لا دورات.')
     + BOX(`التقييمات <span class="muted">${N(A_.length)}</span>`, T(['الموظف', 'المراجع', 'الحال', 'الدرجة', 'التصنيف', 'القرار'], A_.map(a => `<tr data-call="EXT.aprView" data-args="${J([a.id])}" style="cursor:pointer"><td>${esc(a.name)} <small class="muted">${esc(a.number)}</small></td><td>${esc(a.reviewer || '—')}</td><td>${pill(...APR_ST[a.status])}</td><td>${a.overall == null ? '—' : F2(a.overall)}</td><td>${esc(a.rating || '—')}</td><td>${a.status === 'final' || a.status === 'ack' ? APR_DEC[a.decision] : '—'}</td></tr>`), 'لا تقييمات.'));
 };
@@ -2600,6 +2603,65 @@ EXT.dscPropose = async id => {
   modal(`<h3>اقتراح جزاء</h3>${HS('dpR', 'المادة', R.map(r => [r.id, `${r.code} — ${r.name} (${DSC_KIND[r.kind]}${r.max_days ? '، حتى ' + F2(r.max_days) + ' يومًا' : ''})`]), '')}${HF('dpD', 'عدد الأيام (للخصم والإيقاف)', '', 'number', 'min="0" step="0.5"')}${HF('dpP', 'شهر الخصم (للخصم)', payMonth(), 'month')}<div class="err" id="dpE"></div>
     <div class="btns" style="margin-top:12px"><button class="btn p" id="dpGo">اقتراح</button> <button class="btn" data-call="closeModal">إلغاء</button></div>`);
   $('#dpGo').onclick = async () => { try { await post(`/hr/discipline/cases/${id}/propose`, {rule_id: +$('#dpR').value, penalty_days: +$('#dpD').value || 0, apply_period: $('#dpP').value}); closeModal(); EXT.dscCase(id); EXT.l_hr(); } catch (e) { $('#dpE').textContent = e.message; } };
+};
+
+/* ================================================================ الحوكمة — السياسات واللوائح (0.29.0) */
+const POL_CAT = {hr: 'الموارد البشرية', governance: 'الحوكمة', finance: 'المالية', leasing: 'التأجير', sales: 'المبيعات', operations: 'التشغيل والصيانة', compliance: 'الامتثال'};
+const POL_ST = {draft: ['مسودة', 'p-w'], approved: ['معتمدة', 'p-ok'], retired: ['موقوفة', 'p-b']};
+EXT.polArtText = arts => (arts || []).map(a => `${a.title || ''}\n${a.text || ''}`).join('\n---\n');
+EXT.polParse = txt => txt.split(/\n-{3,}\n/).map(b => b.trim()).filter(Boolean).map((b, i) => { const ln = b.split('\n'), t = ln.length > 1 ? ln.shift().trim() : ''; return {no: String(i + 1), title: t.slice(0, 120), text: (ln.join('\n').trim() || t).slice(0, 4000)}; });
+EXT.l_pol = async function () {
+  const el = $('#pol'), adm = can('policies_admin'), q = this.polQ || '', cat = this.polCat || '', st = this.polSt || '';
+  el.innerHTML = '<div id="polB">…</div>';
+  const B = $('#polB');
+  const [L, sm] = await Promise.all([api(`/policies?${cat ? 'category=' + cat + '&' : ''}${adm && st ? 'status=' + st + '&' : ''}${q ? 'q=' + encodeURIComponent(q) : ''}`), api('/policies/summary')]);
+  const row = p => `<tr data-call="EXT.polView" data-args="${J([p.id])}" style="cursor:pointer"><td>${esc(p.code)}</td><td>${esc(p.title)}</td><td>${esc(p.category_label)}</td><td>${esc(p.owner_role || '—')}</td><td>${N(p.version)}</td>
+    <td>${p.effective_from ? fmtDate(p.effective_from) : '—'}</td><td>${pill(...POL_ST[p.status])}${p.review_overdue ? ' ' + pill('المراجعة متأخرة', 'p-b') : ''}</td>
+    <td>${p.status !== 'approved' || !p.ack_required ? '—' : p.acked ? pill('أقررت', 'p-ok') : pill('بانتظار إقرارك', 'p-w')} <small class="muted">${p.ack_required && p.status === 'approved' ? N(p.ack_count) + ' أقرّوا' : ''}</small></td></tr>`;
+  B.innerHTML = KP([['سياسات سارية', N(sm.approved)], ...(adm ? [['مسودات', N(sm.draft)], ['موقوفة', N(sm.retired)]] : []), ['مراجعتها متأخرة', N(sm.review_overdue)], ['بانتظار إقراري', N(sm.my_pending)]])
+    + `<div class="toolbar"><input id="polQ" placeholder="بحث بالعنوان أو الرمز" value="${esc(q)}"> <select id="polC"><option value="">كل التصنيفات</option>${Object.entries(POL_CAT).map(([k, l]) => `<option value="${k}" ${k === cat ? 'selected' : ''}>${l}</option>`).join('')}</select>
+      ${adm ? `<select id="polS"><option value="">كل الحالات</option>${Object.entries(POL_ST).map(([k, v]) => `<option value="${k}" ${k === st ? 'selected' : ''}>${v[0]}</option>`).join('')}</select> <button class="btn p" data-call="EXT.polForm" data-args="[0]">+ سياسة</button>` : ''}</div>`
+    + T(['الرمز', 'السياسة', 'التصنيف', 'المسؤول', 'النسخة', 'السريان', 'الحال', 'الإقرار'], L.map(row), 'لا سياسات مطابقة.');
+  $('#polQ').onchange = e => { EXT.polQ = e.target.value.trim(); EXT.l_pol(); }; $('#polC').onchange = e => { EXT.polCat = e.target.value; EXT.l_pol(); };
+  const s = $('#polS'); if (s) s.onchange = e => { EXT.polSt = e.target.value; EXT.l_pol(); };
+};
+EXT.polView = async function (id) {
+  const p = await api('/policies/' + id), adm = can('policies_admin'), me = S.me.username;
+  const arts = p.articles.map(a => `<details open style="margin:6px 0"><summary><b>${esc(a.no)}</b> ${esc(a.title)}</summary><p style="white-space:pre-wrap;margin:6px 0 10px">${esc(a.text)}</p></details>`).join('');
+  insp(`${p.code} — ${p.title}`, `${KP([['الحال', esc(p.status_label)], ['النسخة', N(p.version)], ['تسري من', p.effective_from ? fmtDate(p.effective_from) : '—'], ['المراجعة القادمة', p.review_due ? fmtDate(p.review_due) : '—'], ['أقرّوا', p.ack_required ? N(p.ack_count) : 'لا يلزم']])}
+    ${p.summary ? `<p>${esc(p.summary)}</p>` : ''}<p class="muted">المسؤول: ${esc(p.owner_role || '—')} · التصنيف: ${esc(p.category_label)}${p.basis ? ' · الأساس: ' + esc(p.basis) : ''}</p>${arts}
+    ${p.versions.length > 1 ? `<p class="muted">النسخ: ${p.versions.map(v => `<a href="#" data-call="EXT.polView" data-args="${J([v.id])}">v${N(v.version)} (${esc(POL_ST[v.status][0])})</a>`).join(' · ')}</p>` : ''}
+    <div class="btns">${p.status === 'approved' && p.ack_required && !p.acked ? `<button class="btn p" data-call="EXT.polAck" data-args="${J([id])}">أقرّ بالاطلاع</button>` : p.acked ? pill('أقررت بالاطلاع على هذه النسخة', 'p-ok') : ''}
+      ${adm && p.status === 'draft' ? `<button class="btn" data-call="EXT.polForm" data-args="${J([id])}">تعديل</button> <button class="btn p" data-call="EXT.polApprove" data-args="${J([id])}" ${p.created_by === me ? 'disabled title="لا تعتمد سياسة أعددتها"' : ''}>اعتماد</button>` : ''}
+      ${adm && p.status === 'approved' ? `<button class="btn" data-call="EXT.polNew" data-args="${J([id])}">نسخة جديدة</button> <button class="btn" data-call="EXT.polAcks" data-args="${J([id])}">من أقرّ؟</button>` : ''}
+      ${adm && p.status !== 'retired' ? `<button class="btn" data-call="EXT.polRetire" data-args="${J([id])}">إيقاف</button>` : ''}</div><div id="polAcks"></div>`);
+};
+EXT.polAck = async id => { await tryDo(() => post(`/policies/${id}/ack`), 'سُجّل إقرارك'); EXT.polView(id); EXT.l_pol(); };
+EXT.polRetire = async id => { if (!confirm('إيقاف السياسة؟ لا تُعرض للعاملين بعد ذلك، ويبقى سجلها.')) return; await tryDo(() => post(`/policies/${id}/retire`), 'أُوقفت'); document.body.classList.remove('io'); EXT.l_pol(); };
+EXT.polNew = async id => { const r = await tryDo(() => post(`/policies/${id}/new-version`), 'أُنشئت مسودة النسخة الجديدة'); EXT.l_pol(); EXT.polView(r.id); };
+EXT.polApprove = id => {
+  modal(`<h3>اعتماد السياسة</h3><p>تؤكد أن النص مراجَع ومناسب للمنشأة. تُوقَف النسخة السارية السابقة تلقائيًا.</p>${HF('paV', 'تسري من', hrDay(), 'date')}<div class="err" id="paE"></div><div class="btns" style="margin-top:12px"><button class="btn p" id="paGo">اعتماد</button> <button class="btn" data-call="closeModal">إلغاء</button></div>`);
+  $('#paGo').onclick = async () => { try { await post(`/policies/${id}/approve`, {effective_from: $('#paV').value}); closeModal(); toast('اعتُمدت السياسة'); EXT.l_pol(); EXT.polView(id); } catch (e) { $('#paE').textContent = e.message; } };
+};
+EXT.polAcks = async id => {
+  const r = await api(`/policies/${id}/acks`);
+  $('#polAcks').innerHTML = BOX(`أقرّوا <span class="muted">${N(r.acknowledged.length)}</span>`, T(['الاسم', 'الوقت'], r.acknowledged.map(a => `<tr><td>${esc(a.name || a.username)}</td><td>${esc((a.acked_at || '').replace('T', ' ').slice(0, 16))}</td></tr>`), 'لم يقرّ أحد بعد.'))
+    + BOX(`لم يقرّوا بعد <span class="muted">${N(r.pending.length)}</span>`, T(['الاسم', 'الدور'], r.pending.map(a => `<tr><td>${esc(a.name || a.username)}</td><td>${esc(a.role)}</td></tr>`), 'أقرّ الجميع.'));
+};
+EXT.polForm = async function (id) {
+  const p = id ? await api('/policies/' + id) : {code: '', title: '', category: 'hr', owner_role: '', summary: '', basis: 'نموذج افتراضي للتجربة — يراجعه مختص قانوني قبل الاعتماد الفعلي', review_months: 12, ack_required: true, articles: []};
+  modal(`<h3>${id ? 'تعديل المسودة' : 'سياسة جديدة'}</h3>${id ? '' : HF('plC', 'الرمز (دائم عبر النسخ)', p.code, 'text', 'maxlength="30" placeholder="POL-HR-01"')}${HF('plT', 'العنوان', p.title, 'text', 'maxlength="160"')}${HS('plK', 'التصنيف', Object.entries(POL_CAT), p.category)}
+    ${HF('plO', 'المسؤول عن السياسة', p.owner_role, 'text', 'maxlength="80"')}${HF('plS', 'ملخص', p.summary, 'text', 'maxlength="600"')}${HF('plB', 'الأساس النظامي', p.basis, 'text', 'maxlength="400"')}${HF('plM', 'مراجعة كل (أشهر)', p.review_months, 'number', 'min="1" max="60"')}
+    <label><input id="plA" type="checkbox" ${p.ack_required ? 'checked' : ''}> يلزم إقرار العاملين بالاطلاع</label>
+    <label for="plX">المواد — كل مادة: سطر العنوان ثم النص، وبين المواد سطر فيه <b dir="ltr">---</b></label><textarea id="plX" rows="12" style="width:100%">${esc(EXT.polArtText(p.articles))}</textarea>
+    <div class="err" id="plE"></div><div class="btns" style="margin-top:12px"><button class="btn p" id="plGo">حفظ كمسودة</button> <button class="btn" data-call="closeModal">إلغاء</button></div>`);
+  $('#plGo').onclick = async () => {
+    const body = {title: $('#plT').value.trim(), category: $('#plK').value, owner_role: $('#plO').value.trim(), summary: $('#plS').value.trim(), basis: $('#plB').value.trim(), review_months: +$('#plM').value || 12, ack_required: $('#plA').checked, articles: EXT.polParse($('#plX').value)};
+    try {
+      if (id) await api('/policies/' + id, {method: 'PATCH', body}); else await post('/policies', {...body, code: $('#plC').value.trim()});
+      closeModal(); toast('حُفظت المسودة — يعتمدها شخص آخر'); EXT.l_pol();
+    } catch (e) { $('#plE').textContent = e.message; }
+  };
 };
 
 /* ---- بوابة الموظف: تقييمي وتدريبي وإشعاراتي */

@@ -58,7 +58,7 @@ def test_every_api_path_is_classified():
     """A new route must be a deliberate core path or belong to a module's prefixes — never silently ungated."""
     core_ok = ("/api/auth", "/api/me", "/api/admin", "/api/users", "/api/audit", "/api/docs", "/api/documents", "/api/plans", "/api/notifications",
                "/api/privacy", "/api/projects", "/api/units", "/api/search", "/api/reset", "/api/appearance", "/api/public", "/api/v1",
-               "/api/portal", "/api/decisions", "/api/kpis", "/api/dashboard", "/api/modules", "/api/license", "/api/tenants")
+               "/api/portal", "/api/decisions", "/api/kpis", "/api/dashboard", "/api/modules", "/api/license", "/api/tenants", "/api/policies")
     stray = [p for p in _paths() if p.startswith("/api/") and R.route_module(p) is None and not any(p == c or p.startswith(c + "/") for c in core_ok)]
     assert stray == [], f"paths without a module or a core entry (add to registry.MODULES prefixes or to core_ok here): {stray}"
 

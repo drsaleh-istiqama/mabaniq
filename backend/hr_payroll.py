@@ -489,7 +489,8 @@ def compute_run(c, run: dict, by: str) -> dict:
             skipped.append({"employee_id": e["id"], "number": e["number"], "name": e["name"], "reason": "لا هيكل راتب"})
             continue
         warns: list[dict] = []
-        if c.execute("SELECT 1 FROM salary_structures WHERE employee_id=? AND effective_from>? AND effective_from<=?", (e["id"], ps.isoformat(), pe.isoformat())).fetchone():
+        # a structure that starts inside the month warns only when the person already had an earlier one — a new hire's first structure is not a "change"
+        if c.execute("SELECT 1 FROM salary_structures WHERE employee_id=? AND effective_from>? AND effective_from<=?", (e["id"], ps.isoformat(), pe.isoformat())).fetchone()                 and c.execute("SELECT 1 FROM salary_structures WHERE employee_id=? AND effective_from<=?", (e["id"], ps.isoformat())).fetchone():
             warns.append({"kind": "mid_month_structure", "blocker": 0, "msg": "تغيّر هيكل الراتب خلال الشهر: احتُسب الشهر كله بالهيكل الأحدث (لا تقسيم بالأيام) — سوِّ الفرق بتسوية إن لزم"})
         ws = max(ps, dt.date.fromisoformat(e["hire_date"]))
         we = min(pe, dt.date.fromisoformat(e["terminated_on"])) if e["terminated_on"] else pe

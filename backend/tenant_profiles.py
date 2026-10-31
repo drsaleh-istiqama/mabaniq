@@ -78,6 +78,7 @@ PROFILES: dict[str, dict] = {
     "bayan": {
         "display": "بيان عمان",
         "seed": 2015,
+        "org_demo": {"seed": 7101},  # 0.29.0: backend/seed_org.py fills HR, payroll, books, leasing operations and policies with illustrative data
         "brand": {"name": "بيان عمان للتطوير العقاري (Bayan Oman)", "address": "العذيبة، محافظة مسقط، سلطنة عُمان — ص.ب 236، ر.ب 130", "phone": "72228000",
                   "email": "contact@bayanoman.com", "signatory": "", "signatory_title": "المؤسس والرئيس التنفيذي"},
         # slot, code, name, location, kind, build %, planned monthly sales, handover (months from today), escrow balance (illustrative)
@@ -149,6 +150,12 @@ PROFILES: dict[str, dict] = {
             ("bayan-finance", "المالية والتحصيل", "finance", None),
             ("bayan-engineer", "المشاريع والإنشاء", "engineer", None),
             ("bayan-client", "عميل تجريبي — وحدة في مساحات الخوض", "customer", "client1"),
+            # 0.29.0 — the people side of the full demo: HR officer and the accountant also have their own employee file; "emp:<key>" links the login to that file
+            ("bayan-hr", "مسؤولة الموارد البشرية", "hr", "emp:hr"),
+            ("bayan-payroll", "مسؤول الرواتب", "payroll", None),
+            ("bayan-pm", "مدير عقاري خارجي", "property_manager", None),
+            ("bayan-accountant", "المحاسبة", "accountant", None),
+            ("bayan-employee", "مدير المبيعات والتأجير (بوابة الموظف)", "employee", "emp:smgr"),
         ],
         # markers on the ground-floor plan of Masahat (percent of the image; the 20 shops sit in one row along Al Salam Street)
         "markers": {"bayan/masahat-plan-gf-shops.jpg": [(f"MSK-M-0{i:02d}", x, 44) for i, x in enumerate(
@@ -306,6 +313,7 @@ PROFILES: dict[str, dict] = {
     "almukhatat": {
         "display": "المخطط العقارية",
         "seed": 2010,
+        "org_demo": {"seed": 7102},  # 0.29.0: see above
         "brand": {"name": "شركة المخطط العقارية", "address": "المعبيلة الجنوبية، محافظة مسقط، سلطنة عُمان", "phone": "72700099",
                   "email": "contact@almukhatat.com", "signatory": "", "signatory_title": "رئيس مجلس الإدارة والرئيس التنفيذي"},
         # slot, code, name, location, kind, build %, planned monthly sales, handover (months from today), escrow balance (illustrative)
@@ -366,6 +374,11 @@ PROFILES: dict[str, dict] = {
             ("mk-finance", "المالية والتحصيل", "finance", None),
             ("mk-engineer", "الهندسة والإنشاء", "engineer", None),
             ("mk-client", "عميل تجريبي — محل في مآب", "customer", "client1"),
+            ("mk-hr", "مسؤولة الموارد البشرية", "hr", "emp:hr"),
+            ("mk-payroll", "مسؤول الرواتب", "payroll", None),
+            ("mk-pm", "مدير عقاري خارجي", "property_manager", None),
+            ("mk-accountant", "المحاسبة", "accountant", None),
+            ("mk-employee", "مدير المبيعات والتسويق (بوابة الموظف)", "employee", "emp:smgr"),
         ],
         # markers on the typical floor plan (percent of the image, approximate — illustrative placement of floor-1 units)
         "markers": {"almukhatat/maab-plan-typical-floor.jpg": [("MAB-A-101", 64, 48), ("MAB-A-102", 62, 18), ("MAB-A-103", 24, 78),
@@ -606,14 +619,28 @@ def ensure_pilot_accounts(c, tenant: str) -> int:
     for un, name, role, link in p["pilot_accounts"]:
         if c.execute("SELECT 1 FROM users WHERE username=?", (un,)).fetchone():
             continue
-        cust = None
-        if link:
+        cust = emp = None
+        if link and link.startswith("emp:"):   # 0.29.0 — a staff login that is also an employee: the file is found by the profile's own list (backend/seed_org_data.py)
+            from .seed_org_data import ORGS
+            row = next((e for e in ORGS.get(tenant, {}).get("employees", []) if e[0] == link[4:]), None)
+            r = c.execute("SELECT id FROM employees WHERE name=?", (row[1],)).fetchone() if row and c.has_table("employees") else None
+            if not r or c.execute("SELECT 1 FROM users WHERE employee_id=?", (r["id"],)).fetchone():
+                continue  # the people file is filled by the org-demo phase (a few seconds after start-up): the next start-up links it
+            emp = r["id"]
+        elif link:
             r = c.execute("SELECT customer_id FROM users WHERE username=?", (link,)).fetchone()
             if not r or not r["customer_id"]:
                 continue  # the linked demo customer does not exist (yet): try again at the next start-up
             cust = r["customer_id"]
-        c.execute("INSERT INTO users(username,name,role,pw,customer_id,must_change) VALUES(?,?,?,?,?,1)", (un, name, role, hash_pw(pw), cust))
+        uid = c.execute("INSERT INTO users(username,name,role,pw,customer_id,employee_id,must_change) VALUES(?,?,?,?,?,?,1)", (un, name, role, hash_pw(pw), cust, emp)).lastrowid
         n += 1
+        if role == "property_manager" and c.has_table("user_scopes"):   # 0.29.0 — a property manager sees only the portfolio inside their scope: give the trial login the project that has most leases
+            try:
+                pr = c.execute("SELECT u.project_id pj FROM leases l JOIN units u ON u.id=l.unit_id GROUP BY u.project_id ORDER BY COUNT(*) DESC LIMIT 1").fetchone()
+            except Exception:  # noqa: BLE001 — a tenant without the leasing tables simply has nothing to scope
+                pr = None
+            if pr and not c.execute("SELECT 1 FROM user_scopes WHERE user_id=?", (uid,)).fetchone():
+                c.execute("INSERT INTO user_scopes(user_id,project_id,owner_id,created_by) VALUES(?,?,NULL,?)", (uid, pr["pj"], "تهيئة حسابات التجربة"))
     if n:
         c.commit()
     return n

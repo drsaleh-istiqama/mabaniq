@@ -221,7 +221,7 @@ def test_an_employee_account_is_created_once_sees_only_his_own_file_and_is_close
     assert cl.post(f"/api/hr/employees/{e1}/account").status_code == 409  # one login per file
     login_as(cl, u1)
     me = cl.get("/api/me").json()
-    assert me["role"] == "employee" and me["employee_id"] == e1 and set(me["perms"]) == {"hr_self", "hr_manager"}
+    assert me["role"] == "employee" and me["employee_id"] == e1 and set(me["perms"]) == {"hr_self", "hr_manager", "policies"}
     mine = cl.get("/api/hr/me").json()
     assert mine["number"] == "EMP-0001" and mine["id_number"] == "111" and "created_by" not in mine
     # nothing of the colleague, and none of the HR screens

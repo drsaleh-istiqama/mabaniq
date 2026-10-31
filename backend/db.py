@@ -569,6 +569,20 @@ CREATE TABLE IF NOT EXISTS disciplinary_cases(
   apply_period TEXT, proposed_by TEXT, issued_by TEXT, issued_at TEXT, appeal_text TEXT, appeal_at TEXT, appeal_decision TEXT CHECK (appeal_decision IN ('upheld','revoked')), appeal_decided_by TEXT, appeal_decided_at TEXT,
   applied_run_id INTEGER REFERENCES payroll_runs(id), closed_note TEXT, created_by TEXT);
 CREATE INDEX IF NOT EXISTS ix_disc_emp ON disciplinary_cases(employee_id);
+-- 0.29.0 — the policy register (db/migrations/0017_policies.sql)
+CREATE TABLE IF NOT EXISTS policies(
+  id INTEGER PRIMARY KEY, code TEXT NOT NULL, title TEXT NOT NULL,
+  category TEXT NOT NULL CHECK (category IN ('hr','governance','finance','leasing','sales','operations','compliance')),
+  owner_role TEXT, summary TEXT, body TEXT NOT NULL DEFAULT '[]', version INTEGER NOT NULL DEFAULT 1 CHECK (version >= 1),
+  status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','approved','retired')),
+  effective_from TEXT, review_months INTEGER NOT NULL DEFAULT 12 CHECK (review_months >= 1), ack_required INTEGER NOT NULL DEFAULT 1,
+  basis TEXT, supersedes_id INTEGER REFERENCES policies(id), created_by TEXT, approved_by TEXT, approved_at TEXT, retired_by TEXT, retired_at TEXT,
+  UNIQUE (code, version));
+CREATE INDEX IF NOT EXISTS ix_policies_code ON policies(code);
+CREATE TABLE IF NOT EXISTS policy_acks(
+  id INTEGER PRIMARY KEY, policy_id INTEGER NOT NULL REFERENCES policies(id), version INTEGER NOT NULL, username TEXT NOT NULL, name TEXT, employee_id INTEGER, acked_at TEXT NOT NULL,
+  UNIQUE (policy_id, username));
+CREATE INDEX IF NOT EXISTS ix_policy_acks_policy ON policy_acks(policy_id);
 
 CREATE INDEX IF NOT EXISTS ix_units_project ON units(project_id);
 CREATE INDEX IF NOT EXISTS ix_inst_booking ON installments(booking_id);

@@ -33,4 +33,9 @@ def tick() -> dict:
         out["hr_alerts"] = hr.alerts_due_all()
     except Exception:  # noqa: BLE001
         log.exception("tick: hr", extra={"event": "job_error"})
+    try:
+        from . import seed_org
+        out["org_demo"] = seed_org.ensure_all()  # 0.29.0: fills the full-demo developers' HR / payroll / books / policies once (phase markers make later ticks free)
+    except Exception:  # noqa: BLE001
+        log.exception("tick: org demo", extra={"event": "job_error"})
     return out

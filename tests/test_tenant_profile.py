@@ -169,8 +169,8 @@ def test_pilot_accounts_created_once_with_temp_password_and_never_reset(cl, monk
     tok = TENANT.set(T)
     try:
         d = connect()
-        d.execute("DELETE FROM sessions WHERE user_id IN (SELECT id FROM users WHERE username IN ('dawood','mk-sales','mk-finance','mk-engineer','mk-client'))")  # PG: FK from sessions
-        d.execute("DELETE FROM users WHERE username IN ('dawood','mk-sales','mk-finance','mk-engineer','mk-client')")
+        d.execute("DELETE FROM sessions WHERE user_id IN (SELECT id FROM users WHERE username IN ('dawood','mk-sales','mk-finance','mk-engineer','mk-client','mk-hr','mk-payroll','mk-pm','mk-accountant','mk-employee'))")  # PG: FK from sessions
+        d.execute("DELETE FROM users WHERE username IN ('dawood','mk-sales','mk-finance','mk-engineer','mk-client','mk-hr','mk-payroll','mk-pm','mk-accountant','mk-employee')")
         d.commit()
         monkeypatch.delenv("MABANIQ_PILOT_PASSWORD", raising=False)
         assert TP.ensure_pilot_accounts(d, T) == 0  # no variable ⟵ nothing
@@ -178,9 +178,9 @@ def test_pilot_accounts_created_once_with_temp_password_and_never_reset(cl, monk
         assert TP.ensure_pilot_accounts(d, T) == 0  # too short ⟵ nothing
         monkeypatch.setenv("MABANIQ_PILOT_PASSWORD", "Pilot-Temp-2026-xyz")
         assert TP.ensure_pilot_accounts(d, "jadwa") == 0  # a tenant without a profile gets none
-        assert TP.ensure_pilot_accounts(d, T) == 5
-        rows = {r["username"]: r for r in d.execute("SELECT * FROM users WHERE username IN ('dawood','mk-sales','mk-finance','mk-engineer','mk-client')").fetchall()}
-        assert {u: r["role"] for u, r in rows.items()} == {"dawood": "admin", "mk-sales": "sales", "mk-finance": "finance", "mk-engineer": "engineer", "mk-client": "customer"}
+        assert TP.ensure_pilot_accounts(d, T) >= 5   # 0.29.0: the HR / payroll / accountant logins too; the two linked to an employee file wait for the people phase
+        rows = {r["username"]: r for r in d.execute("SELECT * FROM users WHERE username IN ('dawood','mk-sales','mk-finance','mk-engineer','mk-client','mk-hr','mk-payroll','mk-pm','mk-accountant','mk-employee')").fetchall()}
+        assert {u: r["role"] for u, r in rows.items() if u in ("dawood", "mk-sales", "mk-finance", "mk-engineer", "mk-client")} == {"dawood": "admin", "mk-sales": "sales", "mk-finance": "finance", "mk-engineer": "engineer", "mk-client": "customer"}
         assert all(r["must_change"] == 1 for r in rows.values())
         assert rows["mk-client"]["customer_id"] == d.execute("SELECT customer_id FROM users WHERE username='client1'").fetchone()["customer_id"]
         assert A.check_pw("Pilot-Temp-2026-xyz", rows["dawood"]["pw"])
