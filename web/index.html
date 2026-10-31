@@ -132,7 +132,16 @@
    <!-- السجل -->
    <div class="scr" id="log">
     <div class="box"><div class="hd">سجل التدقيق <span class="muted">كل إجراء يُسجَّل بوقته ومنفّذه</span></div>
-     <div class="tw"><table><thead><tr><th>الوقت</th><th>المنفّذ</th><th>الإجراء</th><th>التفاصيل</th></tr></thead><tbody id="audit"></tbody></table></div></div>
+     <div class="btns" style="padding:10px 14px;flex-wrap:wrap;gap:8px;align-items:center">
+      <input id="aq" type="search" placeholder="بحث في الإجراء أو التفاصيل أو المنفّذ" style="min-width:240px;flex:1" aria-label="بحث في سجل التدقيق">
+      <select id="aa" aria-label="المنفّذ"><option value="">كل المنفّذين</option></select>
+      <label class="muted" for="as">من</label><input id="as" type="date">
+      <label class="muted" for="au">إلى</label><input id="au" type="date">
+      <button class="btn" id="areset" type="button">مسح التصفية</button>
+      <button class="btn" id="acsv" type="button">تصدير CSV</button>
+     </div>
+     <div class="tw"><table><thead><tr><th>الوقت</th><th>المنفّذ</th><th>الإجراء</th><th>التفاصيل</th></tr></thead><tbody id="audit"></tbody></table></div>
+     <div class="btns" style="padding:10px 14px;align-items:center"><button class="btn" id="amore" type="button" hidden>تحميل المزيد</button><span class="muted" id="acount"></span></div></div>
    </div>
   </div>
  </section>

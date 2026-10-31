@@ -245,8 +245,31 @@ def dashboard_ep(u=Depends(need("view"))):
 
 
 @app.get("/api/audit")
-def audit_log(limit: int = Query(30, ge=1, le=500), _=Depends(need("audit"))):
-    return [dict(r) for r in db().execute("SELECT * FROM audit ORDER BY id DESC LIMIT ?", (limit,))]
+def audit_log(limit: int = Query(30, ge=1, le=500), offset: int = Query(0, ge=0), q: str = Query("", max_length=80),
+              actor: str = Query("", max_length=80), since: str = Query("", max_length=10), until: str = Query("", max_length=10),
+              _=Depends(need("audit"))):
+    """سجل التدقيق مع بحث نصي (الإجراء/التفاصيل/المنفّذ) وتصفية بالمنفّذ والتاريخ وترقيم؛ الترتيب الأحدث أولًا. السجل نفسه إلحاق فقط."""
+    where, args = [], []
+    if q.strip():
+        like = f"%{q.strip()}%"
+        where.append("(action LIKE ? OR detail LIKE ? OR actor LIKE ?)")
+        args += [like, like, like]
+    if actor.strip():
+        where.append("actor=?")
+        args.append(actor.strip())
+    if since.strip():
+        where.append("substr(at,1,10)>=?")
+        args.append(since.strip())
+    if until.strip():
+        where.append("substr(at,1,10)<=?")
+        args.append(until.strip())
+    sql = "SELECT * FROM audit" + (" WHERE " + " AND ".join(where) if where else "") + " ORDER BY id DESC LIMIT ? OFFSET ?"
+    return [dict(r) for r in db().execute(sql, (*args, limit, offset))]
+
+
+@app.get("/api/audit/actors")
+def audit_actors(_=Depends(need("audit"))):
+    return [r["actor"] for r in db().execute("SELECT DISTINCT actor FROM audit WHERE actor IS NOT NULL AND actor<>'' ORDER BY actor")]
 
 
 @app.get("/api/search")

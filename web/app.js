@@ -416,9 +416,46 @@ function showResale(r) {
 async function resaleAct(id, a) { try { await api(`/resale/${id}`, {method: 'POST', body: {action: a}}); toast(a === 'listed' ? 'نُشرت الوحدة في السوق الثانوي' : 'رُفض الطلب'); await loadService(); showResale(SVCD.resale.find(x => x.id === id)); } catch (e) { toast(e.message, 1); } }
 
 /* ---------------- السجل ---------------- */
+// 0.29.1 — بحث وتصفية بالمنفّذ والتاريخ وترقيم «تحميل المزيد» وتصدير CSV؛ السجل نفسه إلحاق فقط.
+const AUD = {rows: [], page: 100, wired: false};
+function audQuery(offset) {
+  const p = new URLSearchParams({limit: AUD.page, offset});
+  [['q', 'aq'], ['actor', 'aa'], ['since', 'as'], ['until', 'au']].forEach(([k, id]) => { const v = $('#' + id).value.trim(); if (v) p.set(k, v); });
+  return '/audit?' + p;
+}
+function audPaint(more) {
+  $('#audit').innerHTML = AUD.rows.map(x => `<tr><td>${new Date(x.at).toLocaleString('ar-OM-u-nu-latn', {dateStyle: 'medium', timeStyle: 'short'})}</td><td>${esc(x.actor)}</td><td>${esc(x.action)}</td><td>${esc(x.detail)}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">لا توجد إجراءات مطابقة.</td></tr>';
+  $('#amore').hidden = !more;
+  $('#acount').textContent = AUD.rows.length ? `معروض ${N(AUD.rows.length)} إجراءً` : '';
+}
+async function audLoad(append) {
+  const a = await api(audQuery(append ? AUD.rows.length : 0));
+  AUD.rows = append ? AUD.rows.concat(a) : a;
+  audPaint(a.length === AUD.page);
+}
+function audCsv() {
+  const q = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+  const body = ['الوقت,المنفّذ,الإجراء,التفاصيل'].concat(AUD.rows.map(x => [x.at, x.actor, x.action, x.detail].map(q).join(','))).join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['﻿' + body], {type: 'text/csv;charset=utf-8'}));
+  a.download = 'audit-log.csv';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
 async function loadAudit() {
-  const a = await api('/audit?limit=100');
-  $('#audit').innerHTML = a.map(x => `<tr><td>${new Date(x.at).toLocaleString('ar-OM-u-nu-latn', {dateStyle: 'medium', timeStyle: 'short'})}</td><td>${esc(x.actor)}</td><td>${esc(x.action)}</td><td>${esc(x.detail)}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">لا توجد إجراءات بعد.</td></tr>';
+  if (!AUD.wired) {
+    AUD.wired = true;
+    let t;
+    $('#aq').oninput = () => { clearTimeout(t); t = setTimeout(() => tryDo(() => audLoad(false)).catch(() => {}), 350); };
+    ['aa', 'as', 'au'].forEach(id => { $('#' + id).onchange = () => tryDo(() => audLoad(false)).catch(() => {}); });
+    $('#amore').onclick = () => tryDo(() => audLoad(true)).catch(() => {});
+    $('#acsv').onclick = audCsv;
+    $('#areset').onclick = () => { ['aq', 'aa', 'as', 'au'].forEach(id => { $('#' + id).value = ''; }); tryDo(() => audLoad(false)).catch(() => {}); };
+  }
+  const actors = await api('/audit/actors');
+  const cur = $('#aa').value;
+  $('#aa').innerHTML = '<option value="">كل المنفّذين</option>' + actors.map(x => `<option value="${esc(x)}"${x === cur ? ' selected' : ''}>${esc(x)}</option>`).join('');
+  await audLoad(false);
 }
 
 /* ---------------- المساعد ---------------- */
@@ -613,13 +650,16 @@ EXT.l_conx = async function () {
    ${BOX('أوامر التغيير', T(['رقم', 'العنوان', 'السبب', 'التكلفة', 'المدة', 'الحالة', ''], d.change_orders.map(c => `<tr><td>${N(c.no)}</td><td>${esc(c.title)}</td><td>${esc(c.reason)}</td><td>${OMR(c.cost)}</td><td>${N(c.days)} يوم</td><td>${pill({approved: 'معتمد', pending: 'معلق', rejected: 'مرفوض'}[c.status], c.status === 'approved' ? 'p-ok' : c.status === 'pending' ? 'p-w' : 'p-b')}</td><td>${c.status === 'pending' && can('approve_ipc') ? `<button class="btn" data-call="EXT.co" data-args="${J([c.id, 'approve'])}">اعتماد</button> <button class="btn" data-call="EXT.co" data-args="${J([c.id, 'reject'])}">رفض</button>` : ''}</td></tr>`)),
       can('construction') ? '<button class="btn" data-call="EXT.newCO">+ أمر تغيير</button>' : '')}
    ${BOX('الميزانية', T(['البند', 'المبلغ'], d.budget.map(b => `<tr><td>${esc(b.category)}</td><td>${OMR(b.amount)}</td></tr>`)))}
-   ${BOX('عدم المطابقة (NCR)', T(['العنوان', 'الموقع', 'الخطورة', 'الحالة', ''], d.ncrs.map(n => `<tr><td>${esc(n.title)}</td><td>${esc(n.location)}</td><td>${pill({minor: 'بسيطة', major: 'جسيمة', critical: 'حرجة'}[n.severity], n.severity === 'minor' ? 'p-w' : 'p-b')}</td><td>${n.status === 'open' ? pill('مفتوح', 'p-b') : pill('مغلق', 'p-ok')}</td><td>${n.status === 'open' && can('construction') ? `<button class="btn" data-call="EXT.ncrClose" data-args="${J([n.id])}">إغلاق</button>` : ''}</td></tr>`)))}
+   ${BOX('عدم المطابقة (NCR)', T(['العنوان', 'الموقع', 'الخطورة', 'الحالة', ''], d.ncrs.map(n => `<tr><td>${esc(n.title)}</td><td>${esc(n.location)}</td><td>${pill({minor: 'بسيطة', major: 'جسيمة', critical: 'حرجة'}[n.severity], n.severity === 'minor' ? 'p-w' : 'p-b')}</td><td>${n.status === 'open' ? pill('مفتوح', 'p-b') : pill('مغلق', 'p-ok')}</td><td>${n.status === 'open' && can('construction') ? `<button class="btn" data-call="EXT.ncrClose" data-args="${J([n.id])}">إغلاق</button>` : ''}</td></tr>`)), can('construction') ? '<button class="btn" data-call="EXT.newNcr">+ تقرير عدم مطابقة</button>' : '')}
    ${BOX('تقارير الموقع اليومية', T(['اليوم', 'العمالة', 'الطقس', 'الأعمال', 'المعوقات', 'الصور'], d.site_reports.map(r => `<tr><td>${fmtDate(r.day)}</td><td>${N(r.workers)}</td><td>${esc(r.weather)}</td><td>${esc(r.work_done)}</td><td>${esc(r.issues || '—')}</td><td>${N(r.photos)}</td></tr>`)),
       can('construction') ? '<button class="btn" data-call="EXT.newSite">+ تقرير اليوم</button>' : '')}
    <div class="ai">${d.reasons.filter(Boolean).map(AR).join('<br>')}</div>`;
   $('#conP').onchange = e => { EXT.conP = +e.target.value; EXT.l_conx(); };
 };
 EXT.co = async (id, a) => { await tryDo(() => api(`/change-orders/${id}/decide`, {method: 'POST', body: {action: a}}), 'سُجّل القرار'); EXT.l_conx(); };
+// 0.29.1 — إنشاء تقرير عدم مطابقة من الواجهة (كان الخادم يقبله دون زر).
+EXT.newNcr = () => { modal(`<h3>تقرير عدم مطابقة جديد</h3><label>وصف المخالفة</label><input id="nct"><label>الموقع (طابق / منطقة)</label><input id="ncl" maxlength="40"><label>الخطورة</label><select id="ncs"><option value="minor">بسيطة</option><option value="major">جسيمة</option><option value="critical">حرجة</option></select><div class="err" id="nce"></div><div class="btns" style="margin-top:12px"><button class="btn p" id="ncgo">حفظ</button><button class="btn" data-call="closeModal">إلغاء</button></div>`);
+  $('#ncgo').onclick = async () => { try { await api('/ncrs', {method: 'POST', body: {project_id: EXT.conP || activeProj().id, title: $('#nct').value.trim(), severity: $('#ncs').value, location: $('#ncl').value.trim()}}); closeModal(); toast('سُجّل تقرير عدم المطابقة'); EXT.l_conx(); } catch (e) { $('#nce').textContent = e.message; } }; };
 EXT.ncrClose = async id => { await tryDo(() => api(`/ncrs/${id}/close`, {method: 'POST'}), 'أُغلق التقرير'); EXT.l_conx(); };
 EXT.newCO = () => { modal(`<h3>أمر تغيير جديد</h3><label>العنوان</label><input id="ct"><label>السبب</label><input id="cr" value="طلب المالك"><label>التكلفة (ر.ع)</label><input id="cc" inputmode="numeric"><label>أثره على المدة (يوم)</label><input id="cd" value="0" inputmode="numeric"><div class="err" id="ce"></div><div class="btns" style="margin-top:12px"><button class="btn p" id="cgo">رفع للاعتماد</button><button class="btn" data-call="closeModal">إلغاء</button></div>`);
   $('#cgo').onclick = async () => { try { await api('/change-orders', {method: 'POST', body: {project_id: EXT.conP || activeProj().id, title: $('#ct').value, reason: $('#cr').value, cost: +$('#cc').value, days: +$('#cd').value}}); closeModal(); toast('رُفع أمر التغيير'); EXT.l_conx(); } catch (e) { $('#ce').textContent = e.message; } }; };
@@ -789,8 +829,11 @@ EXT.l_post = async function () {
 EXT.showHand = function (h) {
   insp('تسليم وحدة', `<h3><span class="num">${esc(h.unit)}</span> · ${esc(h.customer)}</h3><dl class="kv"><dt>الموعد</dt><dd>${fmtDate(h.appointment)}</dd><dt>المسدد</dt><dd>${pct(h.paid_ratio)}</dd>${h.certificate_no ? `<dt>شهادة التسليم</dt><dd>${esc(h.certificate_no)}</dd><dt>ضمان التشطيب</dt><dd>حتى ${fmtDate(h.warranty_until)}</dd><dt>الضمان الإنشائي</dt><dd>حتى ${fmtDate(h.structural_until)}</dd>` : ''}</dl>
    <b>ملاحظات الفحص قبل التسليم</b>${T(['الملاحظة', 'المكان', 'الحالة', ''], h.snags.map(s => `<tr><td>${esc(s.item)}</td><td>${esc(s.location)}</td><td>${s.status === 'open' ? pill('مفتوحة', 'p-b') : pill('مُصلحة', 'p-ok')}</td><td>${s.status === 'open' && can('handover') ? `<button class="btn" data-call="EXT.fix" data-args="${J([s.id])}">أُصلحت</button>` : ''}</td></tr>`))}
-   ${h.status !== 'done' && can('handover') ? `<label>إضافة ملاحظة</label><input id="hn" placeholder="مثال: خدش في باب غرفة النوم"><div class="btns" style="margin-top:8px"><button class="btn" id="hadd">إضافة</button></div>
+   ${h.status !== 'done' && can('handover') ? `<label>موعد التسليم</label><input id="hdate" type="date" value="${esc(String(h.appointment || '').slice(0, 10))}" min="${new Date().toISOString().slice(0, 10)}"><div class="btns" style="margin-top:8px"><button class="btn" id="hsched">حفظ الموعد</button></div>
+   <hr style="border:0;border-top:1px solid var(--line);margin:14px 0"><label>إضافة ملاحظة</label><input id="hn" placeholder="مثال: خدش في باب غرفة النوم"><div class="btns" style="margin-top:8px"><button class="btn" id="hadd">إضافة</button></div>
    <hr style="border:0;border-top:1px solid var(--line);margin:14px 0"><label>قراءة عداد الكهرباء</label><input id="he" inputmode="numeric" value="0"><label>قراءة عداد الماء</label><input id="hw" inputmode="numeric" value="0"><label>عدد المفاتيح</label><input id="hk" inputmode="numeric" value="3"><div class="err" id="herr"></div><div class="btns" style="margin-top:10px"><button class="btn p" id="hgo">إتمام التسليم وإصدار الشهادة</button></div>` : ''}`);
+  // 0.29.1 — جدولة/تغيير موعد التسليم من الواجهة (كان الخادم يقبله دون زر).
+  if ($('#hsched')) $('#hsched').onclick = async () => { await tryDo(() => api(`/bookings/${h.booking_id}/handover/schedule`, {method: 'POST', body: {appointment: $('#hdate').value}}), 'حُفظ موعد التسليم'); EXT.l_post(); };
   if ($('#hadd')) $('#hadd').onclick = async () => { await tryDo(() => api('/snags', {method: 'POST', body: {booking_id: h.booking_id, item: $('#hn').value, location: ''}}), 'أُضيفت الملاحظة'); EXT.l_post(); };
   if ($('#hgo')) $('#hgo').onclick = async () => { try { const r = await api(`/bookings/${h.booking_id}/handover/complete`, {method: 'POST', body: {electricity: +$('#he').value, water: +$('#hw').value, keys: +$('#hk').value}}); toast('✓ سُلّمت الوحدة · شهادة ' + r.certificate); EXT.l_post(); } catch (e) { $('#herr').textContent = e.message; } };
 };
@@ -804,6 +847,10 @@ EXT.newLease = () => { const L = EXT.data.leasing, used = new Set(L.leases.filte
 
 /* ================================================================ الإيجارات المتكاملة (0.21.0) */
 const LMETH = {cash: 'نقدًا', cheque: 'شيك', transfer: 'تحويل بنكي', card: 'بطاقة', other: 'أخرى'};
+// 0.29.1 — تسميات الأدوار بالعربية (تطابق auth.ROLES) بدل عرض المفتاح الإنجليزي في الجداول.
+const ROLE_AR = {admin: 'مدير عام', sales: 'مبيعات', finance: 'مالية وتحصيل', engineer: 'مهندس موقع', broker: 'وسيط عقاري', investor: 'مستثمر / ممول', customer: 'عميل', property_manager: 'مدير عقاري (خارجي)', accountant: 'محاسب', hr: 'موارد بشرية', employee: 'موظف', payroll: 'مسؤول رواتب', lessee: 'مستأجر'};
+const LEASE_AR = {draft: 'مسودة', active: 'ساري', expired: 'منتهٍ', terminated: 'مُنهى', renewed: 'مُجدَّد', evicted: 'إخلاء'};
+const CHAN_AR = {email: 'بريد إلكتروني', sms: 'رسالة نصية', whatsapp: 'واتساب', push: 'إشعار التطبيق', inapp: 'داخل النظام', in_app: 'داخل النظام'};
 const LUSE = {residential: 'سكني', commercial: 'تجاري', office: 'مكتب', warehouse: 'مستودع', land: 'أرض'};
 const LSTP = {leased: 'p-ok', prep: 'p-bl', vacant: 'p-w', maintenance: 'p-b', not_leasable: 'p-b'};
 const LLSP = {active: 'p-ok', draft: 'p-w', expired: 'p-b', terminated: 'p-b', renewed: 'p-bl', evicted: 'p-b'};
@@ -827,7 +874,7 @@ EXT.l_lea = async function () {
     $$('#leaB tr[data-id]').forEach(tr => tr.onclick = () => { sel(tr); EXT.leaOpen(+tr.dataset.id); });
   } else if (k === 'ls') {
     const st = this.leaSt || '', q = this.leaQ || '', L = await api(`/lea/leases?status=${st}&q=${encodeURIComponent(q)}`);
-    B.innerHTML = `<div class="toolbar"><select id="lst"><option value="">كل الحالات</option>${[['draft', 'مسودة'], ['active', 'ساري'], ['expired', 'منتهٍ'], ['terminated', 'مُنهى']].map(([a, b]) => `<option value="${a}" ${a === st ? 'selected' : ''}>${b}</option>`).join('')}</select> <input id="lq" placeholder="بحث: رقم العقد أو الوحدة أو المستأجر" value="${esc(q)}"></div>`
+    B.innerHTML = `<div class="toolbar"><select id="lst"><option value="">كل الحالات</option>${[['draft', 'مسودة'], ['active', 'ساري'], ['expired', 'منتهٍ'], ['terminated', 'مُنهى'], ['renewed', 'مُجدَّد'], ['evicted', 'إخلاء']].map(([a, b]) => `<option value="${a}" ${a === st ? 'selected' : ''}>${b}</option>`).join('')}</select> <input id="lq" placeholder="بحث: رقم العقد أو الوحدة أو المستأجر" value="${esc(q)}"></div>`
       + BOX('عقود الإيجار', T(['العقد', 'الوحدة', 'المستأجر', 'من', 'إلى', 'الإيجار السنوي', 'الحالة', 'متأخرات'], L.map(l => `<tr data-id="${l.id}"><td><span class="num">${esc(l.number)}</span></td><td>${esc(l.unit)}</td><td>${esc(l.tenant)}</td><td>${fmtDate(l.start)}</td><td>${fmtDate(l.end)}</td><td>${OMR(l.annual_rent)}</td><td>${pill(esc(l.status_label), LLSP[l.status] || 'p-w')}${l.days_left != null && l.days_left <= 90 ? ' ' + pill(`${N(l.days_left)} يومًا`, 'p-w') : ''}</td><td>${l.arrears ? pill(OMR(l.arrears), 'p-b') : '—'}</td></tr>`), 'لا عقود مطابقة.'),
         W ? '<button class="btn p" data-call="EXT.leaNew">+ عقد جديد</button>' : '');
     $('#lst').onchange = e => { EXT.leaSt = e.target.value; EXT.l_lea(); };
@@ -923,8 +970,13 @@ EXT.leaMeterDel = async id => { await tryDo(() => api('/lea/meters/' + id, {meth
 
 const tenantFields = (t = {}) => `<label>الاسم</label><input id="tn_name" value="${esc(t.name || '')}"><label>النوع</label><select id="tn_kind"><option value="individual" ${t.kind !== 'company' ? 'selected' : ''}>فرد</option><option value="company" ${t.kind === 'company' ? 'selected' : ''}>شركة</option></select>
   <label>الهاتف</label><input id="tn_phone" value="${esc(t.phone || '')}"><label>رقم الهوية</label><input id="tn_id" value="${esc(t.id_number || '')}"><label>السجل التجاري (للشركات)</label><input id="tn_cr" value="${esc(t.cr_number || '')}">
-  <label>الممثل القانوني</label><input id="tn_rep" value="${esc(t.rep_name || '')}"><label>البريد</label><input id="tn_mail" value="${esc(t.email || '')}"><label>العنوان</label><input id="tn_addr" value="${esc(t.address || '')}">`;
-const tenantBody = () => ({name: $('#tn_name').value, kind: $('#tn_kind').value, phone: $('#tn_phone').value, id_number: $('#tn_id').value, cr_number: $('#tn_cr').value, rep_name: $('#tn_rep').value, email: $('#tn_mail').value, address: $('#tn_addr').value});
+  <label>الممثل القانوني</label><input id="tn_rep" value="${esc(t.rep_name || '')}"><label>البريد</label><input id="tn_mail" value="${esc(t.email || '')}"><label>العنوان</label><input id="tn_addr" value="${esc(t.address || '')}">
+  <label>الرقم الضريبي</label><input id="tn_tax" value="${esc(t.tax_no || '')}"><label>صفة الممثل</label><input id="tn_rept" value="${esc(t.rep_title || '')}"><label>هوية الممثل</label><input id="tn_repid" value="${esc(t.rep_id_number || '')}">
+  <label>جهة الاتصال</label><input id="tn_contact" value="${esc(t.contact_name || '')}"><label>الجنسية</label><input id="tn_nat" value="${esc(t.nationality || '')}"><label>انتهاء الهوية</label><input id="tn_idexp" type="date" value="${esc(String(t.id_expiry || '').slice(0, 10))}">
+  <label>تقييم المستأجر</label><select id="tn_rate">${[['', 'غير مقيَّم'], ['A', 'ممتاز (A)'], ['B', 'جيد (B)'], ['C', 'مقبول (C)'], ['D', 'ضعيف (D)']].map(([v, l]) => `<option value="${v}" ${(t.rating || '') === v ? 'selected' : ''}>${l}</option>`).join('')}</select><label>ملاحظة التقييم</label><input id="tn_ratenote" value="${esc(t.rating_note || '')}">`;
+// 0.29.1 — النموذج يرسل الحقول الستة عشر كلها: كان يرسل ثمانية فيمحو الخادم الباقي (التقييم والجنسية والرقم الضريبي…) عند كل تعديل.
+const tenantBody = () => ({name: $('#tn_name').value, kind: $('#tn_kind').value, phone: $('#tn_phone').value, id_number: $('#tn_id').value, cr_number: $('#tn_cr').value, rep_name: $('#tn_rep').value, email: $('#tn_mail').value, address: $('#tn_addr').value,
+  tax_no: $('#tn_tax').value, rep_title: $('#tn_rept').value, rep_id_number: $('#tn_repid').value, contact_name: $('#tn_contact').value, nationality: $('#tn_nat').value, id_expiry: $('#tn_idexp').value, rating: $('#tn_rate').value, rating_note: $('#tn_ratenote').value});
 
 EXT.leaTenantForm = (t) => {
   modal(`<h3>${t && t.id ? 'تعديل مستأجر' : 'مستأجر جديد'}</h3>${tenantFields(t || {})}<div class="err" id="te"></div><div class="btns" style="margin-top:12px"><button class="btn p" id="tgo">حفظ</button> <button class="btn" data-call="closeModal">إلغاء</button></div>`);
@@ -936,7 +988,7 @@ EXT.leaTenant = async function (id) {
   insp(t.name, `<dl class="kv"><dt>النوع</dt><dd>${t.kind === 'company' ? 'شركة' : 'فرد'}</dd><dt>الهاتف</dt><dd>${esc(t.phone || '—')}</dd><dt>الهوية</dt><dd><span class="num">${esc(t.id_number || '—')}</span></dd><dt>السجل التجاري</dt><dd>${esc(t.cr_number || '—')}</dd><dt>الممثل</dt><dd>${esc(t.rep_name || '—')}</dd><dt>البريد</dt><dd>${esc(t.email || '—')}</dd></dl>
    ${t.blacklisted ? `<p>${pill('قائمة سوداء', 'p-b')} ${esc(t.blacklist_reason || '')}</p>` : ''}
    <div class="btns" style="margin:10px 0">${W ? `<button class="btn" data-call="EXT.leaTenantEdit" data-args="${J([id])}">تعديل</button> <button class="btn" data-call="EXT.leaBlack" data-args="${J([id, !t.blacklisted])}">${t.blacklisted ? 'رفع من القائمة السوداء' : 'إدراج في القائمة السوداء'}</button> <button class="btn" data-call="EXT.leaAccount" data-args="${J([id])}">حساب البوابة</button>` : ''} <button class="btn" data-call="EXT.leaStatement" data-args="${J([id])}">كشف حساب</button></div>
-   <b>عقود المستأجر</b>${T(['العقد', 'الوحدة', 'الحالة', 'الإيجار'], t.leases.map(l => `<tr><td><button class="link" data-call="EXT.leaOpen" data-args="${J([l.id])}">${esc(l.number)}</button></td><td>${esc(l.unit)}</td><td>${esc(l.status)}</td><td>${OMR(l.annual_rent)}</td></tr>`), 'لا عقود.')}`);
+   <b>عقود المستأجر</b>${T(['العقد', 'الوحدة', 'الحالة', 'الإيجار'], t.leases.map(l => `<tr><td><button class="link" data-call="EXT.leaOpen" data-args="${J([l.id])}">${esc(l.number)}</button></td><td>${esc(l.unit)}</td><td>${esc(LEASE_AR[l.status] || l.status)}</td><td>${OMR(l.annual_rent)}</td></tr>`), 'لا عقود.')}`);
 };
 EXT.leaTenantEdit = async id => { EXT.leaTenantForm(await api('/lea/tenants/' + id)); };
 EXT.leaBlack = async (id, on) => { const reason = prompt(on ? 'سبب الإدراج (إلزامي):' : 'سبب الرفع:'); if (!reason) return; await tryDo(() => api(`/lea/tenants/${id}/${on ? 'blacklist' : 'unblacklist'}`, {method: 'POST', body: {reason}}), 'تم'); EXT.l_lea(); EXT.leaTenant(id); };
@@ -1293,7 +1345,7 @@ EXT.l_adm = async function () {
   const B = $('#admB');
   if (k === 'users' && can('users')) {
     const U = await api('/users');
-    B.innerHTML = BOX('المستخدمون والأدوار', T(['المستخدم', 'الاسم', 'البريد', 'الدور', 'الحالة', 'تحقق ثنائي', 'تغيير كلمة المرور', ''], U.map(u => `<tr><td><span class="num">${esc(u.username)}</span></td><td>${esc(u.name)}</td><td><span class="num">${esc(u.email || '—')}</span>${u.google_linked ? ' <span class="pill p-ok">Google</span>' : ''} <button class="link" data-call="EXT.uemail" data-args="${J([u.id, u.email || ''])}">تعديل</button></td><td>${esc(u.role)}</td><td>${u.active ? pill('مفعّل', 'p-ok') : pill('معطّل', 'p-b')}</td><td>${u.totp_enabled ? '✓' : '—'}</td><td>${u.must_change ? pill('مطلوب', 'p-w') : fmtDate(u.pw_changed)}</td><td><button class="btn" data-call="EXT.ureset" data-args="${J([u.id])}">إعادة تعيين</button> <button class="btn" data-call="EXT.uact" data-args="${J([u.id, u.active ? 0 : 1])}">${u.active ? 'تعطيل' : 'تفعيل'}</button> <button class="btn" data-call="EXT.ukill" data-args="${J([u.id])}">إنهاء الجلسات</button>${u.totp_enabled ? ` <button class="btn" data-call="EXT.u2fa" data-args="${J([u.id])}">إعادة ضبط التحقق</button>` : ''}</td></tr>`)),
+    B.innerHTML = BOX('المستخدمون والأدوار', T(['المستخدم', 'الاسم', 'البريد', 'الدور', 'الحالة', 'تحقق ثنائي', 'تغيير كلمة المرور', ''], U.map(u => `<tr><td><span class="num">${esc(u.username)}</span></td><td>${esc(u.name)}</td><td><span class="num">${esc(u.email || '—')}</span>${u.google_linked ? ' <span class="pill p-ok">Google</span>' : ''} <button class="link" data-call="EXT.uemail" data-args="${J([u.id, u.email || ''])}">تعديل</button></td><td>${esc(ROLE_AR[u.role] || u.role)}</td><td>${u.active ? pill('مفعّل', 'p-ok') : pill('معطّل', 'p-b')}</td><td>${u.totp_enabled ? '✓' : '—'}</td><td>${u.must_change ? pill('مطلوب', 'p-w') : fmtDate(u.pw_changed)}</td><td><button class="btn" data-call="EXT.ureset" data-args="${J([u.id])}">إعادة تعيين</button> <button class="btn" data-call="EXT.uact" data-args="${J([u.id, u.active ? 0 : 1])}">${u.active ? 'تعطيل' : 'تفعيل'}</button> <button class="btn" data-call="EXT.ukill" data-args="${J([u.id])}">إنهاء الجلسات</button>${u.totp_enabled ? ` <button class="btn" data-call="EXT.u2fa" data-args="${J([u.id])}">إعادة ضبط التحقق</button>` : ''}</td></tr>`)),
       '<button class="btn" data-call="EXT.newUser">+ مستخدم</button>');
   } else if (k === 'mods' && can('admin')) {
     const [M, L] = await Promise.all([api('/modules'), api('/license')]);
@@ -1328,7 +1380,7 @@ EXT.l_adm = async function () {
     $('#ak1').onclick = async () => { const r = await tryDo(() => api('/admin/api-keys', {method: 'POST'})); $('#opsR').innerHTML = `<div class="ai"><b class="k">المفتاح (يُعرض مرة واحدة):</b><br><span class="num" style="user-select:all">${esc(r.key)}</span><br>${esc(r.note)}</div>`; };
   } else if (k === 'notif') {
     const Nn = await api('/notifications');
-    B.innerHTML = `<div class="btns" style="margin-bottom:12px"><button class="btn p" id="nrun">تشغيل التذكيرات الآن</button></div>` + BOX('الإشعارات', T(['الوقت', 'الجمهور', 'القناة', 'العنوان', 'النص', 'الحالة'], Nn.map(n => `<tr><td>${fmtDate(n.created)}</td><td>${n.audience === 'customer' ? 'عميل' : 'فريق'}</td><td>${esc(n.channel)}</td><td>${esc(n.title)}</td><td>${esc(n.body)}</td><td>${pill('في الطابور', 'p-bl')}</td></tr>`)));
+    B.innerHTML = `<div class="btns" style="margin-bottom:12px"><button class="btn p" id="nrun">تشغيل التذكيرات الآن</button></div>` + BOX('الإشعارات', T(['الوقت', 'الجمهور', 'القناة', 'العنوان', 'النص', 'الحالة'], Nn.map(n => `<tr><td>${fmtDate(n.created)}</td><td>${n.audience === 'customer' ? 'عميل' : 'فريق'}</td><td>${esc(CHAN_AR[n.channel] || n.channel)}</td><td>${esc(n.title)}</td><td>${esc(n.body)}</td><td>${pill('في الطابور', 'p-bl')}</td></tr>`)));
     $('#nrun').onclick = async () => { const r = await tryDo(() => api('/notifications/run', {method: 'POST'})); toast(`أُنشئ ${N(r.created)} إشعار`); EXT.l_adm(); };
   } else if (k === 'priv' && can('admin')) {
     const P = await api('/privacy');
@@ -1391,7 +1443,7 @@ EXT.ukill = async id => { if (!confirm('إنهاء كل جلسات هذا الم
 EXT.u2fa = async id => { if (!confirm('إعادة ضبط التحقق الثنائي لهذا المستخدم؟ تُبطل رموزه وتُنهى جلساته، ويعيد التفعيل عند الدخول.')) return; await tryDo(() => api(`/users/${id}/2fa/reset`, {method: 'POST'}), 'أُعيد ضبط التحقق الثنائي'); EXT.l_adm(); };
 EXT.uemail = async (id, cur) => { const v = prompt('البريد الإلكتروني للمستخدم (فارغ للحذف) — يتيح استعادة كلمة المرور ورابط الدخول والدخول عبر Google', cur || ''); if (v === null) return; await tryDo(() => api(`/users/${id}/email`, {method: 'POST', body: {email: v.trim()}}), 'حُدّث البريد'); EXT.l_adm(); };
 EXT.uact = async (id, a) => { await tryDo(() => api(`/users/${id}/active`, {method: 'POST', body: {active: !!a}}), 'حُدّث المستخدم'); EXT.l_adm(); };
-EXT.newUser = () => { modal(`<h3>مستخدم جديد</h3><label>اسم المستخدم (إنجليزي)</label><input id="un" dir="ltr"><label>الاسم</label><input id="unm"><label>البريد الإلكتروني (اختياري — لاستعادة كلمة المرور ورابط الدخول وGoogle)</label><input id="uem" dir="ltr" type="email"><label>الدور</label><select id="ur"><option value="sales">مبيعات</option><option value="finance">مالية</option><option value="engineer">مهندس</option><option value="investor">مستثمر/ممول</option><option value="admin">مدير</option></select><div class="err" id="ue"></div><div class="btns" style="margin-top:12px"><button class="btn p" id="ugo">إنشاء</button><button class="btn" data-call="closeModal">إلغاء</button></div>`);
+EXT.newUser = () => { modal(`<h3>مستخدم جديد</h3><label>اسم المستخدم (إنجليزي)</label><input id="un" dir="ltr"><label>الاسم</label><input id="unm"><label>البريد الإلكتروني (اختياري — لاستعادة كلمة المرور ورابط الدخول وGoogle)</label><input id="uem" dir="ltr" type="email"><label>الدور</label><select id="ur"><option value="sales">مبيعات</option><option value="finance">مالية</option><option value="engineer">مهندس</option><option value="investor">مستثمر/ممول</option><option value="accountant">محاسب</option><option value="hr">موارد بشرية</option><option value="payroll">مسؤول رواتب</option><option value="property_manager">مدير عقاري (خارجي) — يحتاج نطاق مشروع</option><option value="admin">مدير</option></select><div class="err" id="ue"></div><div class="btns" style="margin-top:12px"><button class="btn p" id="ugo">إنشاء</button><button class="btn" data-call="closeModal">إلغاء</button></div>`);
   $('#ugo').onclick = async () => { try { const r = await api('/users', {method: 'POST', body: {username: $('#un').value.trim().toLowerCase(), name: $('#unm').value, role: $('#ur').value, email: ($('#uem').value || '').trim() || null}}); modal(`<h3>أُنشئ المستخدم</h3><div class="ai"><b>${esc(r.username)}</b><br>كلمة المرور المؤقتة: <span class="num" style="user-select:all">${esc(r.temporary_password)}</span></div><p class="muted">${esc(r.note)}</p><button class="btn" data-call="closeModal">إغلاق</button>`); EXT.l_adm(); } catch (e) { $('#ue').textContent = e.message; } }; };
 EXT.setup2fa = async () => {
   const r = await tryDo(() => api('/auth/2fa/setup', {method: 'POST'}));
@@ -2646,7 +2698,7 @@ EXT.polApprove = id => {
 EXT.polAcks = async id => {
   const r = await api(`/policies/${id}/acks`);
   $('#polAcks').innerHTML = BOX(`أقرّوا <span class="muted">${N(r.acknowledged.length)}</span>`, T(['الاسم', 'الوقت'], r.acknowledged.map(a => `<tr><td>${esc(a.name || a.username)}</td><td>${esc((a.acked_at || '').replace('T', ' ').slice(0, 16))}</td></tr>`), 'لم يقرّ أحد بعد.'))
-    + BOX(`لم يقرّوا بعد <span class="muted">${N(r.pending.length)}</span>`, T(['الاسم', 'الدور'], r.pending.map(a => `<tr><td>${esc(a.name || a.username)}</td><td>${esc(a.role)}</td></tr>`), 'أقرّ الجميع.'));
+    + BOX(`لم يقرّوا بعد <span class="muted">${N(r.pending.length)}</span>`, T(['الاسم', 'الدور'], r.pending.map(a => `<tr><td>${esc(a.name || a.username)}</td><td>${esc(ROLE_AR[a.role] || a.role)}</td></tr>`), 'أقرّ الجميع.'));
 };
 EXT.polForm = async function (id) {
   const p = id ? await api('/policies/' + id) : {code: '', title: '', category: 'hr', owner_role: '', summary: '', basis: 'نموذج افتراضي للتجربة — يراجعه مختص قانوني قبل الاعتماد الفعلي', review_months: 12, ack_required: true, articles: []};
