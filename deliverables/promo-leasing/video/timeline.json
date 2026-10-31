@@ -1,0 +1,353 @@
+{
+ "total": 131.294,
+ "scenes": [
+  {
+   "id": 1,
+   "start": 0.0,
+   "dur": 10.188,
+   "says": [
+    {
+     "n": "n1",
+     "at": 0.3,
+     "dur": 9.288
+    }
+   ],
+   "segs": [
+    {
+     "t": "clip",
+     "src": "gen/c8.mp4",
+     "gen": true,
+     "d": 5.0,
+     "tag": "title"
+    },
+    {
+     "t": "card",
+     "src": "cards/chars.png",
+     "min": 4.0,
+     "d": 5.188
+    }
+   ]
+  },
+  {
+   "id": 2,
+   "start": 10.188,
+   "dur": 12.696,
+   "says": [
+    {
+     "n": "n2",
+     "at": 10.488,
+     "dur": 11.796
+    }
+   ],
+   "segs": [
+    {
+     "t": "real",
+     "src": "out/r2.mp4",
+     "demo": true,
+     "ranges": [
+      [
+       0.4,
+       13.8
+      ]
+     ],
+     "d": 12.696
+    }
+   ]
+  },
+  {
+   "id": 3,
+   "start": 22.884,
+   "dur": 14.786,
+   "says": [
+    {
+     "n": "n3",
+     "at": 23.184,
+     "dur": 13.886
+    }
+   ],
+   "segs": [
+    {
+     "t": "clip",
+     "src": "gen/c3.mp4",
+     "gen": true,
+     "d": 3.2,
+     "tag": "pair"
+    },
+    {
+     "t": "real",
+     "src": "out/r3.mp4",
+     "demo": true,
+     "ranges": [
+      [
+       2.8,
+       16.2
+      ]
+     ],
+     "d": 11.586
+    }
+   ]
+  },
+  {
+   "id": 4,
+   "start": 37.67,
+   "dur": 12.138,
+   "says": [
+    {
+     "n": "n4",
+     "at": 37.97,
+     "dur": 11.238
+    }
+   ],
+   "segs": [
+    {
+     "t": "real",
+     "src": "out/r4.mp4",
+     "demo": true,
+     "ranges": [
+      [
+       2.6,
+       7.4
+      ]
+     ],
+     "d": 4.538
+    },
+    {
+     "t": "clip",
+     "src": "gen/c10.mp4",
+     "gen": true,
+     "d": 3.4,
+     "tag": "pair"
+    },
+    {
+     "t": "real",
+     "src": "out/r4b.mp4",
+     "demo": true,
+     "ranges": [
+      [
+       11.6,
+       17.4
+      ]
+     ],
+     "dur": 4.2,
+     "d": 4.2
+    }
+   ]
+  },
+  {
+   "id": 5,
+   "start": 49.808,
+   "dur": 15.296,
+   "says": [
+    {
+     "n": "n5",
+     "at": 50.108,
+     "dur": 14.396
+    }
+   ],
+   "segs": [
+    {
+     "t": "clip",
+     "src": "gen/c_cheque.mp4",
+     "gen": true,
+     "d": 5.0,
+     "tag": "pair"
+    },
+    {
+     "t": "real",
+     "src": "out/r5.mp4",
+     "demo": true,
+     "ranges": [
+      [
+       3.0,
+       12.6
+      ]
+     ],
+     "d": 10.296
+    }
+   ]
+  },
+  {
+   "id": 6,
+   "start": 65.104,
+   "dur": 10.095,
+   "says": [
+    {
+     "n": "n6",
+     "at": 65.404,
+     "dur": 9.195
+    }
+   ],
+   "segs": [
+    {
+     "t": "real",
+     "src": "out/r6.mp4",
+     "demo": true,
+     "ranges": [
+      [
+       2.4,
+       10.6
+      ]
+     ],
+     "d": 10.095
+    }
+   ]
+  },
+  {
+   "id": 7,
+   "start": 75.199,
+   "dur": 18.269,
+   "says": [
+    {
+     "n": "n7",
+     "at": 75.499,
+     "dur": 17.369
+    }
+   ],
+   "segs": [
+    {
+     "t": "clip",
+     "src": "gen/c1.mp4",
+     "gen": true,
+     "d": 4.2,
+     "tag": "manager"
+    },
+    {
+     "t": "real",
+     "src": "out/r7.mp4",
+     "demo": true,
+     "ranges": [
+      [
+       1.4,
+       15.2
+      ]
+     ],
+     "d": 14.069
+    }
+   ]
+  },
+  {
+   "id": 8,
+   "start": 93.468,
+   "dur": 12.649,
+   "says": [
+    {
+     "n": "n8",
+     "at": 93.768,
+     "dur": 11.749
+    }
+   ],
+   "segs": [
+    {
+     "t": "still",
+     "src": "gen/s6.png",
+     "gen": true,
+     "dur": 3.0,
+     "tag": "tenant",
+     "d": 3.0
+    },
+    {
+     "t": "real",
+     "src": "out/r8.mp4",
+     "demo": true,
+     "ranges": [
+      [
+       1.8,
+       18.0
+      ]
+     ],
+     "d": 9.649
+    }
+   ]
+  },
+  {
+   "id": 9,
+   "start": 106.117,
+   "dur": 9.306,
+   "says": [
+    {
+     "n": "n9",
+     "at": 106.417,
+     "dur": 8.406
+    }
+   ],
+   "segs": [
+    {
+     "t": "clip",
+     "src": "gen/c_owner.mp4",
+     "gen": true,
+     "d": 3.6,
+     "tag": "owner"
+    },
+    {
+     "t": "real",
+     "src": "out/r9.mp4",
+     "demo": true,
+     "ranges": [
+      [
+       3.0,
+       9.6
+      ]
+     ],
+     "d": 5.706
+    }
+   ]
+  },
+  {
+   "id": 10,
+   "start": 115.423,
+   "dur": 8.005,
+   "says": [
+    {
+     "n": "n10",
+     "at": 115.723,
+     "dur": 7.105
+    }
+   ],
+   "segs": [
+    {
+     "t": "clip",
+     "src": "gen/c4.mp4",
+     "gen": true,
+     "d": 3.0,
+     "tag": "accountant"
+    },
+    {
+     "t": "real",
+     "src": "out/r10.mp4",
+     "demo": true,
+     "ranges": [
+      [
+       3.6,
+       6.4
+      ],
+      [
+       8.2,
+       11.8
+      ]
+     ],
+     "d": 5.005
+    }
+   ]
+  },
+  {
+   "id": 11,
+   "start": 123.428,
+   "dur": 7.866,
+   "says": [
+    {
+     "n": "n11",
+     "at": 123.728,
+     "dur": 6.966
+    }
+   ],
+   "segs": [
+    {
+     "t": "card",
+     "src": "cards/end-card.png",
+     "min": 7.0,
+     "d": 7.866
+    }
+   ]
+  }
+ ]
+}
