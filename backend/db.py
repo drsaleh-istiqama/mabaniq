@@ -240,6 +240,13 @@ CREATE TABLE IF NOT EXISTS buildings(
 CREATE TABLE IF NOT EXISTS unit_price_changes(
   id INTEGER PRIMARY KEY, unit_id INTEGER NOT NULL REFERENCES units(id), old_price REAL, new_price REAL NOT NULL, reason TEXT NOT NULL,
   basis TEXT NOT NULL CHECK (basis IN ('free','booking','lease')), changed_by TEXT, changed_at TEXT NOT NULL);
+-- 0.32.0 — الأدوار والصلاحيات كبيانات (backend/roles.py): تُبذران من auth.PERMS عند أول قراءة؛ عدّاد الإصدار في settings['roles:ver']
+CREATE TABLE IF NOT EXISTS roles(
+  id INTEGER PRIMARY KEY, code TEXT NOT NULL UNIQUE, label TEXT NOT NULL, kind TEXT NOT NULL DEFAULT 'staff' CHECK (kind IN ('staff','portal')), builtin INTEGER NOT NULL DEFAULT 0, created_by TEXT,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP, updated_at TEXT);
+CREATE TABLE IF NOT EXISTS role_perms(
+  id INTEGER PRIMARY KEY, role_code TEXT NOT NULL, perm TEXT NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP, updated_at TEXT, UNIQUE(role_code, perm));
+CREATE INDEX IF NOT EXISTS ix_role_perms_role ON role_perms(role_code);
 CREATE TABLE IF NOT EXISTS plans(
   id INTEGER PRIMARY KEY, project_id INTEGER REFERENCES projects(id), building TEXT, floor INTEGER, unit_type TEXT, kind TEXT NOT NULL, title TEXT,
   document_id INTEGER REFERENCES documents(id), markers TEXT DEFAULT '[]', public INTEGER DEFAULT 1, created TEXT, created_by TEXT);

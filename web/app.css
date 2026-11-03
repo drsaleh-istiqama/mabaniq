@@ -188,3 +188,18 @@ td .muted{display:inline-block}
 .acts{margin:6px 0 0;padding-inline-start:18px}.acts li{margin-bottom:6px}.wal{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
 .adgal{padding:14px;grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}.adgal img{width:100%;border-radius:10px;border:1px solid var(--line)}.gal{display:grid;gap:12px}.gal figure{margin:0}
 textarea{width:100%;font:inherit;background:var(--pane2);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:10px}
+
+/* 0.32.0 — مصفوفة الأدوار والصلاحيات: جدول حقيقي يمرَّر داخل حاويته (لا يتحوّل إلى بطاقات)، وعمود الصلاحيات ثابت عند التمرير */
+.rmx-bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid var(--line)}.rmx-bar label{color:var(--muted);font-size:12px}
+.rmxw{overflow:auto;max-height:72vh;overscroll-behavior:contain}.rmxw:focus-visible{outline:2px solid var(--pri);outline-offset:-2px}
+.rmx{width:100%;border-collapse:separate;border-spacing:0}
+.rmx th,.rmx td{padding:8px;border-bottom:1px solid var(--line)}
+.rmx thead th{position:sticky;top:0;z-index:2;background:var(--pane2);vertical-align:bottom;white-space:normal;min-width:84px;text-align:center}
+.rmx .rmx-p{position:sticky;inset-inline-start:0;z-index:1;background:var(--pane);text-align:start;min-width:150px;max-width:210px;white-space:normal;font-weight:500;color:var(--ink);font-size:13px;padding-inline:10px}
+.rmx thead .rmx-p{z-index:3;background:var(--pane2);color:var(--muted)}
+.rmx tbody tr{cursor:default}.rmx tbody tr:hover td,.rmx tbody tr:hover .rmx-p{background:var(--pane2)}
+.rmx td{text-align:center}.rmx td[hidden],.rmx th[hidden]{display:none}
+.rmx tr.rmx-s th{position:static;background:var(--pri2);color:var(--pri);font-size:12px;font-weight:700;text-align:start}
+.rmx input[type=checkbox]{width:18px;height:18px;accent-color:var(--pri);cursor:pointer}.rmx input[type=checkbox]:disabled{cursor:not-allowed;opacity:.55}
+.rmx-n{font-weight:700;color:var(--ink);font-size:13px}.rmx-m{font-size:11px;color:var(--muted);margin-top:2px;font-weight:400}.rmx-a{margin-top:4px;font-size:12px}
+.rmx-foot{padding:12px 16px;line-height:1.8}

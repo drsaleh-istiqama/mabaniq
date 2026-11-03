@@ -59,8 +59,9 @@ def test_every_api_path_is_classified():
     core_ok = ("/api/auth", "/api/me", "/api/admin", "/api/users", "/api/audit", "/api/docs", "/api/documents", "/api/plans", "/api/notifications",
                "/api/privacy", "/api/projects", "/api/units", "/api/search", "/api/reset", "/api/appearance", "/api/public", "/api/v1",
                "/api/portal", "/api/decisions", "/api/kpis", "/api/dashboard", "/api/modules", "/api/license", "/api/tenants", "/api/policies",
-               "/api/buildings")   # 0.31.0: the building register belongs to the always-on inventory core with projects and units (permission `masterdata` is a core permission)
-    stray =[p for p in _paths() if p.startswith("/api/") and R.route_module(p) is None and not any(p == c or p.startswith(c + "/") for c in core_ok)]
+               "/api/buildings",   # 0.31.0: the building register belongs to the always-on inventory core with projects and units (permission `masterdata` is a core permission)
+               "/api/roles")       # 0.32.0: roles and their permissions are governance — core like /api/users, gated by `users`
+    stray = [p for p in _paths() if p.startswith("/api/") and R.route_module(p) is None and not any(p == c or p.startswith(c + "/") for c in core_ok)]
     assert stray == [], f"paths without a module or a core entry (add to registry.MODULES prefixes or to core_ok here): {stray}"
 
 

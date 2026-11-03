@@ -390,7 +390,7 @@ def login(username: str, pw: str, ip: str, otp: str | None = None, ua: str = "")
         audit_insert(c, u["name"], "تسجيل دخول", f"{u['username']} من {ip}{via} · {_ua_label(ua)}")
         c.commit()
         from . import registry
-        return token, public(u, registry.enabled_modules(c))
+        return token, public(u, registry.enabled_modules(c), c)
     finally:
         c.close()
 
@@ -436,14 +436,21 @@ def kill_sessions(c, user_id: int, keep_hash: str | None = None) -> None:
     c.execute("DELETE FROM sessions WHERE user_id=? AND token_hash!=?", (user_id, keep_hash or ""))
 
 
-def public(u, mods=None) -> dict:
+def public(u, mods=None, c=None) -> dict:
     """`mods` (0.20.0): the modules switched on for this developer — a role's permissions owned by a module that is off are removed,
-    so every `need()`/`act_as()` check and the web's `can()` agree. None keeps the role's full set (internal callers without a connection)."""
+    so every `need()`/`act_as()` check and the web's `can()` agree. None keeps the role's full set (internal callers without a connection).
+    `c` (0.32.0): with a connection the role's permissions and label come from the developer's `roles` / `role_perms` tables (backend/roles.py,
+    validated per request by the database's version counter) — a manager's change reaches a signed-in user's very next request; without one, from the code."""
     from . import registry
-    needs_2fa = prod() and u["role"] in TWO_FA_REQUIRED and not u["totp_enabled"]
-    perms = sorted(PERMS[u["role"]]) if mods is None else registry.effective_perms(PERMS[u["role"]], mods)
+    if c is not None:
+        from . import roles
+        base, label, two_fa = roles.role_info(c, u["role"])
+    else:
+        base, label, two_fa = PERMS[u["role"]], ROLES[u["role"]], u["role"] in TWO_FA_REQUIRED
+    needs_2fa = prod() and two_fa and not u["totp_enabled"]
+    perms = sorted(base) if mods is None else registry.effective_perms(base, mods)
     return {"id": u["id"], "username": u["username"], "name": u["name"], "role": u["role"],
-            "role_label": ROLES[u["role"]], "perms": perms, "customer_id": u["customer_id"], "employee_id": u["employee_id"] if "employee_id" in u.keys() else None,
+            "role_label": label, "perms": perms, "customer_id": u["customer_id"], "employee_id": u["employee_id"] if "employee_id" in u.keys() else None,
             "lessee_id": u["lessee_id"] if "lessee_id" in u.keys() else None,
             "modules": sorted(mods) if mods is not None else [],
             "broker_id": u["broker_id"], "must_change": bool(u["must_change"]), "totp_enabled": bool(u["totp_enabled"]),
@@ -476,7 +483,7 @@ def session_user(request: Request) -> dict | None:
             c.commit()
         from . import registry
         mods = getattr(request.state, "mods", None)  # set by the module gate when the path belongs to a module
-        return public(row, mods if mods is not None else registry.enabled_modules(c))
+        return public(row, mods if mods is not None else registry.enabled_modules(c), c)
     finally:
         c.close()
 

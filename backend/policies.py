@@ -16,7 +16,8 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 
-from .auth import PERMS, need
+from . import roles as RL
+from .auth import need
 from .common import act_as, audit, db, now_s, rows, today
 from .modules import one
 from .partial import Col, diff
@@ -123,9 +124,12 @@ LIST_SQL = """SELECT p.id, p.code, p.title, p.category, p.owner_role, p.summary,
 
 def _staff_targets(c) -> list[dict]:
     """Active logins whose role carries `policies`: who is expected to read an acknowledged policy."""
-    roles = sorted(r for r, perms in PERMS.items() if "policies" in perms)
+    roles = RL.roles_with(c, "policies")   # 0.32.0: built-in and custom roles alike, from the roles table
     ph = ",".join("?" for _ in roles)
-    return rows(c.execute(f"SELECT username, name, role FROM users WHERE active=1 AND role IN ({ph}) ORDER BY name", tuple(roles)))
+    out = rows(c.execute(f"SELECT username, name, role FROM users WHERE active=1 AND role IN ({ph}) ORDER BY name", tuple(roles)))
+    for r in out:
+        r["role_label"] = RL.label_for(c, r["role"])
+    return out
 
 
 @router.get("/api/policies/summary")

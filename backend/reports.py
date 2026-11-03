@@ -816,7 +816,7 @@ def _owner_perms(c, username) -> set:
     u = c.execute("SELECT * FROM users WHERE username=? AND active=1", (username,)).fetchone()
     if not u:
         raise HTTPException(403, "صاحب الجدولة لم يعد مفعَّلًا")
-    ps = set(A.public(u, registry.enabled_modules(c))["perms"])
+    ps = set(A.public(u, registry.enabled_modules(c), c)["perms"])
     return ps | ({"view"} if "reports" in ps else set())   # the same rule as the on-screen custom run
 
 

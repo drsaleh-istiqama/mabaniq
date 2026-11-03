@@ -15,8 +15,9 @@ from . import auth as A
 from . import engines as E
 from . import engines_ext as X
 from . import pii
+from . import roles as RL
 from .auth import need, need_any
-from .common import act_as, audit, db, now_s, rows, today
+from .common import act_as, audit, db, now_s, rows, today, xlock
 from .db import TENANT, audit_verify, backup, data_dir, setting_f
 from .modules import issue_invoice, one, paid_ratio, portal_owned
 
@@ -757,22 +758,28 @@ def privacy_process(rid: int, d: PrivDecide, u=Depends(act_as("admin"))):
 def users(_=Depends(need("users"))):
     c = A.conn()
     out = rows(c.execute("SELECT id, username, name, role, active, must_change, totp_enabled, pw_changed, email, email_verified, google_sub FROM users ORDER BY id"))
+    allr = RL.all_roles(c)   # 0.32.0: the label of a custom role comes from the roles table; `role_kind` tells the screen whether the role can be changed from there
     for u in out:
         u["google_linked"] = bool(u.pop("google_sub", None))
         u["email_verified"] = bool(u.get("email_verified"))
+        u["role_label"] = allr[u["role"]]["label"] if u["role"] in allr else u["role"]
+        u["role_kind"] = allr[u["role"]]["kind"] if u["role"] in allr else "staff"
     return out
 
 
 class UserIn(BaseModel):
     username: str = Field(min_length=3, max_length=30, pattern=r"^[a-z][a-z0-9._-]+$")
     name: str = Field(min_length=3, max_length=60)
-    role: str = Field(pattern="^(admin|sales|finance|engineer|investor|property_manager|accountant|hr|payroll)$")
+    role: str = Field(min_length=2, max_length=30)   # 0.32.0: a built-in staff role or a custom one — checked against the roles table in user_create
     email: str | None = Field(default=None, max_length=120)  # 0.10.0: enables recovery links, e-mail sign-in and Google matching
 
 
 @router.post("/api/users")
 def user_create(n: UserIn, _=Depends(act_as("users"))):
     c = A.conn()
+    xlock(c, "roles")      # لا يُحذف الدور بين فحصه وإسناده
+    if not RL.assignable(c, n.role):
+        raise HTTPException(422, "الدور غير معروف أو لا يُنشأ به مستخدم من هنا")
     if c.execute("SELECT 1 FROM users WHERE username=?", (n.username,)).fetchone():
         raise HTTPException(409, "اسم المستخدم مستخدم")
     from .identity import EMAIL_RE, norm_email
@@ -783,7 +790,7 @@ def user_create(n: UserIn, _=Depends(act_as("users"))):
         raise HTTPException(409, "هذا البريد مسجَّل لحساب آخر")
     temp = A.temp_password()
     c.execute("INSERT INTO users(username,name,role,pw,must_change,email) VALUES(?,?,?,?,1,?)", (n.username, n.name, n.role, A.hash_pw(temp), email))
-    audit(c, "إنشاء مستخدم", f"{n.username} ({A.ROLES[n.role]}){' · ' + email if email else ''}")
+    audit(c, "إنشاء مستخدم", f"{n.username} ({RL.label_for(c, n.role)}){' · ' + email if email else ''}")
     c.commit()
     return {"username": n.username, "temporary_password": temp, "note": "تُعرض مرة واحدة فقط، ويُلزم المستخدم بتغييرها عند أول دخول."}
 
@@ -810,6 +817,9 @@ def user_active(uid: int, a: ActiveIn, u=Depends(act_as("users"))):
     if uid == u["id"]:
         raise HTTPException(400, "لا يمكنك تعطيل حسابك")
     t = one(c, "SELECT * FROM users WHERE id=?", (uid,))
+    if not a.active:
+        xlock(c, "roles")
+        RL.assert_not_last_admin(c, uid, deactivate=True)   # 0.32.0: the last active manager is never stopped
     c.execute("UPDATE users SET active=? WHERE id=?", (int(a.active), uid))
     if not a.active:
         A.kill_sessions(c, uid)

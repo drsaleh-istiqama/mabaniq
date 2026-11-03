@@ -1667,12 +1667,14 @@ EXT.l_lender = async function (el) {
 /* ================================================================ الإدارة والأمان */
 EXT.l_adm = async function () {
   const k = this.cur.adm, el = $('#adm');
-  el.innerHTML = SUB('adm', [['users', 'المستخدمون'], ['mods', 'الوحدات والترخيص'], ['sec', 'أماني'], ['brand', 'هوية المستندات والختم'], ['look', 'المظهر والمساعد'], ['ops', 'السجل والنسخ والتكامل'], ['notif', 'الإشعارات'], ['priv', 'طلبات الخصوصية']].filter(([x]) => x === 'sec' || can('admin') || (x === 'notif' && can('notify'))), k) + '<div id="admB">…</div>';
+  el.innerHTML = SUB('adm', [['users', 'المستخدمون'], ['roles', 'الأدوار والصلاحيات'], ['mods', 'الوحدات والترخيص'], ['sec', 'أماني'], ['brand', 'هوية المستندات والختم'], ['look', 'المظهر والمساعد'], ['ops', 'السجل والنسخ والتكامل'], ['notif', 'الإشعارات'], ['priv', 'طلبات الخصوصية']].filter(([x]) => x === 'sec' || can('admin') || (x === 'notif' && can('notify')) || ((x === 'users' || x === 'roles') && can('users'))), k) + '<div id="admB">…</div>';
   const B = $('#admB');
   if (k === 'users' && can('users')) {
     const U = await api('/users');
-    B.innerHTML = BOX('المستخدمون والأدوار', T(['المستخدم', 'الاسم', 'البريد', 'الدور', 'الحالة', 'تحقق ثنائي', 'تغيير كلمة المرور', ''], U.map(u => `<tr><td><span class="num">${esc(u.username)}</span></td><td>${esc(u.name)}</td><td><span class="num">${esc(u.email || '—')}</span>${u.google_linked ? ' <span class="pill p-ok">Google</span>' : ''} <button class="link" data-call="EXT.uemail" data-args="${J([u.id, u.email || ''])}">تعديل</button></td><td>${esc(ROLE_AR[u.role] || u.role)}</td><td>${u.active ? pill('مفعّل', 'p-ok') : pill('معطّل', 'p-b')}</td><td>${u.totp_enabled ? '✓' : '—'}</td><td>${u.must_change ? pill('مطلوب', 'p-w') : fmtDate(u.pw_changed)}</td><td><button class="btn" data-call="EXT.ureset" data-args="${J([u.id])}">إعادة تعيين</button> <button class="btn" data-call="EXT.uact" data-args="${J([u.id, u.active ? 0 : 1])}">${u.active ? 'تعطيل' : 'تفعيل'}</button> <button class="btn" data-call="EXT.ukill" data-args="${J([u.id])}">إنهاء الجلسات</button>${u.totp_enabled ? ` <button class="btn" data-call="EXT.u2fa" data-args="${J([u.id])}">إعادة ضبط التحقق</button>` : ''}</td></tr>`)),
+    B.innerHTML = BOX('المستخدمون والأدوار', T(['المستخدم', 'الاسم', 'البريد', 'الدور', 'الحالة', 'تحقق ثنائي', 'تغيير كلمة المرور', ''], U.map(u => `<tr><td><span class="num">${esc(u.username)}</span></td><td>${esc(u.name)}</td><td><span class="num">${esc(u.email || '—')}</span>${u.google_linked ? ' <span class="pill p-ok">Google</span>' : ''} <button class="link" data-call="EXT.uemail" data-args="${J([u.id, u.email || ''])}">تعديل</button></td><td>${esc(u.role_label || ROLE_AR[u.role] || u.role)}${u.role_kind === 'portal' ? '' : ` <button class="link" data-call="EXT.urole" data-args="${J([u.id, u.role])}">تغيير</button>`}</td><td>${u.active ? pill('مفعّل', 'p-ok') : pill('معطّل', 'p-b')}</td><td>${u.totp_enabled ? '✓' : '—'}</td><td>${u.must_change ? pill('مطلوب', 'p-w') : fmtDate(u.pw_changed)}</td><td><button class="btn" data-call="EXT.ureset" data-args="${J([u.id])}">إعادة تعيين</button> <button class="btn" data-call="EXT.uact" data-args="${J([u.id, u.active ? 0 : 1])}">${u.active ? 'تعطيل' : 'تفعيل'}</button> <button class="btn" data-call="EXT.ukill" data-args="${J([u.id])}">إنهاء الجلسات</button>${u.totp_enabled ? ` <button class="btn" data-call="EXT.u2fa" data-args="${J([u.id])}">إعادة ضبط التحقق</button>` : ''}</td></tr>`)),
       '<button class="btn" data-call="EXT.newUser">+ مستخدم</button>');
+  } else if (k === 'roles' && can('users')) {
+    await EXT.rolesView(B);
   } else if (k === 'mods' && can('admin')) {
     const [M, L] = await Promise.all([api('/modules'), api('/license')]);
     const ttl = Object.fromEntries(M.modules.map(m => [m.key, m.title]));
@@ -1771,8 +1773,73 @@ EXT.ukill = async id => { if (!confirm('إنهاء كل جلسات هذا الم
 EXT.u2fa = async id => { if (!confirm('إعادة ضبط التحقق الثنائي لهذا المستخدم؟ تُبطل رموزه وتُنهى جلساته، ويعيد التفعيل عند الدخول.')) return; await tryDo(() => api(`/users/${id}/2fa/reset`, {method: 'POST'}), 'أُعيد ضبط التحقق الثنائي'); EXT.l_adm(); };
 EXT.uemail = async (id, cur) => { const v = prompt('البريد الإلكتروني للمستخدم (فارغ للحذف) — يتيح استعادة كلمة المرور ورابط الدخول والدخول عبر Google', cur || ''); if (v === null) return; await tryDo(() => api(`/users/${id}/email`, {method: 'POST', body: {email: v.trim()}}), patchMsg); EXT.l_adm(); };
 EXT.uact = async (id, a) => { await tryDo(() => api(`/users/${id}/active`, {method: 'POST', body: {active: !!a}}), 'حُدّث المستخدم'); EXT.l_adm(); };
-EXT.newUser = () => { modal(`<h3>مستخدم جديد</h3><label>اسم المستخدم (إنجليزي)</label><input id="un" dir="ltr"><label>الاسم</label><input id="unm"><label>البريد الإلكتروني (اختياري — لاستعادة كلمة المرور ورابط الدخول وGoogle)</label><input id="uem" dir="ltr" type="email"><label>الدور</label><select id="ur"><option value="sales">مبيعات</option><option value="finance">مالية</option><option value="engineer">مهندس</option><option value="investor">مستثمر/ممول</option><option value="accountant">محاسب</option><option value="hr">موارد بشرية</option><option value="payroll">مسؤول رواتب</option><option value="property_manager">مدير عقاري (خارجي) — يحتاج نطاق مشروع</option><option value="admin">مدير</option></select><div class="err" id="ue"></div><div class="btns" style="margin-top:12px"><button class="btn p" id="ugo">إنشاء</button><button class="btn" data-call="closeModal">إلغاء</button></div>`);
+EXT.newUser = async () => {
+  const RR = await api('/roles').catch(() => null);
+  const ro = (RR ? RR.roles.filter(r => r.assignable) : [{code: 'sales', label: 'مبيعات'}, {code: 'finance', label: 'مالية'}, {code: 'admin', label: 'مدير'}]).sort((a, b) => (a.code === 'admin') - (b.code === 'admin'));
+  modal(`<h3>مستخدم جديد</h3><label>اسم المستخدم (إنجليزي)</label><input id="un" dir="ltr"><label>الاسم</label><input id="unm"><label>البريد الإلكتروني (اختياري — لاستعادة كلمة المرور ورابط الدخول وGoogle)</label><input id="uem" dir="ltr" type="email"><label>الدور</label><select id="ur">${ro.map(r => `<option value="${esc(r.code)}">${esc(r.label)}${r.code === 'property_manager' ? ' — يحتاج نطاق مشروع' : ''}</option>`).join('')}</select><div class="err" id="ue"></div><div class="btns" style="margin-top:12px"><button class="btn p" id="ugo">إنشاء</button><button class="btn" data-call="closeModal">إلغاء</button></div>`);
   $('#ugo').onclick = async () => { try { const r = await api('/users', {method: 'POST', body: {username: $('#un').value.trim().toLowerCase(), name: $('#unm').value, role: $('#ur').value, email: ($('#uem').value || '').trim() || null}}); modal(`<h3>أُنشئ المستخدم</h3><div class="ai"><b>${esc(r.username)}</b><br>كلمة المرور المؤقتة: <span class="num" style="user-select:all">${esc(r.temporary_password)}</span></div><p class="muted">${esc(r.note)}</p><button class="btn" data-call="closeModal">إغلاق</button>`); EXT.l_adm(); } catch (e) { $('#ue').textContent = e.message; } }; };
+/* ================================================================ 0.32.0 — الأدوار والصلاحيات (docs/DESIGN-roles-permissions.md)
+   مصفوفة صفوفها الصلاحيات مجمّعة بالأقسام وأعمدتها أدوار الموظفين؛ كل خانة تُحفظ فور النقر (POST /roles/{code}/perms) ويسري التعديل على جلسات المستخدمين عند أول طلب لهم.
+   ما يمسّ حاجزًا (المدير العام، آخر مدير نشط) يردّه الخادم برسالة عربية فتعود الخانة إلى حالها. أدوار البوابات ثابتة: تُذكر تحت المصفوفة ولا تُعرض أعمدة. */
+const rmxHead = r => `<div class="rmx-n">${esc(r.label)}</div><div class="rmx-m"><span class="num">${N(r.users)}</span> مستخدم${r.two_fa ? ' ' + pill('تحقق ثنائي', 'p-bl') : ''}</div>`;
+const rmxActs = r => r.deletable ? `<div class="rmx-a"><button class="link" data-call="EXT.roleRename" data-args="${J([r.code, r.label])}">تسمية</button> <button class="link" data-call="EXT.roleDel" data-args="${J([r.code, r.label])}">حذف</button></div>` : '';
+EXT.rolesView = async B => {
+  const R = await api('/roles');
+  const staff = R.roles.filter(r => r.kind === 'staff'), portal = R.roles.filter(r => r.kind === 'portal');
+  const keep = R.must_keep || {}, cols = staff.length + 1;
+  EXT.rmxRoles = Object.fromEntries(staff.map(r => [r.code, r]));
+  EXT.rmxPerms = Object.fromEntries(R.perms.map(p => [p.perm, p.label]));
+  const cell = (r, p) => `<td data-role="${esc(r.code)}"><input type="checkbox" class="rpm" data-role="${esc(r.code)}" data-perm="${esc(p.perm)}" ${r.perms.includes(p.perm) ? 'checked' : ''} ${(keep[r.code] || []).includes(p.perm) ? 'disabled title="لا يُسحب من المدير العام"' : ''} aria-label="${esc(r.label)} — ${esc(p.label)}"></td>`;
+  const body = R.sections.map(s => { const ps = R.perms.filter(p => p.section === s.key); return ps.length ? `<tr class="rmx-s"><th colspan="${cols}" scope="colgroup">${esc(s.title)}</th></tr>` + ps.map(p => `<tr><th scope="row" class="rmx-p">${esc(p.label)}${p.module_on ? '' : ' <span class="muted">(وحدتها مطفأة)</span>'}</th>${staff.map(r => cell(r, p)).join('')}</tr>`).join('') : ''; }).join('');
+  B.innerHTML = BOX('الأدوار والصلاحيات <span class="muted">كل خانة تُحفظ عند النقر وتسري على جلسات المستخدمين عند أول طلب لهم</span>',
+    `<div class="rmx-bar"><label for="rmFocus">عرض</label><select id="rmFocus"><option value="all">كل الأدوار</option>${staff.map(r => `<option value="${esc(r.code)}">${esc(r.label)}</option>`).join('')}</select><span class="muted">${N(staff.length)} دور · ${N(R.perms.length)} صلاحية</span></div>
+     <div class="rmxw" tabindex="0" role="region" aria-label="مصفوفة الأدوار والصلاحيات"><table class="rmx" id="rmx"><thead><tr><th class="rmx-p" scope="col">الصلاحية</th>${staff.map(r => `<th scope="col" data-role="${esc(r.code)}">${rmxHead(r)}${rmxActs(r)}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></div>
+     <div class="rmx-foot muted">أدوار البوابات ثابتة لا تُعدَّل (${portal.map(r => esc(r.label)).join('، ')}): لكل منها بوابتها وصلاحياتها المحددة في النظام. المدير العام لا يفقد «الإدارة العامة» و«المستخدمون والأدوار»، ولا يُلغى آخر مدير نشط، ولا يُحذف دور له مستخدمون. من يحمل صلاحية حساسة (إدارة، مستخدمون، رواتب، اعتماد قيود…) يلزمه التحقق الثنائي في الإنتاج.</div>`,
+    '<button class="btn p" data-call="EXT.roleNew">+ دور جديد</button>');
+  const focus = v => B.querySelectorAll('#rmx th[data-role], #rmx td[data-role]').forEach(e => { e.hidden = v !== 'all' && e.dataset.role !== v; });
+  const sel = B.querySelector('#rmFocus');      // داخل الحاوية لا المستند: إن حلّت إعادة رسم أحدث محلّ هذه (نقر سريع بين التبويبات) كتبنا في عقدة منفصلة بلا ضرر
+  sel.value = window.matchMedia('(max-width: 700px)').matches && staff.length ? staff[0].code : 'all';     // على الهاتف دور واحد في كل مرة
+  focus(sel.value);
+  sel.onchange = () => focus(sel.value);
+  B.querySelector('#rmx').addEventListener('change', ev => { const b = ev.target.closest('input.rpm'); if (b) EXT.roleToggle(b); });
+};
+EXT.meReload = async () => { S.me = await api('/me'); $$('[data-s]').forEach(b => b.classList.toggle('hidden', !canS(b.dataset.s))); groupsVis(); };
+EXT.roleToggle = async b => {
+  const code = b.dataset.role, perm = b.dataset.perm, on = b.checked, r = EXT.rmxRoles[code];
+  b.disabled = true;
+  try {
+    const x = await api(`/roles/${code}/perms`, {method: 'POST', body: on ? {grant: [perm]} : {revoke: [perm]}});
+    toast(!(x.changed || []).length ? 'لم يتغيّر شيء' : (on ? 'مُنحت «' : 'سُحبت «') + EXT.rmxPerms[perm] + (on ? '» لدور «' : '» من دور «') + r.label + '»');
+    r.perms = on ? [...new Set([...r.perms, perm])] : r.perms.filter(p => p !== perm);
+    const R = await api('/roles');       // الشارة «تحقق ثنائي» قد تتبدّل بتبدّل الصلاحية الحساسة
+    R.roles.filter(q => q.kind === 'staff').forEach(q => { const th = [...$$('#rmx thead th[data-role]')].find(h => h.dataset.role === q.code); if (th) th.innerHTML = rmxHead(q) + rmxActs(q); });
+    if (S.me && code === S.me.role) await EXT.meReload();      // عدّل المدير دوره هو: تنعكس القوائم فورًا
+  } catch (e) { b.checked = !on; toast(e.message, 1); }
+  finally { b.disabled = false; }
+};
+EXT.roleNew = async () => {
+  const R = await api('/roles'), staff = R.roles.filter(r => r.kind === 'staff');
+  EXT.mdForm({title: 'دور جديد', note: 'يبدأ الدور بلا صلاحيات أو بنسخة من دور قائم، ثم تُعدَّل صلاحياته من المصفوفة، وبعدها يُسنَد إلى مستخدمين من تبويب «المستخدمون».',
+    fields: [{k: 'label', label: 'اسم الدور', type: 'text', req: true, minlen: 3, max: 40, ph: 'مثال: مسؤول مبيعات أول'},
+      {k: 'copy_from', label: 'البداية', type: 'select', options: [['', 'دور فارغ بلا صلاحيات'], ...staff.map(r => [r.code, 'نسخة من «' + r.label + '»'])]}],
+    submit: body => api('/roles', {method: 'POST', body}), ok: r => 'أُضيف الدور «' + r.label + '»', done: () => EXT.l_adm()});
+};
+EXT.roleRename = (code, label) => EXT.mdForm({title: 'إعادة تسمية الدور', edit: true, values: {label},
+  fields: [{k: 'label', label: 'اسم الدور', type: 'text', req: true, minlen: 3, max: 40}],
+  submit: body => Object.keys(body).length ? api(`/roles/${code}`, {method: 'PATCH', body}) : {changed: []},
+  ok: r => (r.changed || []).length ? 'أُعيدت تسمية الدور' : 'لم يتغيّر شيء', done: () => EXT.l_adm()});
+EXT.roleDel = async (code, label) => {
+  if (!confirm(`حذف الدور «${label}»؟ تُحذف صلاحياته معه، ولا يُحذف إن كان له مستخدمون.`)) return;
+  try { await api(`/roles/${code}`, {method: 'DELETE'}); toast('حُذف الدور «' + label + '»'); } catch (e) { toast(e.message, 1); return; }
+  EXT.l_adm();
+};
+EXT.urole = async (id, cur) => {
+  const R = await api('/roles'), staff = R.roles.filter(r => r.kind === 'staff');
+  EXT.mdForm({title: 'تغيير دور المستخدم', edit: true, values: {role: cur}, note: 'يسري الدور الجديد على جلسته عند أول طلب له.',
+    fields: [{k: 'role', label: 'الدور', type: 'select', req: true, options: staff.map(r => [r.code, r.label])}],
+    submit: body => Object.keys(body).length ? api(`/users/${id}/role`, {method: 'POST', body}) : {changed: []},
+    ok: r => (r.changed || []).length ? 'غُيّر دور المستخدم' : 'لم يتغيّر شيء', done: () => EXT.l_adm()});
+};
 EXT.setup2fa = async () => {
   const r = await tryDo(() => api('/auth/2fa/setup', {method: 'POST'}));
   modal(`<h3>تفعيل التحقق الثنائي</h3><p>أضف الحساب في تطبيق المصادقة (Google Authenticator أو Microsoft Authenticator) بالمفتاح التالي:</p><div class="ai"><span class="num" style="user-select:all;word-break:break-all">${esc(r.secret)}</span></div><label>أدخل الرمز المكوّن من 6 أرقام</label><input id="otp" inputmode="numeric" dir="ltr" maxlength="6"><div class="err" id="oe"></div><div class="btns" style="margin-top:12px"><button class="btn p" id="ogo2">تفعيل</button><button class="btn" data-call="closeModal">لاحقًا</button></div>`);
@@ -3080,7 +3147,7 @@ EXT.polApprove = id => {
 EXT.polAcks = async id => {
   const r = await api(`/policies/${id}/acks`);
   $('#polAcks').innerHTML = BOX(`أقرّوا <span class="muted">${N(r.acknowledged.length)}</span>`, T(['الاسم', 'الوقت'], r.acknowledged.map(a => `<tr><td>${esc(a.name || a.username)}</td><td>${esc((a.acked_at || '').replace('T', ' ').slice(0, 16))}</td></tr>`), 'لم يقرّ أحد بعد.'))
-    + BOX(`لم يقرّوا بعد <span class="muted">${N(r.pending.length)}</span>`, T(['الاسم', 'الدور'], r.pending.map(a => `<tr><td>${esc(a.name || a.username)}</td><td>${esc(ROLE_AR[a.role] || a.role)}</td></tr>`), 'أقرّ الجميع.'));
+    + BOX(`لم يقرّوا بعد <span class="muted">${N(r.pending.length)}</span>`, T(['الاسم', 'الدور'], r.pending.map(a => `<tr><td>${esc(a.name || a.username)}</td><td>${esc(a.role_label || ROLE_AR[a.role] || a.role)}</td></tr>`), 'أقرّ الجميع.'));
 };
 EXT.polForm = async function (id) {
   const p = id ? await api('/policies/' + id) : {code: '', title: '', category: 'hr', owner_role: '', summary: '', basis: 'نموذج افتراضي للتجربة — يراجعه مختص قانوني قبل الاعتماد الفعلي', review_months: 12, ack_required: true, articles: []};
