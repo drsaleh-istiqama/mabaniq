@@ -127,17 +127,19 @@ def _cached_json(key: str, compute):
 
 
 @app.get("/api/projects")
-def projects(_=Depends(need("view"))):
+def projects(archived: int = 0, _=Depends(need("view"))):
+    if archived:    # 0.31.0 — the stopped ones too (management); the working list is the cached one
+        return _projects(True)
     return _cached_json("projects", _projects)
 
 
-def _projects():
+def _projects(with_archived: bool = False):
     c = db()
     out = []
-    for p in c.execute("SELECT * FROM projects ORDER BY id"):
+    for p in c.execute("SELECT * FROM projects WHERE (?=1 OR COALESCE(active,1)=1) ORDER BY id", (int(with_archived),)):
         k = E.kpis(c, p["id"])
         sold = c.execute("SELECT COUNT(*) FROM units WHERE project_id=? AND status!='a'", (p["id"],)).fetchone()[0]
-        out.append({**dict(p), **k, "sold_pct": round(100 * sold / k["total_units"])})
+        out.append({**dict(p), **k, "sold_pct": round(100 * sold / k["total_units"]) if k["total_units"] else 0})   # 0.31.0 — a project made from the form starts with no units
     return out
 
 
@@ -151,9 +153,9 @@ def kpis(project_id: int | None = None, _=Depends(need("view"))):
 
 
 @app.get("/api/units")
-def units(project_id: int, building: str | None = None, _=Depends(need("inventory"))):
+def units(project_id: int, building: str | None = None, archived: int = 0, _=Depends(need("inventory"))):
     c = db()
-    q, a = "SELECT * FROM units WHERE project_id=?", [project_id]
+    q, a = "SELECT * FROM units WHERE project_id=? AND (?=1 OR COALESCE(active,1)=1)", [project_id, int(archived)]
     if building:
         q += " AND building=?"
         a.append(building)
@@ -978,6 +980,7 @@ from .hr_perf import router as hr_perf_router  # noqa: E402
 from .hr_recruit import router as hr_recruit_router  # noqa: E402
 from .hr_self import router as hr_self_router  # noqa: E402
 from .lessee import router as lessee_router  # noqa: E402
+from .masterdata import router as masterdata_router  # noqa: E402
 from .policies import router as policies_router  # noqa: E402
 
 app.include_router(acc_ap_router)  # 0.24.0: الذمم الدائنة والبنوك
@@ -994,6 +997,7 @@ app.include_router(hr_perf_router)  # 0.27.0: التقييم السنوي وال
 app.include_router(hr_disc_router)  # 0.27.0: الجزاءات
 app.include_router(lessee_router)  # 0.28.0: بوابة المستأجر
 app.include_router(policies_router)  # 0.29.0: سجل السياسات واللوائح (الحوكمة)
+app.include_router(masterdata_router)  # 0.31.0: البيانات الأساسية — مشروع ومبنى ووحدة وعميل وأرض وترخيص ومقاول وعقد ومهمة
 from .appearance import router as appearance_router  # noqa: E402
 from .assistant import router as assistant_router  # noqa: E402
 from .identity import router as identity_router  # noqa: E402

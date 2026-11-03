@@ -52,9 +52,9 @@ def paid_ratio(c, bid):
 
 # ======================================================================= الأرض والجدوى
 @router.get("/api/lands")
-def lands(_=Depends(need("land"))):
+def lands(archived: int = Query(0), _=Depends(need("land"))):
     c = db()
-    out = rows(c.execute("SELECT * FROM lands ORDER BY id"))
+    out = rows(c.execute("SELECT * FROM lands WHERE (?=1 OR COALESCE(active,1)=1) ORDER BY id", (int(archived),)))
     for x in out:
         x["studies"] = rows(c.execute("SELECT id,name,results,created,by FROM feasibility WHERE land_id=? ORDER BY id DESC", (x["id"],)))
         for s in x["studies"]:
@@ -91,11 +91,11 @@ PERMIT_STATUS = {"not_started": "لم يبدأ", "submitted": "مقدَّم", "i
 
 
 @router.get("/api/permits")
-def permits(_=Depends(need_any("permits", "view"))):
+def permits(archived: int = Query(0), _=Depends(need_any("permits", "view"))):
     c = db()
     t = today()
     out = []
-    for r in c.execute("SELECT pm.*, p.name project FROM permits pm JOIN projects p ON p.id=pm.project_id ORDER BY p.id, pm.id"):
+    for r in c.execute("SELECT pm.*, p.name project FROM permits pm JOIN projects p ON p.id=pm.project_id WHERE (?=1 OR COALESCE(pm.active,1)=1) ORDER BY p.id, pm.id", (int(archived),)):
         x = dict(r)
         x["status_label"] = PERMIT_STATUS.get(x["status"], x["status"])
         x["alert"] = None
@@ -111,7 +111,7 @@ def permits(_=Depends(need_any("permits", "view"))):
     return out
 
 
-PERMIT_SETTABLE = ("submitted", "in_review", "issued", "rejected")   # ما يضبطه الموظف؛ «لم يبدأ» و«منتهٍ» يشتقهما النظام
+PERMIT_SETTABLE = ("not_started", "submitted", "in_review", "issued", "rejected")   # ما يضبطه الموظف (0.31.0: «لم يبدأ» تُتاح للتراجع عن انتقال خاطئ)؛ «منتهٍ» يشتقه النظام
 
 
 class PermitPatch(BaseModel):
@@ -120,9 +120,15 @@ class PermitPatch(BaseModel):
     status: str | None = None
     ref: str | None = Field(default=None, max_length=40)
     expires: dt.date | None = None
+    authority: str | None = Field(default=None, max_length=80)      # 0.31.0 — الحقول الوصفية تُعدَّل مع الحالة والمرجع والانتهاء
+    kind: str | None = Field(default=None, max_length=80)
+    notes: str | None = Field(default=None, max_length=300)
 
 
 PERMIT_COLS = {
+    "authority": Col("الجهة", required=True, check=lambda v: None if len(v) >= 2 else "اسم الجهة حرفان على الأقل"),
+    "kind": Col("نوع الترخيص", required=True, check=lambda v: None if len(v) >= 2 else "نوع الترخيص حرفان على الأقل"),
+    "notes": Col("ملاحظات"),
     "status": Col("الحالة", required=True, check=lambda v: None if v in PERMIT_SETTABLE else "حالة الترخيص غير مسموحة — المسموح: " + "، ".join(PERMIT_STATUS[s] for s in PERMIT_SETTABLE)),
     "ref": Col("الرقم المرجعي"),
     "expires": Col("تاريخ الانتهاء", kind="date"),
@@ -139,7 +145,7 @@ def permit_update(pid: int, p: PermitPatch, _=Depends(act_as("permits"))):
     extra = {}
     new_status = (p.status or "").strip() if "status" in p.model_fields_set else ""
     if new_status and new_status != r["status"]:   # تاريخ الصدور يُحدَّد عند الانتقال إلى «صادر» فقط (كان يتحرك مع كل حفظ)
-        if not r["applied"]:
+        if not r["applied"] and new_status != "not_started":
             extra["applied"] = today().isoformat()
         if new_status == "issued":
             extra["issued"] = today().isoformat()
@@ -152,9 +158,9 @@ def permit_update(pid: int, p: PermitPatch, _=Depends(act_as("permits"))):
 def construction(project_id: int, _=Depends(need("construction"))):
     c = db()
     p = one(c, "SELECT * FROM projects WHERE id=?", (project_id,), "المشروع غير موجود")
-    tasks = rows(c.execute("SELECT * FROM schedule_tasks WHERE project_id=? ORDER BY id", (project_id,)))
+    tasks = rows(c.execute("SELECT * FROM schedule_tasks WHERE project_id=? AND COALESCE(active,1)=1 ORDER BY id", (project_id,)))
     sched = X.schedule_analysis(tasks, today())
-    k = c.execute("SELECT cc.*, k.name contractor FROM contracts_c cc JOIN contractors k ON k.id=cc.contractor_id WHERE project_id=?",
+    k = c.execute("SELECT cc.*, k.name contractor FROM contracts_c cc JOIN contractors k ON k.id=cc.contractor_id WHERE project_id=? AND COALESCE(cc.active,1)=1",
                   (project_id,)).fetchone()
     cos = rows(c.execute("SELECT * FROM change_orders WHERE project_id=? ORDER BY no", (project_id,)))
     approved_co = sum(x["cost"] for x in cos if x["status"] == "approved")
@@ -214,7 +220,7 @@ def co_decide(cid: int, d: DecideIn, u=Depends(act_as("approve_ipc"))):
     st = "approved" if d.action == "approve" else "rejected"
     c.execute("UPDATE change_orders SET status=?, decided=?, decided_by=? WHERE id=?", (st, today().isoformat(), u["name"], cid))
     if st == "approved" and co["days"]:
-        last = c.execute("SELECT id, planned_end FROM schedule_tasks WHERE project_id=? ORDER BY id DESC LIMIT 1", (co["project_id"],)).fetchone()
+        last = c.execute("SELECT id, planned_end FROM schedule_tasks WHERE project_id=? AND COALESCE(active,1)=1 ORDER BY id DESC LIMIT 1", (co["project_id"],)).fetchone()
         if last:
             c.execute("UPDATE schedule_tasks SET planned_end=? WHERE id=?",
                       ((dt.date.fromisoformat(last["planned_end"]) + dt.timedelta(days=co["days"])).isoformat(), last["id"]))
@@ -307,20 +313,31 @@ class KycIn(BaseModel):
     consent_signed: bool = False  # 0.5.0 — M5: وقّع العميل إقرار الخصوصية ورقيًا بحضور الموظف (وإلا تُؤخذ الموافقة من تطبيقه)
 
 
-@router.post("/api/customers/{cid}/kyc")
-def kyc_submit(cid: int, k: KycIn, _=Depends(act_as("kyc"))):
-    c = db()
+def create_customer(c, name: str, phone: str | None, email: str | None = None) -> int:
+    """0.31.0 — المسار الوحيد لإنشاء عميل: الحجز (`paperwork.create_booking`) واستمارة «+ عميل» (`masterdata.customer_create`) يشتركان فيه؛ لا commit (يلتزم المستدعي)."""
+    return c.execute("INSERT INTO customers(name,phone,email,created) VALUES(?,?,?,?)", (name, phone, email, today().isoformat())).lastrowid
+
+
+def apply_kyc(c, cid: int, k: KycIn, actor: str) -> dict:
+    """بيانات الهوية: تشفير `pii.py` وفحص القوائم وتسجيل الموافقة — لا commit ولا تدقيق (يكتبهما المستدعي)."""
     cu = dict(one(c, "SELECT * FROM customers WHERE id=?", (cid,), "العميل غير موجود"))
     cu.update({"id_type": k.id_type, "id_number": k.id_number, "nationality": k.nationality, "id_expiry": k.id_expiry.isoformat(),
                "pep": int(k.pep), "source_of_funds": k.source_of_funds})
     res = X.kyc_screen(c, cu, today())
-    c.execute("""UPDATE customers SET id_type=?, id_number=?, nationality=?, id_expiry=?, dob=?, pep=?, source_of_funds=?, email=?,
+    c.execute("""UPDATE customers SET id_type=?, id_number=?, nationality=?, id_expiry=?, dob=?, pep=?, source_of_funds=?, email=COALESCE(?, email),
                  kyc_status=?, kyc_risk=?, kyc_note=?, kyc_at=? WHERE id=?""",
               (k.id_type, pii.enc(k.id_number), k.nationality, k.id_expiry.isoformat(), pii.enc(k.dob.isoformat()) if k.dob else None, int(k.pep),
                k.source_of_funds, k.email, res["status"], res["risk"], "؛ ".join(res["flags"]), now_s(), cid))
     if k.consent_signed:  # الموافقة لا تُفترض؛ إما إقرار ورقي يشهده الموظف أو موافقة من تطبيق العميل
         c.execute("UPDATE customers SET consent_at=COALESCE(consent_at,?), consent_version=COALESCE(consent_version,'1.0'), consent_source=COALESCE(consent_source,?) WHERE id=?",
-                  (now_s(), "إقرار ورقي بحضور " + _["name"], cid))
+                  (now_s(), "إقرار ورقي بحضور " + actor, cid))
+    return res
+
+
+@router.post("/api/customers/{cid}/kyc")
+def kyc_submit(cid: int, k: KycIn, _=Depends(act_as("kyc"))):
+    c = db()
+    res = apply_kyc(c, cid, k, _["name"])
     audit(c, "تحقق من الهوية", f"عميل {cid} ← {res['status']} · مخاطر {res['risk']}")
     c.commit()
     return res
@@ -996,7 +1013,7 @@ def escrow(project_id: int, _=Depends(need_any("finance", "reports"))):
     paid = c.execute("""SELECT COALESCE(SUM(i.paid_amount),0) FROM installments i JOIN bookings b ON b.id=i.booking_id
                        JOIN units u ON u.id=b.unit_id WHERE u.project_id=?""", (project_id,)).fetchone()[0]
     ipcs = rows(c.execute("SELECT no, stage, approved_pct, stage_value, created FROM ipcs WHERE project_id=? AND status='approved'", (project_id,)))
-    k = c.execute("SELECT retention_pct FROM contracts_c WHERE project_id=?", (project_id,)).fetchone()
+    k = c.execute("SELECT retention_pct FROM contracts_c WHERE project_id=? AND COALESCE(active,1)=1", (project_id,)).fetchone()
     ret = k["retention_pct"] if k else .1
     released = sum(i["approved_pct"] / 100 * i["stage_value"] * (1 - ret) for i in ipcs)
     refunds = c.execute("""SELECT COALESCE(SUM(r.refund),0) FROM refunds r JOIN bookings b ON b.id=r.booking_id JOIN units u ON u.id=b.unit_id

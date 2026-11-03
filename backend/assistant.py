@@ -349,7 +349,7 @@ def t_construction(ctx, a):
     for pr in ctx.projects:
         if p and pr["id"] != p["id"]:
             continue
-        late = c.execute("SELECT COUNT(*) n FROM schedule_tasks WHERE project_id=? AND planned_end<? AND COALESCE(pct,0)<100", (pr["id"], t)).fetchone()["n"]
+        late = c.execute("SELECT COUNT(*) n FROM schedule_tasks WHERE project_id=? AND planned_end<? AND COALESCE(pct,0)<100 AND COALESCE(active,1)=1", (pr["id"], t)).fetchone()["n"]
         ncr = c.execute("SELECT COUNT(*) n FROM ncrs WHERE project_id=? AND status!='closed'", (pr["id"],)).fetchone()["n"]
         ip = [dict(r) for r in c.execute("SELECT id,no FROM ipcs WHERE project_id=? AND status='pending'", (pr["id"],))]
         ipt = []

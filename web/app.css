@@ -94,6 +94,9 @@ select{background:var(--pane);border:1px solid var(--line);border-radius:8px;pad
 .btn.w{width:100%}.btn:disabled{opacity:.5;cursor:not-allowed}
 .btn.sm{min-height:34px;padding:5px 11px;font-size:12px;white-space:nowrap}
 .fld{display:flex;gap:6px;align-items:center}.fld>input,.fld>select{flex:1;min-width:0}
+.mdf{margin:10px 0}.mdf.hidden{display:none!important}.mdf .req{color:var(--bad)}.mdh{font-size:12px;color:var(--muted);margin-top:4px}.mde{color:var(--bad);font-size:12px;min-height:16px;margin-top:3px}
+.mdf input[aria-invalid=true],.mdf select[aria-invalid=true],.mdf textarea[aria-invalid=true]{border-color:var(--bad)}.mdf textarea{width:100%;resize:vertical}.mdf input[type=text],.mdf input[type=date],.mdf select{width:100%}
+.mbox.wide{width:min(900px,100%)}.mbox h4{margin:14px 0 6px}tr.stopped{opacity:.55}.fld>textarea{flex:1;min-width:0}
 .btns{display:flex;gap:8px;flex-wrap:wrap}
 .inst{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px dashed var(--line);font-size:13px;gap:8px}
 .inst:last-child{border:0}

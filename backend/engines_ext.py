@@ -90,6 +90,7 @@ def _d(s):
 def schedule_analysis(tasks: list[dict], today: dt.date) -> dict:
     planned_val = earned = 0.0
     out, delay_days = [], 0
+    total_w = sum(t["weight"] or 0 for t in tasks) or 1.0     # 0.31.0 — a schedule being built (weights not yet summing to 1) still reports the true progress
     for t in tasks:
         ps, pe = _d(t["planned_start"]), _d(t["planned_end"])
         span = max(1, (pe - ps).days)
@@ -103,8 +104,8 @@ def schedule_analysis(tasks: list[dict], today: dt.date) -> dict:
         status = "مكتمل" if t["pct"] >= 100 else "متأخر" if late > 7 else "جارٍ" if t["pct"] > 0 else "لم يبدأ"
         out.append({**t, "plan_pct": plan_pct, "late_days": late, "status": status, "critical": True})
     spi = round(earned / planned_val, 2) if planned_val else 1.0
-    return {"tasks": out, "spi": spi, "forecast_delay_days": delay_days, "planned_pct": round(planned_val, 1),
-            "actual_pct": round(earned, 1),
+    return {"tasks": out, "spi": spi, "forecast_delay_days": delay_days, "planned_pct": round(planned_val / total_w, 1),
+            "actual_pct": round(earned / total_w, 1),
             "reasons": [f"مؤشر أداء الجدول SPI = {spi} ({'متأخر عن الخطة' if spi < .95 else 'ضمن الخطة'})",
                         "الأنشطة متسلسلة، فكل تأخير في نشاط جارٍ يقع على المسار الحرج ويؤخر التسليم"]}
 

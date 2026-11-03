@@ -45,12 +45,12 @@ ROLES = {
 ALL_STAFF = {"view", "inventory", "book", "leads", "finance", "confirm", "decide", "construction", "approve_ipc",
              "service", "admin", "audit", "land", "permits", "kyc", "brokers", "invoices", "handover", "oa",
              "leasing", "leasing_approve", "market", "reports", "notify", "users", "docs", "accounting", "accounting_approve",
-             "hr", "hr_payroll", "hr_manager", "hr_self", "policies", "policies_admin"}  # 0.29.0: policies = read + acknowledge, policies_admin = prepare / approve
+             "hr", "hr_payroll", "hr_manager", "hr_self", "policies", "policies_admin", "masterdata"}  # 0.29.0: policies = read + acknowledge, policies_admin = prepare / approve · 0.31.0: masterdata = projects, buildings, units
 PERMS = {
     "admin": ALL_STAFF,
     "sales": {"view", "inventory", "book", "leads", "service", "kyc", "brokers", "market", "notify", "docs", "policies"},
     "finance": {"view", "inventory", "finance", "confirm", "decide", "construction", "service", "audit", "kyc",
-                "invoices", "oa", "leasing", "reports", "notify", "brokers", "land", "docs", "accounting", "policies"},
+                "invoices", "oa", "leasing", "reports", "notify", "brokers", "land", "docs", "accounting", "policies", "masterdata"},
     "engineer": {"view", "construction", "permits", "handover", "docs", "policies"},
     "broker": {"broker_portal"},
     "investor": {"reports"},

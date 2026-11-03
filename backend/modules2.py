@@ -584,7 +584,7 @@ def lender_report(_=Depends(need("reports"))):
         if lastipc and lastipc["status"] == "pending":
             gap = lastipc["claimed_pct"] - E.verify_ipc(c, lastipc["id"]).get("verified_pct", lastipc["claimed_pct"])
         cov = (cash["opening"] + receivable + unsold_value * .6) / remaining_cost if remaining_cost else 9.9
-        row = {"project": p["name"], "build_pct": p["build_pct"], "sold_pct": round(sold / n * 100), "collection_rate": round(due[1] / due[0] * 100, 1) if due[0] else 100,
+        row = {"project": p["name"], "build_pct": p["build_pct"], "sold_pct": round(sold / n * 100) if n else 0, "collection_rate": round(due[1] / due[0] * 100, 1) if due[0] else 100,
                "receivable": round(receivable), "unsold_value": round(unsold_value), "remaining_cost_12m": round(remaining_cost),
                "coverage": round(cov, 2), "cash_gap": cash["gap"], "claimed_vs_verified": round(gap, 1), "handover": p["handover"]}
         row["flags"] = X.lender_flags(row)
@@ -602,7 +602,7 @@ def investor_report(_=Depends(need("reports"))):
         gdv = c.execute("SELECT COALESCE(SUM(price),0) FROM units WHERE project_id=?", (p["id"],)).fetchone()[0]
         sold_v = c.execute("SELECT COALESCE(SUM(b.price),0) FROM bookings b JOIN units u ON u.id=b.unit_id WHERE u.project_id=? AND b.status='confirmed'",
                            (p["id"],)).fetchone()[0]
-        k = c.execute("SELECT value FROM contracts_c WHERE project_id=?", (p["id"],)).fetchone()
+        k = c.execute("SELECT value FROM contracts_c WHERE project_id=? AND COALESCE(active,1)=1", (p["id"],)).fetchone()
         co = c.execute("SELECT COALESCE(SUM(cost),0) FROM change_orders WHERE project_id=? AND status='approved'", (p["id"],)).fetchone()[0]
         # التكلفة = عقد المقاول + أوامر التغيير المعتمدة + الأرض والتكاليف غير المباشرة والتسويق (18٪ من قيمة المبيعات)
         cost = (k["value"] + co + gdv * .18) if k else gdv * .72

@@ -25,6 +25,7 @@ from . import ledger, pii
 from .auth import need
 from .common import ACTOR, act_as, audit, db, now_s, rows, today, xlock
 from .db import TENANT, connect, tenants
+from .masterdata import assert_sellable
 from .modules import one
 from .partial import Col, diff
 
@@ -723,6 +724,7 @@ def _overlap(c, unit_id: int, start: dt.date, end: dt.date, skip: int | None = N
 
 def create_lease(c, b: LeaseNew, u: dict, source="manual", bill_deposit=True, number: str | None = None) -> int:
     unit = one(c, "SELECT * FROM units WHERE id=? AND retained=1", (b.unit_id,), "الوحدة ليست ضمن محفظة التأجير")
+    assert_sellable(c, unit["id"])    # 0.31.0 — no new lease on a stopped unit or project
     rents, sch = _plan(b)
     end = addm(b.start, b.months) - dt.timedelta(days=1)
     if _overlap(c, b.unit_id, b.start, end):

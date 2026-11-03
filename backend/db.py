@@ -73,17 +73,17 @@ def connect(tenant: str | None = None):
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS projects(
   id INTEGER PRIMARY KEY, code TEXT UNIQUE, name TEXT, location TEXT, kind TEXT,
-  build_pct REAL, planned_monthly_sales REAL, handover TEXT, land_id INTEGER, completed INTEGER DEFAULT 0);
+  build_pct REAL, planned_monthly_sales REAL, handover TEXT, land_id INTEGER, completed INTEGER DEFAULT 0, active INTEGER NOT NULL DEFAULT 1);
 CREATE TABLE IF NOT EXISTS units(
   id INTEGER PRIMARY KEY, project_id INTEGER REFERENCES projects(id), code TEXT UNIQUE,
   building TEXT, floor INTEGER, pos INTEGER, type TEXT, area REAL, view TEXT,
   price REAL, status TEXT CHECK(status IN ('a','r','s')), retained INTEGER DEFAULT 0, use TEXT DEFAULT 'residential',
-  owner_id INTEGER, lease_state TEXT, parking_bays INTEGER, source TEXT, import_batch TEXT);
+  owner_id INTEGER, lease_state TEXT, parking_bays INTEGER, source TEXT, import_batch TEXT, active INTEGER NOT NULL DEFAULT 1);
 CREATE TABLE IF NOT EXISTS customers(
   id INTEGER PRIMARY KEY, name TEXT, phone TEXT, created TEXT, rescheduled INTEGER DEFAULT 0,
   id_type TEXT, id_number TEXT, nationality TEXT, id_expiry TEXT, dob TEXT, pep INTEGER DEFAULT 0,
   source_of_funds TEXT, kyc_status TEXT DEFAULT 'pending', kyc_risk TEXT, kyc_note TEXT, kyc_at TEXT,
-  consent_at TEXT, email TEXT, consent_version TEXT, consent_source TEXT, erased_at TEXT);
+  consent_at TEXT, email TEXT, consent_version TEXT, consent_source TEXT, erased_at TEXT, active INTEGER NOT NULL DEFAULT 1);
 CREATE TABLE IF NOT EXISTS leads(
   id INTEGER PRIMARY KEY, name TEXT, phone TEXT, interest TEXT, project_id INTEGER REFERENCES projects(id),
   channel TEXT, stage INTEGER, interactions INTEGER, budget REAL, created TEXT, last_contact TEXT, score INTEGER,
@@ -95,7 +95,7 @@ CREATE TABLE IF NOT EXISTS bookings(
 CREATE TABLE IF NOT EXISTS installments(
   id INTEGER PRIMARY KEY, booking_id INTEGER REFERENCES bookings(id), seq INTEGER, label TEXT,
   due_date TEXT, amount REAL, paid_amount REAL DEFAULT 0, paid_date TEXT, penalty_waived INTEGER DEFAULT 0);
-CREATE TABLE IF NOT EXISTS contractors(id INTEGER PRIMARY KEY, name TEXT, cr_number TEXT);
+CREATE TABLE IF NOT EXISTS contractors(id INTEGER PRIMARY KEY, name TEXT, cr_number TEXT, phone TEXT, email TEXT, trade TEXT, notes TEXT, active INTEGER NOT NULL DEFAULT 1);
 CREATE TABLE IF NOT EXISTS ipcs(
   id INTEGER PRIMARY KEY, project_id INTEGER REFERENCES projects(id), contractor_id INTEGER REFERENCES contractors(id),
   no INTEGER, stage TEXT, claimed_pct REAL, stage_value REAL, status TEXT, approved_pct REAL, created TEXT);
@@ -120,22 +120,22 @@ CREATE TABLE IF NOT EXISTS payments(
 -- الأراضي والجدوى
 CREATE TABLE IF NOT EXISTS lands(
   id INTEGER PRIMARY KEY, name TEXT, location TEXT, area REAL, zoning TEXT, far REAL, max_floors INTEGER,
-  price REAL, status TEXT, lat REAL, lng REAL, notes TEXT);
+  price REAL, status TEXT, lat REAL, lng REAL, notes TEXT, active INTEGER NOT NULL DEFAULT 1);
 CREATE TABLE IF NOT EXISTS feasibility(
   id INTEGER PRIMARY KEY, land_id INTEGER, name TEXT, inputs TEXT, results TEXT, created TEXT, by TEXT);
 
 -- التراخيص والجهات
 CREATE TABLE IF NOT EXISTS permits(
   id INTEGER PRIMARY KEY, project_id INTEGER, authority TEXT, kind TEXT, ref TEXT, status TEXT,
-  applied TEXT, issued TEXT, expires TEXT, notes TEXT);
+  applied TEXT, issued TEXT, expires TEXT, notes TEXT, active INTEGER NOT NULL DEFAULT 1);
 
 -- الإنشاء
 CREATE TABLE IF NOT EXISTS contracts_c(
   id INTEGER PRIMARY KEY, project_id INTEGER, contractor_id INTEGER, value REAL, retention_pct REAL,
-  delay_penalty_per_day REAL, start TEXT, finish TEXT);
+  delay_penalty_per_day REAL, start TEXT, finish TEXT, active INTEGER NOT NULL DEFAULT 1);
 CREATE TABLE IF NOT EXISTS schedule_tasks(
   id INTEGER PRIMARY KEY, project_id INTEGER, name TEXT, planned_start TEXT, planned_end TEXT,
-  actual_start TEXT, actual_end TEXT, pct REAL, depends_on INTEGER, weight REAL);
+  actual_start TEXT, actual_end TEXT, pct REAL, depends_on INTEGER, weight REAL, active INTEGER NOT NULL DEFAULT 1);
 CREATE TABLE IF NOT EXISTS change_orders(
   id INTEGER PRIMARY KEY, project_id INTEGER, no INTEGER, title TEXT, reason TEXT, cost REAL, days INTEGER,
   status TEXT, requested TEXT, decided TEXT, decided_by TEXT);
@@ -233,6 +233,13 @@ CREATE TABLE IF NOT EXISTS doc_issues(
   UNIQUE(kind, ref_id));
 CREATE TABLE IF NOT EXISTS doc_sends(id INTEGER PRIMARY KEY, kind TEXT, ref_id INTEGER, channel TEXT, recipient TEXT, sent_by TEXT, at TEXT);
 CREATE TABLE IF NOT EXISTS share_links(token_hash TEXT PRIMARY KEY, kind TEXT, ref_id INTEGER, expires REAL, created REAL, created_by TEXT, opened INTEGER DEFAULT 0, last_open TEXT);
+-- 0.31.0 — البيانات الأساسية (backend/masterdata.py): سجل المباني (الربط بالوحدة بالاسم) ودفتر تغيّر الأسعار الموثَّق
+CREATE TABLE IF NOT EXISTS buildings(
+  id INTEGER PRIMARY KEY, project_id INTEGER NOT NULL REFERENCES projects(id), name TEXT NOT NULL, floors INTEGER, notes TEXT, active INTEGER NOT NULL DEFAULT 1, created_by TEXT,
+  UNIQUE(project_id, name));
+CREATE TABLE IF NOT EXISTS unit_price_changes(
+  id INTEGER PRIMARY KEY, unit_id INTEGER NOT NULL REFERENCES units(id), old_price REAL, new_price REAL NOT NULL, reason TEXT NOT NULL,
+  basis TEXT NOT NULL CHECK (basis IN ('free','booking','lease')), changed_by TEXT, changed_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS plans(
   id INTEGER PRIMARY KEY, project_id INTEGER REFERENCES projects(id), building TEXT, floor INTEGER, unit_type TEXT, kind TEXT NOT NULL, title TEXT,
   document_id INTEGER REFERENCES documents(id), markers TEXT DEFAULT '[]', public INTEGER DEFAULT 1, created TEXT, created_by TEXT);
@@ -629,6 +636,15 @@ MIGRATIONS["vendors"] = ["tax_no TEXT"]  # 0.24.0
 MIGRATIONS["rent_payments"] = ["import_key TEXT"]
 MIGRATIONS["charity_dues"] = ["rent_due_id INTEGER", "lease_id INTEGER"]
 MIGRATIONS["customers"] += ["consent_version TEXT", "consent_source TEXT", "erased_at TEXT"]  # 0.5.0 — M5
+for _t in ("projects", "units", "customers", "lands", "permits", "contractors", "contracts_c", "schedule_tasks"):   # 0.31.0 — علم الإيقاف (لا حذف فعليًا)
+    MIGRATIONS[_t] = MIGRATIONS.get(_t, []) + ["active INTEGER NOT NULL DEFAULT 1"]
+MIGRATIONS["contractors"] += ["phone TEXT", "email TEXT", "trade TEXT", "notes TEXT"]
+# 0.31.0 — فهرسان فريدان جزئيان يُنشآن فقط إن خلت البيانات القائمة من تكرار (لا يُفشلان إقلاع قاعدة قديمة)
+SOFT_UNIQUE = [
+    ("ux_contracts_c_one_active", "contracts_c(project_id) WHERE active=1", "SELECT 1 FROM contracts_c WHERE active=1 GROUP BY project_id HAVING COUNT(*)>1"),
+    ("ux_contractors_cr", "contractors(cr_number) WHERE cr_number IS NOT NULL AND cr_number<>''",
+     "SELECT 1 FROM contractors WHERE cr_number IS NOT NULL AND cr_number<>'' GROUP BY cr_number HAVING COUNT(*)>1"),
+]
 
 
 def init(c) -> None:
@@ -644,6 +660,9 @@ def init(c) -> None:
                 if col.split()[0] not in have:
                     c.execute(f"ALTER TABLE {table} ADD COLUMN {col}")
     c.executescript(SCHEMA)
+    for name, on, dup in SOFT_UNIQUE:
+        if not c.execute(dup).fetchone():
+            c.execute(f"CREATE UNIQUE INDEX IF NOT EXISTS {name} ON {on}")
     from .pii import encrypt_existing  # noqa: E402 — استيراد متأخر لتجنب الدور
     encrypt_existing(c)
     c.commit()

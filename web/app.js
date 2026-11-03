@@ -194,11 +194,17 @@ async function loadInventory() {
   const segs = await api(`/pricing/${p.id}`);
   $('#segs').innerHTML = segs.map(s => `<tr><td>${esc(s.type)} · ${esc(s.view)}</td><td>${N(s.total)}</td><td>${N(s.available)}</td><td>${N(s.recent_sales)}</td><td><bdi>${s.demand_ratio.toLocaleString('ar-OM-u-nu-latn', {maximumFractionDigits: 1, minimumFractionDigits: 1})} ضعف</bdi></td>
     <td>${s.suggested_change > 0 ? pill('رفع ' + N(s.suggested_change * 100) + '٪', 'p-ok') : s.suggested_change < 0 ? pill('خفض/حافز ' + N(-s.suggested_change * 100) + '٪', 'p-b') : pill('إبقاء', '')}</td></tr>`).join('');
+  ['#mdInv', '#mdUnit'].forEach(q => { $(q).hidden = !can('masterdata'); });
   crumb();
 }
 function renderHeat(p) {
   const fs = $('#fStat').value, ai = $('#fAi').checked;
   const list = UNITS.filter(u => u.building === S.bld);
+  if (!UNITS.length) {   // 0.31.0 — a project made from the form starts with no units
+    const h0 = $('#heat'); h0.className = 'heat'; h0.style.gridTemplateColumns = '';
+    h0.innerHTML = `<div class="muted" style="padding:22px;grid-column:1/-1">لا وحدات في هذا المشروع بعد${can('masterdata') ? ' — أضفها بزر «+ وحدة» أو من «إدارة المخزون».' : '.'}</div>`;
+    $('#invTitle').textContent = 'المخطط'; $('#invCount').textContent = ''; return;
+  }
   const dim = u => (fs && u.status !== fs) || (ai && !u.ai_change);
   const cell = u => `<button class="cell ${u.status} ${dim(u) ? 'dim' : ''} ${u.ai_change > 0 ? 'up' : u.ai_change < 0 ? 'dn' : ''}" data-c="${u.code}" aria-label="${u.code} ${ST[u.status]}">${u.code.split('-').pop()}</button>`;
   const h = $('#heat');
@@ -256,6 +262,7 @@ async function showUnit(code) {
       return `<div class="inst"><span>${esc(i.label)}<br><span class="muted">${fmtDate(i.due_date)}</span></span><span>${OMR(i.amount)} ${st}</span></div>`;
     }).join('');
   }
+  if (can('masterdata') || can('decide')) h += EXT.mdUnitBtns(u);
   const UP = await api(`/units/${encodeURIComponent(code)}/plans`).catch(() => null);
   if (UP && (UP.floor_plan || UP.unit_plan || UP.others.length)) {
     h += `<b>موقع الوحدة ومخططاتها</b>`;
@@ -269,7 +276,7 @@ async function showUnit(code) {
 
 /* ---------------- الحجز ---------------- */
 const modal = (html) => { $('#mbox').innerHTML = html; $('#modal').classList.add('on'); };
-const closeModal = () => $('#modal').classList.remove('on');
+const closeModal = () => { $('#modal').classList.remove('on'); $('#mbox').classList.remove('wide'); EXT.mdPanel = null; };
 $('#modal').onclick = e => { if (e.target.id === 'modal') closeModal(); };
 let BK = {};
 async function openBooking(code, lead) {
@@ -582,7 +589,7 @@ CALLS.gotoPay = () => document.querySelector('[data-t=pay]')?.click();
 const T = (heads, rows, empty = 'لا توجد بيانات.') => `<div class="tw"><table><thead><tr>${heads.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.join('') || `<tr><td colspan="${heads.length}" class="muted">${empty}</td></tr>`}</tbody></table></div>`;
 const BOX = (title, inner, extra = '') => `<div class="box"><div class="hd"><span>${title}</span>${extra}</div>${inner}</div>`;
 const KP = items => `<div class="kp">${items.map(([l, v, s]) => `<div><small>${l}</small><b>${v}</b><small>${s || ''}</small></div>`).join('')}</div>`;
-const SUBP = {'pre.land': ['land'], 'pre.permit': ['permits'], 'sal.kyc': ['kyc'], 'sal.brk': ['brokers'], 'sal.mkt': ['market', 'decide'], 'sal.disc': ['decide', 'book'], 'sal.wa': ['leads'],
+const SUBP = {'pre.land': ['land'], 'pre.permit': ['permits'], 'sal.kyc': ['kyc'], 'sal.cust': ['book', 'kyc'], 'sal.brk': ['brokers'], 'sal.mkt': ['market', 'decide'], 'sal.disc': ['decide', 'book'], 'sal.wa': ['leads'],
   'bill.inv': ['invoices'], 'bill.pen': ['finance'], 'bill.bank': ['finance'], 'bill.esc': ['finance', 'reports'], 'bill.erp': ['invoices'],
   'post.hand': ['handover', 'service'], 'post.title': ['handover', 'finance'], 'post.fm': ['service', 'handover'], 'post.oa': ['oa'], 'post.lease': ['leasing']};
 const SUBM = {'post.hand': ['handover'], 'post.title': ['handover'], 'post.fm': ['handover', 'leasing'], 'post.oa': ['handover']};  // 0.20.0: a sub-tab also needs one of its modules
@@ -596,7 +603,7 @@ const tryDo = async (fn, ok) => { try { const r = await fn(); if (ok) toast(type
 // 0.30.0 — التحديث الجزئي: الخادم يخبرنا بما تغيّر فعلًا (changes[].label) فلا نعلن «حُدّث» لما لم يتغيّر
 const patchMsg = r => !(r.changed || []).length ? 'لم يتغيّر شيء' : 'حُدّث: ' + (r.changes || []).map(c => c.label).join('، ');
 // زر «مسح» لحقل اختياري (حقل التاريخ الأصلي لا يُمسح في كل المتصفحات): يفرّغ الحقل ويعلّمه ليُرسَل فارغًا صراحةً
-const clearField = id => { const e = $('#' + id); if (!e) return; e.value = ''; e.dataset.cleared = '1'; if (e.placeholder) e.placeholder = 'سيُمسح عند الحفظ'; e.focus(); };
+const clearField = id => { const e = $('#' + id); if (!e) return; e.value = ''; e.dataset.cleared = '1'; if (e.placeholder) e.placeholder = 'سيُمسح عند الحفظ'; e.dispatchEvent(new Event('input', {bubbles: true})); e.focus(); };
 const fieldRow = (inputHtml, id) => `<div class="fld">${inputHtml}<button type="button" class="btn sm" data-call="clearField" data-args="${J([id])}">مسح</button></div>`;
 // حقل مقنَّع (هوية/آيبان محفوظان): لا يُرسَل إلا بقيمة جديدة مكتوبة أو بمسح صريح؛ غير ذلك يبقى المحفوظ
 const secretVal = id => { const e = $('#' + id); const v = e.value.trim(); return v || (e.dataset.cleared ? '' : undefined); };
@@ -609,6 +616,260 @@ const EXT = {
   load(id) { return this['l_' + id](); },
 };
 
+/* ================================================================ 0.31.0 — البيانات الأساسية (docs/DESIGN-master-data-forms.md)
+   مشروع · مبنى · وحدة · عميل · أرض · ترخيص · مقاول · عقد مقاول · مهمة جدول. مصنع استمارات واحد مدفوع بوصف الحقول: تحقق فوري أثناء الكتابة، «مسح» لكل اختياري،
+   ويُرسَل في التعديل ما تغيّر وحده (PATCH) فيردّ الخادم بما تغيّر فعلًا. الإيقاف لا يحذف: يخرج من القوائم ويبقى تاريخه. */
+const MD = {KIND: {tower: 'برج', villa: 'فلل', land: 'أرض'}, USE: {residential: 'سكني', commercial: 'تجاري', office: 'مكتبي', warehouse: 'مخزن', land: 'أرض'},
+  LAND_ST: ['تحت الدراسة', 'قيد التفاوض', 'تم الشراء — قيد التطوير', 'مؤجَّلة', 'مباعة'], PERMIT_ST: [['not_started', 'لم يبدأ'], ['submitted', 'مقدَّم'], ['in_review', 'قيد المراجعة'], ['issued', 'صادر'], ['rejected', 'مرفوض']]};
+const mdNum = v => (v === '' || v == null) ? null : +WD(String(v).trim());
+const mdNorm = v => v === '' || v === undefined ? null : typeof v === 'boolean' ? (v ? 1 : 0) : typeof v === 'string' && /^-?\d+(\.\d+)?$/.test(v.trim()) ? +v : v;
+const mdSame = (a, b) => mdNorm(a) === mdNorm(b);
+const mdErr = (f, v) => {
+  if (v === null || v === undefined || v === '') return f.req ? `«${f.label}» إلزامي` : '';
+  if (f.type === 'number') {
+    if (!Number.isFinite(v)) return `«${f.label}» رقم صحيح أو عشري`;
+    if (f.int && !Number.isInteger(v)) return `«${f.label}» عدد صحيح`;
+    if (f.min != null && v < f.min) return `«${f.label}» لا يقل عن ${f.min}`;
+    if (f.gt != null && v <= f.gt) return `«${f.label}» أكبر من ${f.gt}`;
+    if (f.max != null && v > f.max) return `«${f.label}» لا يزيد على ${f.max}`;
+    return '';
+  }
+  if (typeof v === 'string') {
+    if (f.minlen && v.length < f.minlen) return `«${f.label}» ${f.minlen} أحرف على الأقل`;
+    if (f.pattern && !f.pattern.test(v)) return f.patternMsg || `«${f.label}» غير صالح`;
+  }
+  return '';
+};
+const mdRead = f => {
+  const el = $('#mf_' + f.k); if (!el) return undefined;
+  if (f.type === 'check') return el.checked;
+  const raw = String(el.value ?? '').trim(); if (raw === '') return null;
+  if (f.type === 'number') return mdNum(raw);
+  return f.type === 'select' && f.num ? +raw : raw;
+};
+const mdFieldHtml = (f, v) => {
+  const id = 'mf_' + f.k, val = v == null ? '' : v;
+  const off = f.ro ? (f.type === 'select' || f.type === 'check' ? 'disabled' : 'readonly') : '';
+  const common = `id="${id}" name="${f.k}" ${f.max && f.type !== 'number' ? `maxlength="${f.max}"` : ''} ${f.dir ? `dir="${f.dir}"` : ''} ${off} aria-describedby="${id}_e"`;
+  let inp;
+  if (f.type === 'select') inp = `<select ${common}>${f.options.map(([a, b]) => `<option value="${esc(a)}" ${String(a) === String(val) ? 'selected' : ''}>${esc(b)}</option>`).join('')}</select>`;
+  else if (f.type === 'textarea') inp = `<textarea ${common} rows="3">${esc(val)}</textarea>`;
+  else if (f.type === 'check') inp = `<label class="chk"><input type="checkbox" ${common} ${val ? 'checked' : ''}> ${esc(f.label)}</label>`;
+  else inp = `<input ${common} type="${f.type === 'date' ? 'date' : 'text'}" ${f.type === 'number' ? 'inputmode="decimal"' : ''} ${f.list ? `list="${id}_dl"` : ''} value="${esc(val)}" placeholder="${esc(f.ph || '')}">${f.list ? `<datalist id="${id}_dl">${f.list.map(x => `<option value="${esc(x)}">`).join('')}</datalist>` : ''}`;
+  const clearable = !f.req && !f.ro && ['text', 'number', 'date', 'textarea', undefined].includes(f.type);
+  const body = f.type === 'check' || f.type === 'select' ? inp : clearable ? fieldRow(inp, id) : inp;
+  return `<div class="mdf${f.showIf ? ' hidden' : ''}" data-k="${f.k}">${f.type === 'check' ? '' : `<label for="${id}">${esc(f.label)}${f.req ? ' <b class="req" aria-hidden="true">*</b>' : ''}</label>`}${body}${f.hint ? `<div class="mdh">${esc(f.hint)}</div>` : ''}<div class="mde" id="${id}_e" role="alert"></div></div>`;
+};
+// submit(body, now) ⟵ الرد؛ ok(r) رسالة النجاح؛ done(r) بعدها. التعديل يرسل ما تغيّر وحده.
+EXT.mdForm = ({title, fields, values = {}, submit, ok, done, edit = false, note = '', foot = ''}) => {
+  const back = EXT.mdPanel;
+  modal(`<h3>${esc(title)}</h3>${note ? `<p class="muted">${esc(note)}</p>` : ''}<form id="mdForm" novalidate>${fields.map(f => mdFieldHtml(f, values[f.k])).join('')}${foot}<div class="err" id="mf_err" role="alert"></div>
+    <div class="btns" style="margin-top:12px"><button class="btn p" id="mf_go" type="submit">${edit ? 'حفظ' : 'إضافة'}</button><button class="btn" type="button" data-call="closeModal">إلغاء</button></div></form>`);
+  $('#mbox').classList.remove('wide');
+  const shown = f => !f.showIf || $('#mf_' + f.showIf)?.checked;
+  const mark = (f, msg) => { const e = $('#mf_' + f.k + '_e'); if (e) e.textContent = msg; $('#mf_' + f.k)?.setAttribute('aria-invalid', msg ? 'true' : 'false'); };
+  const check = f => { const msg = shown(f) && !f.ro ? mdErr(f, mdRead(f)) : ''; mark(f, msg); return !msg; };
+  const sync = () => fields.filter(f => f.showIf).forEach(f => $(`.mdf[data-k="${f.k}"]`)?.classList.toggle('hidden', !shown(f)));
+  fields.forEach(f => { const el = $('#mf_' + f.k); if (!el) return; ['input', 'change'].forEach(ev => el.addEventListener(ev, () => { sync(); check(f); })); });
+  sync();
+  $('#mdForm').onsubmit = async ev => {
+    ev.preventDefault();
+    const bad = fields.filter(f => !check(f)); if (bad.length) { $('#mf_' + bad[0].k)?.focus(); return; }
+    const now = {}; fields.forEach(f => { if (!f.ro && shown(f)) now[f.k] = mdRead(f); });
+    const body = edit ? Object.fromEntries(Object.entries(now).filter(([k, v]) => !mdSame(v, values[k])))
+      : Object.fromEntries(Object.entries(now).filter(([, v]) => v !== null && v !== undefined));
+    $('#mf_go').disabled = true;
+    try { const r = await submit(body, now); closeModal(); toast(typeof ok === 'function' ? ok(r) : ok || 'تم'); await refreshAll(); if (done) await done(r); else if (back && EXT[back]) EXT[back](); }
+    catch (e) { $('#mf_err').textContent = e.message; $('#mf_go').disabled = false; }
+  };
+  $('#mdForm input:not([readonly]):not([type=checkbox]), #mdForm select:not([disabled])')?.focus();
+};
+// الإيقاف والاستعادة والإنهاء: تأكيد ثم POST، ثم تحديث الشاشة (واللوحة المفتوحة إن وُجدت)
+EXT.mdAct = async (kind, id, act, label) => {
+  const P = {project: 'projects', building: 'buildings', unit: 'units', customer: 'customers', land: 'lands', permit: 'permits', contractor: 'contractors', contract: 'contractor-contracts', task: 'schedule-tasks'}[kind];
+  if (act !== 'restore' && !confirm(`${act === 'terminate' ? 'إنهاء' : 'إيقاف'} «${label}»؟ يخرج من القوائم الجارية ويبقى تاريخه محفوظًا ويمكن استعادته.`)) return;
+  const panel = $('#modal').classList.contains('on') ? EXT.mdPanel : null;
+  try { const r = await api(`/${P}/${id}/${act}`, {method: 'POST'}); toast(!(r.changed || []).length ? 'لم يتغيّر شيء' : act === 'restore' ? 'استُعيد «' + label + '»' : (act === 'terminate' ? 'أُنهي «' : 'أُوقف «') + label + '»'); }
+  catch (e) { toast(e.message, 1); return; }
+  await refreshAll(); $('#ix')?.click();      // بعد التحديث لا قبله: بطاقة قيد الجلب قد تعيد فتح اللوحة
+  if (panel && EXT.mdPanel === panel && EXT[panel]) EXT[panel]();      // لا تُعاد فتحها إن أغلقها المستخدم أثناء التحديث
+};
+const mdActBtn = (kind, id, act, label, txt) => `<button class="btn sm" data-call="EXT.mdAct" data-args="${J([kind, id, act, label])}">${txt}</button>`;
+const mdStatePill = on => on === 0 ? pill('موقوف', 'p-b') : pill('فعّال', 'p-ok');
+
+// ---- المشروع والمبنى (لوحة إدارة المخزون)
+EXT.mdInv = async () => {
+  const [all, blds, units] = await Promise.all([api('/projects?archived=1'), api(`/projects/${S.proj}/buildings?archived=1`), api(`/units?project_id=${S.proj}&archived=1`)]);
+  const cur = all.find(p => p.id === S.proj) || {}, stopped = units.filter(u => u.active === 0);
+  modal(`<h3>إدارة المخزون</h3><p class="muted">الإيقاف لا يحذف شيئًا: يخرج من القوائم الجارية ويبقى تاريخه في التقارير، ويمكن استعادته. لا يُوقف مشروع فيه حجوزات نشطة.</p>
+   <div class="btns" style="margin-bottom:8px"><button class="btn p" data-call="EXT.mdProject">+ مشروع</button></div>
+   ${T(['المشروع', 'الرمز', 'النوع', 'وحدات', 'الحالة', ''], all.map(p => `<tr><td>${esc(p.name)}</td><td><span class="num">${esc(p.code)}</span></td><td>${MD.KIND[p.kind] || ''}</td><td>${N(p.total_units)}</td><td>${mdStatePill(p.active)}</td><td><button class="btn sm" data-call="EXT.mdProject" data-args="${J([p.id])}">تعديل</button> ${p.active === 0 ? mdActBtn('project', p.id, 'restore', p.name, 'استعادة') : mdActBtn('project', p.id, 'archive', p.name, 'إيقاف')}</td></tr>`))}
+   <h4 style="margin:16px 0 6px">مباني «${esc(cur.name || '')}»</h4>
+   ${T(['المبنى', 'الطوابق', 'وحدات', 'الحالة', ''], blds.map(b => `<tr><td>${esc(b.name)}</td><td>${b.floors == null ? '—' : N(b.floors)}</td><td>${N(b.units)}</td><td>${mdStatePill(b.active)}</td><td><button class="btn sm" data-call="EXT.mdBuilding" data-args="${J([b.id])}">تعديل</button> ${b.active === 0 ? mdActBtn('building', b.id, 'restore', b.name, 'استعادة') : mdActBtn('building', b.id, 'archive', b.name, 'إيقاف')}</td></tr>`), 'لا مبانٍ مسجَّلة بعد.')}
+   <div class="btns" style="margin:8px 0"><button class="btn" data-call="EXT.mdBuilding">+ مبنى</button></div>
+   ${stopped.length ? `<h4 style="margin:16px 0 6px">وحدات موقوفة في «${esc(cur.name || '')}»</h4>${T(['الوحدة', 'النوع', ''], stopped.map(u => `<tr><td><span class="num">${esc(u.code)}</span></td><td>${esc(u.type || '—')}</td><td>${mdActBtn('unit', u.id, 'restore', u.code, 'استعادة')}</td></tr>`))}` : ''}
+   <div class="btns" style="margin-top:14px"><button class="btn" data-call="closeModal">إغلاق</button></div>`);
+  $('#mbox').classList.add('wide'); EXT.mdPanel = 'mdInv';
+};
+EXT.mdProject = async id => {
+  const ed = id != null, all = await api('/projects?archived=1'), p = ed ? all.find(x => x.id === id) || {} : {};
+  const lands = can('land') ? await api('/lands').catch(() => []) : [], locked = ed && p.total_units > 0;
+  EXT.mdForm({title: ed ? 'تعديل المشروع «' + p.name + '»' : 'مشروع جديد', edit: ed, values: ed ? p : {build_pct: 0, planned_monthly_sales: 0},
+    fields: [
+      {k: 'code', label: 'رمز المشروع', req: true, max: 12, dir: 'ltr', ro: ed, pattern: /^[A-Za-z0-9][A-Za-z0-9-]{1,11}$/, patternMsg: '«رمز المشروع» حروف إنجليزية وأرقام وشرطة من حرفين إلى 12', hint: 'فريد ضمن المطوّر ويبقى ثابتًا بعد الإنشاء', ph: 'MSK'},
+      {k: 'name', label: 'اسم المشروع', req: true, minlen: 2, max: 120},
+      {k: 'kind', label: 'النوع', type: 'select', req: true, ro: locked, options: Object.entries(MD.KIND), hint: locked ? 'لا يتغيّر بعد إنشاء وحداته' : ''},
+      {k: 'location', label: 'الموقع', max: 120},
+      {k: 'build_pct', label: 'نسبة الإنجاز ٪', type: 'number', req: true, min: 0, max: 100},
+      {k: 'planned_monthly_sales', label: 'المبيعات الشهرية المخططة (وحدات)', type: 'number', req: true, min: 0},
+      {k: 'handover', label: 'موعد التسليم', type: 'date', hint: 'يلزم تحديده قبل أول حجز'},
+      ...(lands.length ? [{k: 'land_id', label: 'الأرض', type: 'select', num: true, options: [['', '— بلا —']].concat(lands.map(l => [l.id, l.name]))}] : []),
+      {k: 'completed', label: 'المشروع مكتمل', type: 'check'}],
+    submit: body => api(ed ? '/projects/' + id : '/projects', {method: ed ? 'PATCH' : 'POST', body: ed ? body : {build_pct: 0, planned_monthly_sales: 0, ...body}}),
+    ok: r => ed ? patchMsg(r) : 'أُضيف المشروع ' + r.code});
+};
+EXT.mdBuilding = async id => {
+  const ed = id != null, b = ed ? (await api(`/projects/${S.proj}/buildings?archived=1`)).find(x => x.id === id) || {} : {};
+  EXT.mdForm({title: ed ? 'تعديل المبنى «' + b.name + '»' : 'مبنى جديد', edit: ed, values: b,
+    fields: [{k: 'name', label: 'اسم المبنى', req: true, max: 40, hint: ed ? 'إعادة التسمية تُحدّث وحداته ومخططاته' : ''}, {k: 'floors', label: 'عدد الطوابق', type: 'number', int: true, min: 1, max: 200}, {k: 'notes', label: 'ملاحظات', max: 200}],
+    submit: body => api(ed ? '/buildings/' + id : `/projects/${S.proj}/buildings`, {method: ed ? 'PATCH' : 'POST', body}), ok: r => ed ? patchMsg(r) : 'أُضيف المبنى'});
+};
+
+// ---- الوحدة (وبطاقتها)
+EXT.mdUnitFields = (u, ed, blds) => {
+  const busy = ed && (u.status !== 'a' || u.lease);
+  return [
+    {k: 'code', label: 'رمز الوحدة', req: true, max: 30, dir: 'ltr', ro: ed, pattern: /^[A-Za-z0-9][A-Za-z0-9-]{1,29}$/, patternMsg: '«رمز الوحدة» حروف إنجليزية وأرقام وشرطة من حرفين إلى 30', hint: 'فريد ضمن المطوّر ويبقى ثابتًا (مخزَّن في علامات المخططات)'},
+    {k: 'building', label: 'المبنى', max: 40, list: blds},
+    {k: 'floor', label: 'الطابق', type: 'number', int: true, min: -5, max: 200, hint: 'اتركه فارغًا إن لم يُعلَن'},
+    {k: 'pos', label: 'الترتيب في الطابق', type: 'number', int: true, min: 1, max: 500},
+    {k: 'type', label: 'النوع (غرفتان وصالة…)', max: 60},
+    {k: 'area', label: 'المساحة م²', type: 'number', gt: 0, hint: 'اتركها فارغة إن لم تُعلَن'},
+    {k: 'view', label: 'الإطلالة', max: 40},
+    {k: 'price', label: 'السعر (ر.ع)', type: 'number', min: 0, ro: busy, hint: busy ? 'عليها حجز أو عقد: يتغيّر السعر بـ«تغيير سعر موثَّق» فقط' : 'اتركه فارغًا إن لم يُحدَّد'},
+    {k: 'use', label: 'الاستخدام', type: 'select', req: true, options: Object.entries(MD.USE)}];
+};
+EXT.mdUnit = async () => {
+  const pid = S.proj, blds = (await api(`/projects/${pid}/buildings`).catch(() => [])).map(b => b.name);
+  EXT.mdForm({title: 'وحدة جديدة في «' + (S.projects.find(p => p.id === pid)?.name || '') + '»', values: {use: 'residential'}, fields: EXT.mdUnitFields({}, false, blds), note: 'تُنشأ متاحة؛ حالتها يحكمها مسار الحجز.',
+    submit: body => api('/units', {method: 'POST', body: {...body, project_id: pid}}), ok: r => 'أُضيفت الوحدة ' + r.code, done: r => showUnit(r.code)});
+};
+EXT.mdUnitEdit = async code => {
+  const u = await api('/units/' + encodeURIComponent(code)), blds = (await api(`/projects/${u.project_id}/buildings`).catch(() => [])).map(b => b.name);
+  EXT.mdForm({title: 'تعديل الوحدة ' + u.code, edit: true, values: u, fields: EXT.mdUnitFields(u, true, blds), submit: body => api('/units/' + u.id, {method: 'PATCH', body}), ok: patchMsg, done: () => showUnit(code)});
+};
+EXT.mdPrice = async code => {
+  const u = await api('/units/' + encodeURIComponent(code));
+  EXT.mdForm({title: 'تغيير سعر موثَّق — ' + u.code, values: {price: u.price}, note: 'يُغيّر سعر القائمة فقط؛ سعر الحجز المتعاقد عليه وأقساطه لا تُمس. يُسجَّل السبب ومن غيّر ومتى في دفتر لا يُعدَّل.',
+    fields: [{k: 'price', label: 'السعر الجديد (ر.ع)', type: 'number', req: true, min: 0}, {k: 'reason', label: 'السبب', req: true, minlen: 5, max: 300, type: 'textarea', hint: 'يُسجَّل مع اسمك ووقت التغيير ولا يُعدَّل'}],
+    submit: body => api(`/units/${u.id}/price`, {method: 'POST', body}), ok: patchMsg, done: () => showUnit(code)});
+};
+EXT.mdUnitBtns = u => {
+  if (u.active === 0) return `<div class="btns" style="margin:10px 0">${pill('موقوفة', 'p-b')} ${can('masterdata') ? mdActBtn('unit', u.id, 'restore', u.code, 'استعادة') : ''}</div>`;
+  return `<div class="btns" style="margin:10px 0">${can('masterdata') ? `<button class="btn" data-call="EXT.mdUnitEdit" data-args="${J([u.code])}">تعديل الوحدة</button>` : ''}${can('decide') ? `<button class="btn" data-call="EXT.mdPrice" data-args="${J([u.code])}">تغيير سعر موثَّق</button>` : ''}${can('masterdata') ? mdActBtn('unit', u.id, 'archive', u.code, 'إيقاف') : ''}</div>`;
+};
+
+// ---- العملاء (تبويب في المبيعات)
+EXT.mdCustomers = async B => {
+  const q = EXT.mdCq || '', arch = EXT.mdCArch ? 1 : 0, rows = await api(`/customers?archived=${arch}&q=${encodeURIComponent(q)}`);
+  B.innerHTML = BOX('العملاء <span class="muted">من أُنشئ لهم حجز أو سُجّلوا هنا — الإيقاف لا يحذف (الحذف بطلب خصوصية فقط)</span>',
+    `<div class="toolbar" style="padding:0 14px"><input id="mdCq" placeholder="بحث بالاسم أو الهاتف" value="${esc(q)}" style="max-width:260px"><label class="chk"><input type="checkbox" id="mdCa" ${arch ? 'checked' : ''}> عرض الموقوف</label></div>`
+    + T(['العميل', 'الهاتف', 'البريد', 'التحقق', 'حجوزات', 'الحالة', ''], rows.map(c => `<tr class="${c.active === 0 ? 'stopped' : ''}"><td>${esc(c.name)}</td><td><span class="num">${esc(c.phone || '—')}</span></td><td>${esc(c.email || '—')}</td><td>${pill({verified: 'موثَّق', pending: 'بانتظار', review: 'عناية معززة', rejected: 'مرفوض'}[c.kyc_status] || '—', c.kyc_status === 'verified' ? 'p-ok' : c.kyc_status === 'pending' ? 'p-bl' : 'p-b')}</td><td>${N(c.bookings)}</td><td>${mdStatePill(c.active)}</td><td>${can('book') ? `<button class="btn sm" data-call="EXT.mdCustomer" data-args="${J([c.id])}">تعديل</button>` : ''} ${can('admin') ? (c.active === 0 ? mdActBtn('customer', c.id, 'restore', c.name, 'استعادة') : mdActBtn('customer', c.id, 'archive', c.name, 'إيقاف')) : ''}</td></tr>`), 'لا عملاء.'),
+    can('book') ? '<button class="btn p" data-call="EXT.mdCustomer">+ عميل</button>' : '');
+  let t; $('#mdCq').oninput = e => { clearTimeout(t); t = setTimeout(() => { EXT.mdCq = e.target.value.trim(); EXT.mdCustomers(B); }, 350); };
+  $('#mdCa').onchange = e => { EXT.mdCArch = e.target.checked; EXT.mdCustomers(B); };
+};
+EXT.mdCustomer = async id => {
+  const ed = id != null, c0 = ed ? (await api(`/customers?archived=1&q=`)).find(x => x.id === id) || {} : {}, kyc = !ed && can('kyc');
+  const PH = /^[0-9+ ()-]{6,24}$/, EM = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+  const fields = [{k: 'name', label: 'الاسم', req: true, minlen: 2, max: 120}, {k: 'phone', label: 'الهاتف', max: 24, dir: 'ltr', pattern: PH, patternMsg: '«الهاتف» أرقام وعلامات + - ( ) فقط', ph: '+968 9xxx xxxx'},
+    {k: 'email', label: 'البريد', max: 120, dir: 'ltr', pattern: EM, patternMsg: '«البريد» صيغته غير صحيحة'}];
+  if (kyc) fields.push({k: 'with_kyc', label: 'إضافة بيانات الهوية الآن (التحقق والموافقة)', type: 'check'},
+    {k: 'id_type', label: 'نوع الهوية', type: 'select', req: true, showIf: 'with_kyc', options: ['بطاقة مدنية', 'جواز سفر', 'بطاقة مقيم'].map(x => [x, x])},
+    {k: 'id_number', label: 'رقم الهوية', req: true, showIf: 'with_kyc', max: 20, dir: 'ltr', pattern: /^[A-Za-z0-9]{5,20}$/, patternMsg: '«رقم الهوية» حروف وأرقام من 5 إلى 20'},
+    {k: 'nationality', label: 'الجنسية', req: true, showIf: 'with_kyc', minlen: 2, max: 30}, {k: 'id_expiry', label: 'انتهاء الهوية', type: 'date', req: true, showIf: 'with_kyc'},
+    {k: 'dob', label: 'تاريخ الميلاد', type: 'date', showIf: 'with_kyc'}, {k: 'source_of_funds', label: 'مصدر الأموال', req: true, showIf: 'with_kyc', minlen: 2, max: 60, ph: 'راتب'},
+    {k: 'pep', label: 'شخص معرَّض سياسيًا', type: 'check', showIf: 'with_kyc'}, {k: 'consent_signed', label: 'وقّع العميل إقرار الخصوصية ورقيًا بحضوري', type: 'check', showIf: 'with_kyc'});
+  EXT.mdForm({title: ed ? 'تعديل بيانات العميل' : 'عميل جديد', edit: ed, values: c0, fields, note: ed ? 'بيانات الاتصال فقط؛ الهوية تُوثَّق من «التحقق والعقود».' : '',
+    submit: (body, now) => {
+      if (ed) return api('/customers/' + id, {method: 'PATCH', body});
+      const out = {name: now.name}; if (now.phone) out.phone = now.phone; if (now.email) out.email = now.email;
+      if (kyc && now.with_kyc) out.kyc = {id_type: now.id_type, id_number: now.id_number, nationality: now.nationality, id_expiry: now.id_expiry, source_of_funds: now.source_of_funds, pep: !!now.pep, consent_signed: !!now.consent_signed, ...(now.dob ? {dob: now.dob} : {})};
+      return api('/customers', {method: 'POST', body: out});
+    }, ok: r => ed ? patchMsg(r) : 'أُضيف العميل' + (r.kyc ? ' — الهوية: ' + ({verified: 'موثَّقة', review: 'عناية معززة', rejected: 'مرفوضة', pending: 'بانتظار'}[r.kyc.status] || r.kyc.status) : ''), done: () => EXT.l_sal()});
+};
+
+// ---- الأرض والترخيص (ما قبل التطوير)
+EXT.mdPreBar = btn => {
+  $('#preB').insertAdjacentHTML('afterbegin', `<div class="toolbar">${btn ? `<button class="btn p" data-call="EXT.md${btn[0] === 'land' ? 'Land' : 'Permit'}">${btn[1]}</button>` : ''}<label class="chk"><input type="checkbox" id="mdPreArch" ${EXT.preArch ? 'checked' : ''}> عرض الموقوف</label></div>`);
+  $('#mdPreArch').onchange = e => { EXT.preArch = e.target.checked; EXT.l_pre(); };
+};
+EXT.mdLand = async id => {
+  const ed = id != null, l = ed ? (await api('/lands?archived=1')).find(x => x.id === id) || {} : {}, st = [...new Set([...MD.LAND_ST, l.status].filter(Boolean))];
+  EXT.mdForm({title: ed ? 'تعديل الأرض «' + l.name + '»' : 'أرض جديدة', edit: ed, values: ed ? l : {status: 'تحت الدراسة'},
+    fields: [{k: 'name', label: 'اسم الأرض', req: true, minlen: 2, max: 120}, {k: 'location', label: 'الموقع', max: 120}, {k: 'area', label: 'المساحة م²', type: 'number', gt: 0}, {k: 'zoning', label: 'الاستخدام المسموح', max: 80, ph: 'سكني متعدد الطوابق'},
+      {k: 'far', label: 'معامل البناء', type: 'number', gt: 0, max: 20}, {k: 'max_floors', label: 'أقصى عدد طوابق', type: 'number', int: true, min: 1, max: 200}, {k: 'price', label: 'السعر المطلوب (ر.ع)', type: 'number', min: 0},
+      {k: 'status', label: 'الحالة', type: 'select', req: true, options: st.map(x => [x, x])}, {k: 'lat', label: 'خط العرض', type: 'number', min: -90, max: 90, hint: 'مع خط الطول أو بدونهما معًا'}, {k: 'lng', label: 'خط الطول', type: 'number', min: -180, max: 180},
+      {k: 'notes', label: 'ملاحظات', type: 'textarea', max: 500}],
+    submit: body => api(ed ? '/lands/' + id : '/lands', {method: ed ? 'PATCH' : 'POST', body}), ok: r => ed ? patchMsg(r) : 'أُضيفت الأرض', done: () => EXT.l_pre()});
+};
+EXT.mdPermit = async id => {
+  const ed = id != null, p = ed ? (await api('/permits?archived=1')).find(x => x.id === id) || {} : {};
+  EXT.mdForm({title: ed ? 'تعديل الترخيص «' + p.kind + '»' : 'ترخيص جديد', edit: ed, values: p, note: ed ? 'الحالة والمرجع والانتهاء تُعدَّل من لوحة الترخيص.' : '',
+    fields: [...(ed ? [] : [{k: 'project_id', label: 'المشروع', type: 'select', req: true, num: true, options: S.projects.map(x => [x.id, x.name])}]),
+      {k: 'authority', label: 'الجهة', req: true, minlen: 2, max: 80, ph: 'بلدية مسقط'}, {k: 'kind', label: 'نوع الترخيص', req: true, minlen: 2, max: 80, ph: 'رخصة بناء'},
+      ...(ed ? [] : [{k: 'ref', label: 'الرقم المرجعي', max: 40, dir: 'ltr'}, {k: 'status', label: 'الحالة', type: 'select', req: true, options: MD.PERMIT_ST}, {k: 'applied', label: 'تاريخ التقديم', type: 'date'}, {k: 'issued', label: 'تاريخ الصدور', type: 'date'}, {k: 'expires', label: 'تاريخ الانتهاء', type: 'date'}]),
+      {k: 'notes', label: 'ملاحظات', type: 'textarea', max: 300}],
+    submit: body => api(ed ? '/permits/' + id : '/permits', {method: ed ? 'PATCH' : 'POST', body}), ok: r => ed ? patchMsg(r) : 'أُضيف الترخيص', done: () => EXT.l_pre()});
+};
+
+// ---- الإنشاء: المقاول والعقد والمهمة
+EXT.mdContractors = async () => {
+  const K = await api('/contractors?archived=1');
+  modal(`<h3>المقاولون</h3><p class="muted">الإيقاف لا يحذف؛ لا يُوقف مقاول له عقد فعّال.</p><div class="btns" style="margin-bottom:8px"><button class="btn p" data-call="EXT.mdContractor">+ مقاول</button></div>
+   ${T(['المقاول', 'السجل التجاري', 'التخصص', 'الهاتف', 'عقود', 'الحالة', ''], K.map(k => `<tr class="${k.active === 0 ? 'stopped' : ''}"><td>${esc(k.name)}</td><td><span class="num">${esc(k.cr_number || '—')}</span></td><td>${esc(k.trade || '—')}</td><td><span class="num">${esc(k.phone || '—')}</span></td><td>${N(k.contracts)}</td><td>${mdStatePill(k.active)}</td><td><button class="btn sm" data-call="EXT.mdContractor" data-args="${J([k.id])}">تعديل</button> ${k.active === 0 ? mdActBtn('contractor', k.id, 'restore', k.name, 'استعادة') : mdActBtn('contractor', k.id, 'archive', k.name, 'إيقاف')}</td></tr>`), 'لا مقاولين مسجَّلين.')}
+   <div class="btns" style="margin-top:14px"><button class="btn" data-call="closeModal">إغلاق</button></div>`);
+  $('#mbox').classList.add('wide'); EXT.mdPanel = 'mdContractors';
+};
+EXT.mdContractor = async id => {
+  const ed = id != null, k = ed ? (await api('/contractors?archived=1')).find(x => x.id === id) || {} : {};
+  EXT.mdForm({title: ed ? 'تعديل المقاول «' + k.name + '»' : 'مقاول جديد', edit: ed, values: k,
+    fields: [{k: 'name', label: 'اسم المقاول', req: true, minlen: 2, max: 120}, {k: 'cr_number', label: 'السجل التجاري', max: 30, dir: 'ltr', hint: 'فريد ضمن المطوّر'}, {k: 'trade', label: 'التخصص', max: 80, ph: 'هيكل / تشطيبات'},
+      {k: 'phone', label: 'الهاتف', max: 24, dir: 'ltr', pattern: /^[0-9+ ()-]{6,24}$/, patternMsg: '«الهاتف» أرقام وعلامات + - ( ) فقط'}, {k: 'email', label: 'البريد', max: 120, dir: 'ltr', pattern: /^[^@\s]+@[^@\s]+\.[^@\s]+$/, patternMsg: '«البريد» صيغته غير صحيحة'},
+      {k: 'notes', label: 'ملاحظات', type: 'textarea', max: 300}],
+    submit: body => api(ed ? '/contractors/' + id : '/contractors', {method: ed ? 'PATCH' : 'POST', body}), ok: r => ed ? patchMsg(r) : 'أُضيف المقاول'});
+};
+EXT.mdConBox = d => {
+  EXT.conD = d;
+  if (!can('construction')) return '';
+  const k = d.contract, tasks = d.schedule.tasks, wsum = tasks.reduce((a, t) => a + (t.weight || 0), 0);
+  const kBox = BOX('عقد المقاول', k ? `<dl class="kv" style="padding:14px"><dt>المقاول</dt><dd>${esc(k.contractor)}</dd><dt>قيمة العقد</dt><dd>${OMR(k.value)}</dd><dt>الاحتجاز</dt><dd>${ND(k.retention_pct * 100, 1)}٪</dd><dt>غرامة التأخير اليومية</dt><dd>${OMR(k.delay_penalty_per_day)}</dd><dt>المدة</dt><dd>${fmtDate(k.start)} — ${fmtDate(k.finish)}</dd></dl>`
+    : '<p class="muted" style="padding:14px">لا عقد مقاول فعّال لهذا المشروع.</p>',
+    k ? `<button class="btn" data-call="EXT.mdContract" data-args="${J([k.id])}">تعديل العقد</button> ${mdActBtn('contract', k.id, 'terminate', 'عقد ' + k.contractor, 'إنهاء العقد')}` : '<button class="btn p" data-call="EXT.mdContract">+ عقد مقاول</button>');
+  const tBox = BOX(`مهام الجدول <span class="muted">مجموع الأوزان ${ND(wsum * 100, 0)}٪</span>`, T(['المهمة', 'من', 'إلى', 'الوزن', 'الإنجاز', 'تعتمد على', ''], tasks.map(t => `<tr><td>${esc(t.name)}</td><td>${fmtDate(t.planned_start)}</td><td>${fmtDate(t.planned_end)}</td><td>${ND(t.weight * 100, 0)}٪</td><td>${N(t.pct)}٪</td><td>${esc((tasks.find(x => x.id === t.depends_on) || {}).name || '—')}</td><td><button class="btn sm" data-call="EXT.mdTask" data-args="${J([t.id])}">تعديل</button> ${mdActBtn('task', t.id, 'archive', t.name, 'إيقاف')}</td></tr>`), 'لا مهام بعد.'),
+    '<button class="btn p" data-call="EXT.mdTask">+ مهمة</button>');
+  return kBox + tBox;
+};
+EXT.mdContract = async id => {
+  const ed = id != null, pid = EXT.conP || activeProj().id, c0 = ed ? EXT.conD.contract : {}, K = (await api('/contractors?archived=1')).filter(k => k.active !== 0 || k.id === c0.contractor_id);
+  EXT.mdForm({title: ed ? 'تعديل عقد المقاول' : 'عقد مقاول جديد', edit: ed, values: ed ? {...c0, retention_pct: c0.retention_pct * 100} : {retention_pct: 10}, note: 'عقد فعّال واحد للمشروع. لا تقل القيمة عن المعتمد من المستخلصات، ولا يتغيّر المقاول بعد أول مستخلص.',
+    fields: [{k: 'contractor_id', label: 'المقاول', type: 'select', req: true, num: true, options: [['', '— اختر —']].concat(K.map(k => [k.id, k.name]))}, {k: 'value', label: 'قيمة العقد (ر.ع)', type: 'number', req: true, gt: 0},
+      {k: 'retention_pct', label: 'نسبة احتجاز ضمان حسن التنفيذ ٪', type: 'number', req: true, min: 0, max: 30}, {k: 'delay_penalty_per_day', label: 'غرامة التأخير اليومية (ر.ع)', type: 'number', min: 0},
+      {k: 'start', label: 'بداية العقد', type: 'date', req: true}, {k: 'finish', label: 'نهاية العقد', type: 'date', req: true}],
+    submit: body => { const b = {...body}; if (b.retention_pct != null) b.retention_pct = b.retention_pct / 100; return api(ed ? '/contractor-contracts/' + id : '/contractor-contracts', {method: ed ? 'PATCH' : 'POST', body: ed ? b : {delay_penalty_per_day: 0, ...b, project_id: pid}}); },
+    ok: r => ed ? patchMsg(r) : 'أُضيف عقد المقاول', done: () => EXT.l_conx()});
+};
+EXT.mdTask = async id => {
+  const ed = id != null, pid = EXT.conP || activeProj().id, tasks = EXT.conD.schedule.tasks, t0 = ed ? tasks.find(x => x.id === id) || {} : {};
+  EXT.mdForm({title: ed ? 'تعديل المهمة «' + t0.name + '»' : 'مهمة جدول جديدة', edit: ed, values: ed ? {...t0, weight: t0.weight * 100} : {pct: 0}, note: 'الوزن نسبة المهمة من المشروع؛ مجموع الأوزان لا يتجاوز 100٪.',
+    fields: [{k: 'name', label: 'اسم المهمة', req: true, minlen: 2, max: 120}, {k: 'planned_start', label: 'بداية مخططة', type: 'date', req: true}, {k: 'planned_end', label: 'نهاية مخططة', type: 'date', req: true},
+      {k: 'weight', label: 'الوزن ٪ من المشروع', type: 'number', req: true, gt: 0, max: 100}, {k: 'pct', label: 'نسبة الإنجاز ٪', type: 'number', req: true, min: 0, max: 100},
+      {k: 'actual_start', label: 'بداية فعلية', type: 'date'}, {k: 'actual_end', label: 'نهاية فعلية', type: 'date'},
+      {k: 'depends_on', label: 'تعتمد على', type: 'select', num: true, options: [['', '— لا شيء —']].concat(tasks.filter(x => x.id !== id).map(x => [x.id, x.name]))}],
+    submit: body => { const b = {...body}; if (b.weight != null) b.weight = b.weight / 100; return api(ed ? '/schedule-tasks/' + id : '/schedule-tasks', {method: ed ? 'PATCH' : 'POST', body: ed ? b : {...b, project_id: pid}}); },
+    ok: r => ed ? patchMsg(r) : 'أُضيفت المهمة', done: () => EXT.l_conx()});
+};
+
 /* ================================================================ ما قبل التطوير */
 EXT.l_pre = async function () {
   const tabs = [['land', 'الأراضي ودراسات الجدوى', 'land'], ['permit', 'التراخيص والجهات الحكومية', 'permits']].filter(t => can(t[2]));
@@ -616,21 +877,23 @@ EXT.l_pre = async function () {
   const k = this.cur.pre, el = $('#pre');
   el.innerHTML = (tabs.length > 1 ? SUB('pre', tabs, k) : '') + '<div id="preB">…</div>';
   if (k === 'land') {
-    const L = this.data.lands = await api('/lands');
+    const L = this.data.lands = await api('/lands' + (EXT.preArch ? '?archived=1' : ''));
     $('#preB').innerHTML = BOX('الأراضي تحت الدراسة', T(['الأرض', 'الموقع', 'المساحة م²', 'الاستخدام', 'معامل البناء', 'السعر', 'الحالة', 'آخر دراسة'],
       L.map((l, i) => { const s = l.studies[0]?.results; return `<tr data-i="${i}"><td>${esc(l.name)}</td><td>${esc(l.location)}</td><td>${N(l.area)}</td><td>${esc(l.zoning)}</td><td>${N(l.far)}</td><td>${OMR(l.price)}</td><td>${pill(esc(l.status), 'p-bl')}</td><td>${s ? pill('هامش ' + pct(s.margin), s.margin >= 20 ? 'p-ok' : s.margin >= 12 ? 'p-w' : 'p-b') : '<span class="muted">—</span>'}</td></tr>`; })));
-    $$('#preB tr[data-i]').forEach(tr => tr.onclick = () => { sel(tr); EXT.showLand(L[+tr.dataset.i]); });
+    $$('#preB tr[data-i]').forEach(tr => { tr.onclick = () => { sel(tr); EXT.showLand(L[+tr.dataset.i]); }; if (L[+tr.dataset.i].active === 0) tr.classList.add('stopped'); });
+    EXT.mdPreBar(can('land') ? ['land', '+ أرض'] : null);
   } else {
-    const P = await api('/permits');
+    const P = await api('/permits' + (EXT.preArch ? '?archived=1' : ''));
     $('#preB').innerHTML = BOX('التراخيص <span class="muted">البلدية · الإسكان والتخطيط العمراني · الدفاع المدني · البيئة · المرافق</span>',
       T(['المشروع', 'الجهة', 'نوع الترخيص', 'المرجع', 'الحالة', 'الصدور', 'الانتهاء', 'تنبيه'],
         P.map((p, i) => `<tr data-i="${i}"><td>${esc(p.project)}</td><td>${esc(p.authority)}</td><td>${esc(p.kind)}</td><td><span class="num">${esc(p.ref || '—')}</span></td><td>${pill(p.status_label, p.status === 'issued' ? 'p-ok' : p.status === 'not_started' ? 'p-bl' : 'p-w')}</td><td>${fmtDate(p.issued)}</td><td>${fmtDate(p.expires)}</td><td>${p.alert ? pill(esc(p.alert), 'p-b') : ''}</td></tr>`)));
-    $$('#preB tr[data-i]').forEach(tr => tr.onclick = () => { sel(tr); EXT.showPermit(P[+tr.dataset.i]); });
+    $$('#preB tr[data-i]').forEach(tr => { tr.onclick = () => { sel(tr); EXT.showPermit(P[+tr.dataset.i]); }; if (P[+tr.dataset.i].active === 0) tr.classList.add('stopped'); });
+    EXT.mdPreBar(can('permits') ? ['permit', '+ ترخيص'] : null);
   }
 };
 EXT.showLand = function (l) {
   const s = l.studies[0]?.results;
-  insp('أرض ودراسة جدوى', `<h3>${esc(l.name)}</h3><dl class="kv"><dt>الموقع</dt><dd>${esc(l.location)}</dd><dt>المساحة</dt><dd>${N(l.area)} م²</dd><dt>الاستخدام</dt><dd>${esc(l.zoning)} · ${N(l.max_floors)} طوابق</dd><dt>السعر المطلوب</dt><dd>${OMR(l.price)}</dd></dl>
+  insp('أرض ودراسة جدوى', `<h3>${esc(l.name)}</h3><dl class="kv"><dt>الموقع</dt><dd>${esc(l.location)}</dd><dt>المساحة</dt><dd>${N(l.area)} م²</dd><dt>الاستخدام</dt><dd>${esc(l.zoning)} · ${N(l.max_floors)} طوابق</dd><dt>السعر المطلوب</dt><dd>${OMR(l.price)}</dd></dl>${can('land') ? `<div class="btns" style="margin:0 0 12px"><button class="btn" data-call="EXT.mdLand" data-args="${J([l.id])}">تعديل الأرض</button> ${l.active === 0 ? `<button class="btn" data-call="EXT.mdAct" data-args="${J(['land', l.id, 'restore', l.name])}">استعادة</button> ${pill('موقوفة', 'p-b')}` : `<button class="btn" data-call="EXT.mdAct" data-args="${J(['land', l.id, 'archive', l.name])}">إيقاف</button>`}</div>` : ''}
    <div class="ai"><b class="k">✦ دراسة جدوى سريعة</b> — عدّل الافتراضات واحسب: الإيرادات، التكاليف، ذروة التمويل، IRR، القيمة الحالية، وتحليل الحساسية.</div>
    <label>سعر البيع ر.ع/م²</label><input id="fs" value="620" inputmode="numeric"><label>تكلفة البناء ر.ع/م²</label><input id="fc" value="260" inputmode="numeric">
    <label>نسبة البيع على الخريطة</label><input id="fp" value="0.6"><label>مدة المشروع (شهر)</label><input id="fm" value="30" inputmode="numeric">
@@ -646,6 +909,7 @@ EXT.feasHtml = s => `<h3 style="margin-top:14px">${esc(s.verdict)}</h3><dl class
 EXT.showPermit = function (p) {
   const PST = [['submitted', 'مقدَّم'], ['in_review', 'قيد المراجعة'], ['issued', 'صادر'], ['rejected', 'مرفوض']], known = PST.some(x => x[0] === p.status);
   insp('ترخيص', `<h3>${esc(p.kind)}</h3><dl class="kv"><dt>المشروع</dt><dd>${esc(p.project)}</dd><dt>الجهة</dt><dd>${esc(p.authority)}</dd><dt>الحالة</dt><dd>${esc(p.status_label)}</dd><dt>المرجع</dt><dd>${esc(p.ref || '—')}</dd></dl>
+   ${can('permits') ? `<div class="btns" style="margin:0 0 12px"><button class="btn" data-call="EXT.mdPermit" data-args="${J([p.id])}">تعديل الجهة والنوع والملاحظات</button> ${p.active === 0 ? `<button class="btn" data-call="EXT.mdAct" data-args="${J(['permit', p.id, 'restore', p.kind])}">استعادة</button> ${pill('موقوف', 'p-b')}` : `<button class="btn" data-call="EXT.mdAct" data-args="${J(['permit', p.id, 'archive', p.kind])}">إيقاف</button>`}</div>` : ''}
    ${p.alert ? `<div class="ai"><b class="k">تنبيه:</b> ${esc(p.alert)}</div>` : ''}
    ${can('permits') ? `<label>تحديث الحالة</label><select id="ps">${known ? '' : `<option value="" selected>${esc(p.status_label)} (بلا تغيير)</option>`}${PST.map(([v, l]) => `<option value="${v}" ${v === p.status ? 'selected' : ''}>${l}</option>`).join('')}</select>
    <label>رقم المرجع</label>${fieldRow(`<input id="pr" value="${esc(p.ref || '')}" maxlength="40">`, 'pr')}<label>تاريخ الانتهاء</label>${fieldRow(`<input id="pe" type="date" value="${esc(p.expires || '')}">`, 'pe')}
@@ -671,9 +935,10 @@ EXT.l_conx = async function () {
   const min = Math.min(...s.tasks.map(t => +new Date(t.planned_start))), max = Math.max(...s.tasks.map(t => +new Date(t.planned_end)));
   const now = Date.now(), X = v => 100 * (v - min) / (max - min);
   const gantt = `<div class="gantt">${s.tasks.map(t => { const a = X(+new Date(t.planned_start)), b = X(+new Date(t.planned_end)); return `<div class="gr"><span class="gn">${esc(t.name)}</span><div class="gt"><i style="inset-inline-start:${a}%;width:${b - a}%"></i><i class="gp ${t.late_days > 7 ? 'late' : ''}" style="inset-inline-start:${a}%;width:${(b - a) * t.pct / 100}%"></i></div><span class="gs">${pill(t.status, t.status === 'متأخر' ? 'p-b' : t.status === 'مكتمل' ? 'p-ok' : t.status === 'جارٍ' ? 'p-w' : 'p-bl')}</span></div>`; }).join('')}<div class="gnow" style="inset-inline-start:calc(180px + (100% - 290px) * ${X(now) / 100})"></div></div>`;
-  box.innerHTML = `<div class="toolbar"><select id="conP">${projOpts(pid)}</select><span class="muted">${esc(d.contract?.contractor || '')}</span></div>
+  box.innerHTML = `<div class="toolbar"><select id="conP">${projOpts(pid)}</select><span class="muted">${esc(d.contract?.contractor || '')}</span>${can('construction') ? ' <button class="btn" data-call="EXT.mdContractors">المقاولون</button>' : ''}</div>
    ${KP([['مؤشر أداء الجدول SPI', ND(s.spi), s.spi < .95 ? 'متأخر' : 'ضمن الخطة'], ['التأخير المتوقع', N(s.forecast_delay_days) + ' يومًا', 'تمديد معتمد ' + N(d.extension_days)], ['الالتزام الحالي', K(d.committed), 'المتوقع عند الإكمال ' + K(d.eac)], ['محتجز ضمان حسن التنفيذ', K(d.retention_held), d.delay_penalty ? 'غرامة تأخير محتملة ' + K(d.delay_penalty) : 'لا غرامة']])}
    ${BOX('الجدول الزمني (جانت) والمسار الحرج', gantt)}
+   ${EXT.mdConBox(d)}
    ${BOX('أوامر التغيير', T(['رقم', 'العنوان', 'السبب', 'التكلفة', 'المدة', 'الحالة', ''], d.change_orders.map(c => `<tr><td>${N(c.no)}</td><td>${esc(c.title)}</td><td>${esc(c.reason)}</td><td>${OMR(c.cost)}</td><td>${N(c.days)} يوم</td><td>${pill({approved: 'معتمد', pending: 'معلق', rejected: 'مرفوض'}[c.status], c.status === 'approved' ? 'p-ok' : c.status === 'pending' ? 'p-w' : 'p-b')}</td><td>${c.status === 'pending' && can('approve_ipc') ? `<button class="btn" data-call="EXT.co" data-args="${J([c.id, 'approve'])}">اعتماد</button> <button class="btn" data-call="EXT.co" data-args="${J([c.id, 'reject'])}">رفض</button>` : ''}</td></tr>`)),
       can('construction') ? '<button class="btn" data-call="EXT.newCO">+ أمر تغيير</button>' : '')}
    ${BOX('الميزانية', T(['البند', 'المبلغ'], d.budget.map(b => `<tr><td>${esc(b.category)}</td><td>${OMR(b.amount)}</td></tr>`)))}
@@ -711,9 +976,10 @@ EXT.newSite = () => { modal(`<h3>تقرير الموقع اليومي</h3><label
 /* ================================================================ المبيعات الموسّعة */
 EXT.l_sal = async function () {
   const k = this.cur.sal, el = $('#sal');
-  el.innerHTML = SUB('sal', [['kyc', 'التحقق والعقود'], ['quotes', 'عروض الأسعار'], ['brk', 'الوسطاء والعمولات'], ['mkt', 'السوق الثانوي'], ['disc', 'الخصومات'], ['wa', 'وكيل واتساب']], k) + '<div id="salB">…</div>';
+  el.innerHTML = SUB('sal', [['kyc', 'التحقق والعقود'], ['cust', 'العملاء'], ['quotes', 'عروض الأسعار'], ['brk', 'الوسطاء والعمولات'], ['mkt', 'السوق الثانوي'], ['disc', 'الخصومات'], ['wa', 'وكيل واتساب']], k) + '<div id="salB">…</div>';
   const B = $('#salB');
   if (k === 'quotes') return EXT.l_quotes(B);
+  if (k === 'cust') return EXT.mdCustomers(B);
   if (k === 'kyc') {
     const Q = await api('/kyc');
     B.innerHTML = BOX('الحجوزات بانتظار التحقق من الهوية (KYC) وإصدار العقد', T(['العميل', 'الوحدة', 'الهوية', 'الجنسية', 'حالة التحقق', 'المخاطر', 'الحجز'],

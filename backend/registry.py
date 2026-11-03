@@ -28,7 +28,7 @@ MODULES: OrderedDict[str, dict] = OrderedDict([
                      prefixes=("/api/leasing", "/api/leases", "/api/rent-dues", "/api/lea", "/api/pm", "/api/lessee"))),
     ("construction", dict(title="الإنشاء", desc="المستخلصات والتحقق من الإنجاز وأوامر التغيير والجودة وتقارير الموقع",
                           deps=("finance",), perms=("construction", "approve_ipc"),
-                          prefixes=("/api/ipcs", "/api/change-orders", "/api/ncrs", "/api/site-reports", "/api/construction"))),
+                          prefixes=("/api/ipcs", "/api/change-orders", "/api/ncrs", "/api/site-reports", "/api/construction", "/api/contractors", "/api/contractor-contracts", "/api/schedule-tasks"))),
     ("marketing", dict(title="التسويق", desc="الحملات واستوديو الإعلانات وتنبيهات السوق",
                        deps=("sales",), perms=("market",),
                        prefixes=("/api/campaigns", "/api/creatives", "/api/marketing", "/api/market"))),
@@ -57,7 +57,7 @@ for _k, _m in MODULES.items():
 SHARED_PREFIXES = {"/api/fm": ("handover", "leasing"), "/api/work-orders": ("handover", "leasing")}
 
 # permissions that belong to no module: always present for the roles that hold them
-CORE_PERMS = frozenset({"view", "inventory", "users", "audit", "admin", "docs", "notify", "portal", "policies", "policies_admin"})  # 0.29.0: the policy register is governance — never switched off with a module
+CORE_PERMS = frozenset({"view", "inventory", "users", "audit", "admin", "docs", "notify", "portal", "policies", "policies_admin", "masterdata"})  # 0.29.0: the policy register is governance — never switched off with a module
 
 PERM_MODULE = {p: k for k, m in MODULES.items() for p in m["perms"]}
 

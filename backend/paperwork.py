@@ -28,7 +28,8 @@ from . import mail, pdfgen
 from .auth import need, need_any
 from .common import act_as, audit, db, now_s, rows, today
 from .db import TENANT, audit_insert, setting_f, valid_tenant
-from .modules import PLAN_LABEL, booking_full, one, portal_owned
+from .masterdata import assert_sellable
+from .modules import PLAN_LABEL, booking_full, create_customer, one, portal_owned
 from .partial import Col, diff
 from .seed import schedule
 
@@ -467,6 +468,7 @@ def quote_create(q: QuoteIn, request: Request, u=Depends(act_as("book"))):
         raise HTTPException(404, "الوحدة غير موجودة")
     if unit["status"] != "a" or unit["retained"]:
         raise HTTPException(409, "الوحدة غير متاحة للعرض")
+    assert_sellable(c, unit["id"])
     limit = QUOTE_MAX_DISCOUNT_DECIDE if "decide" in u["perms"] else QUOTE_MAX_DISCOUNT_SALES
     if q.discount_pct > limit + 1e-9:
         raise HTTPException(403, f"الخصم يتجاوز صلاحيتك ({limit * 100:g}٪) — يحتاج اعتماد الإدارة/المالية")
@@ -517,12 +519,13 @@ def create_booking(c, unit, customer_name: str, phone: str, plan: str, lead_id: 
                    price: float | None = None, email: str | None = None) -> dict:
     """The one path that turns a unit into a pending booking (manual booking and quotation conversion share it)."""
     t = today()
+    assert_sellable(c, unit["id"])    # 0.31.0 — a stopped unit or project takes no booking (also the quote conversion)
     agreed = price if price is not None else unit["price"]
     if agreed is None:  # checks first: a refusal must not leave a half-written transaction (it would hold SQLite's write lock)
         raise HTTPException(400, "سعر الوحدة غير محدد بعد — حدّده في المخزون قبل الحجز")
     if not unit["handover"]:  # 0.19.1 — a developer may not publish a handover date: refuse clearly instead of a 500
         raise HTTPException(400, "موعد تسليم المشروع غير محدد بعد — حدّده قبل الحجز")
-    cid = c.execute("INSERT INTO customers(name,phone,email,created) VALUES(?,?,?,?)", (customer_name, phone, email, t.isoformat())).lastrowid
+    cid = create_customer(c, customer_name, phone, email)    # 0.31.0 — the one customer-creation path (shared with the «+ عميل» form)
     bid = c.execute("INSERT INTO bookings(unit_id,customer_id,lead_id,plan,price,status,created,expires,broker_id,list_price) VALUES(?,?,?,?,?,?,?,?,?,?)",
                     (unit["id"], cid, lead_id, plan, agreed, "pending", t.isoformat(), (t + dt.timedelta(days=3)).isoformat(), broker_id, unit["price"])).lastrowid
     sched = schedule(plan, agreed, t, dt.date.fromisoformat(unit["handover"]))

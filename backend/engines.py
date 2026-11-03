@@ -31,7 +31,7 @@ def pricing(c, project_id: int):
         SUM(CASE WHEN u.status='a' THEN 1 ELSE 0 END) avail,
         SUM(CASE WHEN b.status IN('confirmed','pending') AND b.created>=? THEN 1 ELSE 0 END) recent
       FROM units u LEFT JOIN bookings b ON b.unit_id=u.id AND b.status!='cancelled'
-      WHERE u.project_id=? GROUP BY u.view,u.type""", (since, project_id)).fetchall()
+      WHERE u.project_id=? AND COALESCE(u.active,1)=1 GROUP BY u.view,u.type""", (since, project_id)).fetchall()
     segs = []
     tot_recent = sum(r["recent"] for r in rows)
     tot_units = sum(r["total"] for r in rows) or 1
@@ -257,7 +257,7 @@ def rescore_leads(c):
 
 def match_units(c, lead_id: int, limit: int = 3):
     l = c.execute("SELECT * FROM leads WHERE id=?", (lead_id,)).fetchone()
-    units = c.execute("SELECT * FROM units WHERE project_id=? AND status='a'", (l["project_id"],)).fetchall()
+    units = c.execute("SELECT * FROM units WHERE project_id=? AND status='a' AND COALESCE(active,1)=1", (l["project_id"],)).fetchall()
     words = l["interest"]
 
     def fit(u):
@@ -414,7 +414,7 @@ def kpis(c, project_id=None):
                         FROM installments i JOIN bookings b ON b.id=i.booking_id JOIN units u ON u.id=b.unit_id
                         WHERE b.status='confirmed' AND i.due_date<=? AND i.due_date>=? {w}""",
                     (today.isoformat(), (today - dt.timedelta(days=90)).isoformat(), *a)).fetchone()
-    un = c.execute(f"SELECT COUNT(*) t, SUM(CASE WHEN status='a' THEN 1 ELSE 0 END) av FROM units u WHERE 1=1 {w}", a).fetchone()
+    un = c.execute(f"SELECT COUNT(*) t, COALESCE(SUM(CASE WHEN status='a' THEN 1 ELSE 0 END),0) av FROM units u WHERE COALESCE(u.active,1)=1 {w}", a).fetchone()
     return {"sales_30d_count": s["n"], "sales_30d_value": s["v"],
             "collection_rate": round(100 * col["paid"] / col["due"]) if col["due"] else 100,
             "available": un["av"], "total_units": un["t"]}
