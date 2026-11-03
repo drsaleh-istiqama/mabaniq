@@ -17,6 +17,7 @@ from . import ledger, pii
 from .auth import need
 from .common import act_as, audit, db, now_s, rows, today
 from .db import setting_f
+from .partial import Col, diff
 
 router = APIRouter()
 r3 = ledger.r3
@@ -128,17 +129,20 @@ def api_vendor_add(b: VendorIn, u=Depends(act_as("accounting"))):
 
 
 class VendorTax(BaseModel):
-    tax_no: str = Field(max_length=40)
+    tax_no: str | None = Field(default=None, max_length=40)
+
+
+VENDOR_COLS = {"tax_no": Col("الرقم الضريبي")}
 
 
 @router.patch("/api/acc/vendors/{vid}")
 def api_vendor_tax(vid: int, b: VendorTax, u=Depends(act_as("accounting"))):
     c = db()
-    if not c.execute("SELECT 1 FROM vendors WHERE id=?", (vid,)).fetchone():
+    cur = c.execute("SELECT * FROM vendors WHERE id=?", (vid,)).fetchone()
+    if not cur:
         raise HTTPException(404, "المورّد غير موجود")
-    c.execute("UPDATE vendors SET tax_no=? WHERE id=?", (b.tax_no or None, vid))
-    c.commit()
-    return {"ok": True}
+    cur = dict(cur)
+    return diff(cur, b, VENDOR_COLS).commit(c, "vendors", vid, "تعديل مورّد", cur["name"])
 
 
 # ----------------------------------------------------------------------------------------------------- bills

@@ -593,6 +593,13 @@ const pct = v => N(v) + '٪';
 const AR = s => esc(s);
 const ND = (v, d = 2) => new Intl.NumberFormat('ar-OM-u-nu-latn', {maximumFractionDigits: d}).format(+v || 0);
 const tryDo = async (fn, ok) => { try { const r = await fn(); if (ok) toast(typeof ok === 'function' ? ok(r) : ok); return r; } catch (e) { toast(e.message, 1); throw e; } };
+// 0.30.0 — التحديث الجزئي: الخادم يخبرنا بما تغيّر فعلًا (changes[].label) فلا نعلن «حُدّث» لما لم يتغيّر
+const patchMsg = r => !(r.changed || []).length ? 'لم يتغيّر شيء' : 'حُدّث: ' + (r.changes || []).map(c => c.label).join('، ');
+// زر «مسح» لحقل اختياري (حقل التاريخ الأصلي لا يُمسح في كل المتصفحات): يفرّغ الحقل ويعلّمه ليُرسَل فارغًا صراحةً
+const clearField = id => { const e = $('#' + id); if (!e) return; e.value = ''; e.dataset.cleared = '1'; if (e.placeholder) e.placeholder = 'سيُمسح عند الحفظ'; e.focus(); };
+const fieldRow = (inputHtml, id) => `<div class="fld">${inputHtml}<button type="button" class="btn sm" data-call="clearField" data-args="${J([id])}">مسح</button></div>`;
+// حقل مقنَّع (هوية/آيبان محفوظان): لا يُرسَل إلا بقيمة جديدة مكتوبة أو بمسح صريح؛ غير ذلك يبقى المحفوظ
+const secretVal = id => { const e = $('#' + id); const v = e.value.trim(); return v || (e.dataset.cleared ? '' : undefined); };
 const projOpts = (cur) => S.projects.map(p => `<option value="${p.id}" ${p.id === cur ? 'selected' : ''}>${esc(p.name)}</option>`).join('');
 
 const EXT = {
@@ -637,11 +644,22 @@ EXT.feasHtml = s => `<h3 style="margin-top:14px">${esc(s.verdict)}</h3><dl class
   <div class="muted">حساسية الهامش (السعر × التكلفة)</div>${T(['السعر \\ التكلفة', '−10٪', 'كما هي', '+10٪'], s.sensitivity.map(r => `<tr><td>${r.price_change > 0 ? '+' : ''}${N(r.price_change * 100)}٪</td>${r.margins.map(m => `<td>${pill(pct(m), m >= 20 ? 'p-ok' : m >= 12 ? 'p-w' : 'p-b')}</td>`).join('')}</tr>`))}
   <div class="ai">${s.reasons.map(AR).join('<br>')}</div>`;
 EXT.showPermit = function (p) {
+  const PST = [['submitted', 'مقدَّم'], ['in_review', 'قيد المراجعة'], ['issued', 'صادر'], ['rejected', 'مرفوض']], known = PST.some(x => x[0] === p.status);
   insp('ترخيص', `<h3>${esc(p.kind)}</h3><dl class="kv"><dt>المشروع</dt><dd>${esc(p.project)}</dd><dt>الجهة</dt><dd>${esc(p.authority)}</dd><dt>الحالة</dt><dd>${esc(p.status_label)}</dd><dt>المرجع</dt><dd>${esc(p.ref || '—')}</dd></dl>
    ${p.alert ? `<div class="ai"><b class="k">تنبيه:</b> ${esc(p.alert)}</div>` : ''}
-   ${can('permits') ? `<label>تحديث الحالة</label><select id="ps"><option value="submitted">مقدَّم</option><option value="in_review">قيد المراجعة</option><option value="issued">صادر</option><option value="rejected">مرفوض</option></select><label>رقم المرجع</label><input id="pr" value="${esc(p.ref || '')}"><label>تاريخ الانتهاء</label><input id="pe" type="date" value="${esc(p.expires || '')}">
+   ${can('permits') ? `<label>تحديث الحالة</label><select id="ps">${known ? '' : `<option value="" selected>${esc(p.status_label)} (بلا تغيير)</option>`}${PST.map(([v, l]) => `<option value="${v}" ${v === p.status ? 'selected' : ''}>${l}</option>`).join('')}</select>
+   <label>رقم المرجع</label>${fieldRow(`<input id="pr" value="${esc(p.ref || '')}" maxlength="40">`, 'pr')}<label>تاريخ الانتهاء</label>${fieldRow(`<input id="pe" type="date" value="${esc(p.expires || '')}">`, 'pe')}
    <div class="btns" style="margin-top:10px"><button class="btn p" id="pgo">حفظ</button></div>` : ''}`);
-  if ($('#pgo')) $('#pgo').onclick = async () => { await tryDo(() => api(`/permits/${p.id}`, {method: 'POST', body: {status: $('#ps').value, ref: $('#pr').value, expires: $('#pe').value || null}}), 'حُدّث الترخيص'); EXT.l_pre(); };
+  if ($('#pgo')) $('#pgo').onclick = async () => {
+    const body = {};   // PATCH: يُرسَل ما تغيّر وحده، وغير المُرسَل لا يُمس
+    if ($('#ps').value && $('#ps').value !== p.status) body.status = $('#ps').value;
+    if ($('#pr').value.trim() !== (p.ref || '')) body.ref = $('#pr').value.trim();
+    if (($('#pe').value || '') !== (p.expires || '')) body.expires = $('#pe').value || null;
+    await tryDo(() => api(`/permits/${p.id}`, {method: 'PATCH', body}), patchMsg);
+    await EXT.l_pre();
+    const fresh = (await api('/permits')).find(x => x.id === p.id);
+    if (fresh) EXT.showPermit(fresh);
+  };
 };
 
 /* ================================================================ الإنشاء (تفاصيل المشروع) */
@@ -996,13 +1014,13 @@ EXT.leaCheqAct = async (id, act) => {
 EXT.leaUnit = async function (u) {
   const O = await api('/lea/owners'), W = can('leasing');
   insp(`وحدة ${u.code}`, `<h3>${esc(u.project)} · ${esc(u.type || '')}</h3><dl class="kv"><dt>الحالة</dt><dd>${pill(esc(u.state_label), LSTP[u.state])}</dd><dt>المستأجر</dt><dd>${u.lease ? esc(u.lease.tenant) + ` (${esc(u.lease.number)})` : '—'}</dd><dt>شاغرة منذ</dt><dd>${u.vacant_since ? fmtDate(u.vacant_since) : '—'}</dd></dl>
-   ${W ? `<label>المالك</label><select id="uo">${O.map(o => `<option value="${o.id}" ${o.id === u.owner_id ? 'selected' : ''}>${esc(o.name)}</option>`).join('')}</select>
+   ${W ? `<label>المالك</label><select id="uo">${u.owner_id ? '' : '<option value="" selected>— بلا مالك —</option>'}${O.map(o => `<option value="${o.id}" ${o.id === u.owner_id ? 'selected' : ''}>${esc(o.name)}</option>`).join('')}</select>
    <label>تجاوز يدوي للحالة</label><select id="us"><option value="none">بلا (تُشتق من العقود)</option><option value="prep" ${u.lease_state === 'prep' ? 'selected' : ''}>فترة تجهيز</option><option value="maintenance" ${u.lease_state === 'maintenance' ? 'selected' : ''}>صيانة</option><option value="not_leasable" ${u.lease_state === 'not_leasable' ? 'selected' : ''}>غير قابلة للتأجير</option></select>
    <label>الاستخدام</label><select id="uu">${Object.entries(LUSE).map(([a, b]) => `<option value="${a}" ${a === u.use ? 'selected' : ''}>${b}</option>`).join('')}</select><label>مواقف السيارات</label><input id="up" inputmode="numeric" value="${u.parking_bays ?? ''}">
    <div class="btns" style="margin-top:10px"><button class="btn p" id="ugo">حفظ</button></div>
    <hr style="border:0;border-top:1px solid var(--line);margin:14px 0"><b>العدّادات</b>${T(['النوع', 'الرقم', 'المزوّد', ''], u.meters.map(m => `<tr><td>${esc({water: 'ماء', electricity: 'كهرباء', gas: 'غاز', other: 'أخرى'}[m.kind] || m.kind)}${m.shared ? ' (مشترك)' : ''}</td><td>${esc(m.number)}</td><td>${esc(m.provider || '')}</td><td><button class="btn" data-call="EXT.leaMeterDel" data-args="${J([m.id])}">حذف</button></td></tr>`), 'لا عدّادات.')}
    <div class="btns" style="margin-top:8px"><select id="mk"><option value="electricity">كهرباء</option><option value="water">ماء</option><option value="gas">غاز</option><option value="other">أخرى</option></select> <input id="mn" placeholder="رقم العدّاد"> <button class="btn" id="mgo">إضافة</button></div>` : ''}`);
-  if ($('#ugo')) $('#ugo').onclick = async () => { await tryDo(() => api('/lea/units/' + u.id, {method: 'POST', body: {owner_id: +$('#uo').value, lease_state: $('#us').value, use: $('#uu').value, parking_bays: num($('#up').value)}}), 'حُفظت الوحدة'); EXT.l_lea(); };
+  if ($('#ugo')) $('#ugo').onclick = async () => { await tryDo(() => api('/lea/units/' + u.id, {method: 'PATCH', body: {owner_id: num($('#uo').value), lease_state: $('#us').value, use: $('#uu').value, parking_bays: num($('#up').value)}}), patchMsg); EXT.l_lea(); };
   if ($('#mgo')) $('#mgo').onclick = async () => { await tryDo(() => api(`/lea/units/${u.id}/meters`, {method: 'POST', body: {kind: $('#mk').value, number: $('#mn').value}}), 'أُضيف العدّاد'); EXT.l_lea(); };
 };
 EXT.leaMeterDel = async id => { await tryDo(() => api('/lea/meters/' + id, {method: 'DELETE'}), 'حُذف العدّاد'); EXT.l_lea(); };
@@ -1011,7 +1029,7 @@ const tenantFields = (t = {}) => `<label>الاسم</label><input id="tn_name" v
   <label>الهاتف</label><input id="tn_phone" value="${esc(t.phone || '')}"><label>رقم الهوية</label><input id="tn_id" value="${esc(t.id_number || '')}"><label>السجل التجاري (للشركات)</label><input id="tn_cr" value="${esc(t.cr_number || '')}">
   <label>الممثل القانوني</label><input id="tn_rep" value="${esc(t.rep_name || '')}"><label>البريد</label><input id="tn_mail" value="${esc(t.email || '')}"><label>العنوان</label><input id="tn_addr" value="${esc(t.address || '')}">
   <label>الرقم الضريبي</label><input id="tn_tax" value="${esc(t.tax_no || '')}"><label>صفة الممثل</label><input id="tn_rept" value="${esc(t.rep_title || '')}"><label>هوية الممثل</label><input id="tn_repid" value="${esc(t.rep_id_number || '')}">
-  <label>جهة الاتصال</label><input id="tn_contact" value="${esc(t.contact_name || '')}"><label>الجنسية</label><input id="tn_nat" value="${esc(t.nationality || '')}"><label>انتهاء الهوية</label><input id="tn_idexp" type="date" value="${esc(String(t.id_expiry || '').slice(0, 10))}">
+  <label>جهة الاتصال</label><input id="tn_contact" value="${esc(t.contact_name || '')}"><label>الجنسية</label><input id="tn_nat" value="${esc(t.nationality || '')}"><label>انتهاء الهوية</label>${fieldRow(`<input id="tn_idexp" type="date" value="${esc(String(t.id_expiry || '').slice(0, 10))}">`, 'tn_idexp')}
   <label>تقييم المستأجر</label><select id="tn_rate">${[['', 'غير مقيَّم'], ['A', 'ممتاز (A)'], ['B', 'جيد (B)'], ['C', 'مقبول (C)'], ['D', 'ضعيف (D)']].map(([v, l]) => `<option value="${v}" ${(t.rating || '') === v ? 'selected' : ''}>${l}</option>`).join('')}</select><label>ملاحظة التقييم</label><input id="tn_ratenote" value="${esc(t.rating_note || '')}">`;
 // 0.29.1 — النموذج يرسل الحقول الستة عشر كلها: كان يرسل ثمانية فيمحو الخادم الباقي (التقييم والجنسية والرقم الضريبي…) عند كل تعديل.
 const tenantBody = () => ({name: $('#tn_name').value, kind: $('#tn_kind').value, phone: $('#tn_phone').value, id_number: $('#tn_id').value, cr_number: $('#tn_cr').value, rep_name: $('#tn_rep').value, email: $('#tn_mail').value, address: $('#tn_addr').value,
@@ -1019,7 +1037,7 @@ const tenantBody = () => ({name: $('#tn_name').value, kind: $('#tn_kind').value,
 
 EXT.leaTenantForm = (t) => {
   modal(`<h3>${t && t.id ? 'تعديل مستأجر' : 'مستأجر جديد'}</h3>${tenantFields(t || {})}<div class="err" id="te"></div><div class="btns" style="margin-top:12px"><button class="btn p" id="tgo">حفظ</button> <button class="btn" data-call="closeModal">إلغاء</button></div>`);
-  $('#tgo').onclick = async () => { try { await api('/lea/tenants' + (t && t.id ? '/' + t.id : ''), {method: 'POST', body: tenantBody()}); closeModal(); toast('حُفظ المستأجر'); EXT.l_lea(); } catch (e) { $('#te').textContent = e.message; } };
+  $('#tgo').onclick = async () => { try { const ed = !!(t && t.id), r = await api('/lea/tenants' + (ed ? '/' + t.id : ''), {method: ed ? 'PATCH' : 'POST', body: tenantBody()}); closeModal(); toast(ed ? patchMsg(r) : 'حُفظ المستأجر'); EXT.l_lea(); } catch (e) { $('#te').textContent = e.message; } };
 };
 
 EXT.leaTenant = async function (id) {
@@ -1037,10 +1055,12 @@ EXT.leaStatement = async id => {
 };
 
 EXT.leaOwnerForm = (o) => {
-  const ed = !!(o && o.id), keep = ed ? ' placeholder="اتركه فارغًا للإبقاء على المحفوظ"' : '';
-  modal(`<h3>${ed ? 'تعديل مالك' : 'مالك جديد'}</h3><label>الاسم</label><input id="on" value="${esc(ed ? o.name : '')}"><label>الهاتف</label><input id="op" value="${esc(ed ? o.phone || '' : '')}"><label>البريد</label><input id="om" value="${esc(ed ? o.email || '' : '')}" dir="ltr"><label>رقم الهوية / السجل</label><input id="oi"${keep}><label>الآيبان</label><input id="ob"${keep}><label>عمولة الإدارة (٪)</label><input id="of" inputmode="decimal" value="${ed ? o.mgmt_fee_pct : 0}"><label>أساس العمولة</label><select id="ox"><option value="collected" ${ed && o.mgmt_basis === 'collected' ? 'selected' : ''}>المحصَّل</option><option value="invoiced" ${ed && o.mgmt_basis === 'invoiced' ? 'selected' : ''}>المفوتَر</option></select><label>ملاحظات</label><input id="oN" maxlength="500" value="${esc(ed ? o.notes || '' : '')}">
+  const ed = !!(o && o.id), sec = (id, saved) => ed && saved ? fieldRow(`<input id="${id}" placeholder="محفوظ (${esc(saved)}) — اتركه للإبقاء">`, id) : `<input id="${id}">`;
+  modal(`<h3>${ed ? 'تعديل مالك' : 'مالك جديد'}</h3><label>الاسم</label><input id="on" value="${esc(ed ? o.name : '')}"><label>الهاتف</label><input id="op" value="${esc(ed ? o.phone || '' : '')}"><label>البريد</label><input id="om" value="${esc(ed ? o.email || '' : '')}" dir="ltr"><label>رقم الهوية / السجل</label>${sec('oi', ed && o.id_number)}<label>الآيبان</label>${sec('ob', ed && o.iban)}<label>عمولة الإدارة (٪)</label><input id="of" inputmode="decimal" value="${ed ? o.mgmt_fee_pct : 0}"><label>أساس العمولة</label><select id="ox"><option value="collected" ${ed && o.mgmt_basis === 'collected' ? 'selected' : ''}>المحصَّل</option><option value="invoiced" ${ed && o.mgmt_basis === 'invoiced' ? 'selected' : ''}>المفوتَر</option></select><label>ملاحظات</label><input id="oN" maxlength="500" value="${esc(ed ? o.notes || '' : '')}">
    <div class="err" id="oe"></div><div class="btns" style="margin-top:12px"><button class="btn p" id="ogo">حفظ</button> <button class="btn" data-call="closeModal">إلغاء</button></div>`);
-  $('#ogo').onclick = async () => { try { await api('/lea/owners' + (ed ? '/' + o.id : ''), {method: 'POST', body: {name: $('#on').value, phone: $('#op').value, email: $('#om').value, id_number: $('#oi').value, iban: $('#ob').value, mgmt_fee_pct: +$('#of').value, mgmt_basis: $('#ox').value, notes: $('#oN').value}}); closeModal(); toast(ed ? 'حُفظ المالك' : 'أُضيف المالك'); EXT.l_lea(); } catch (e) { $('#oe').textContent = e.message; } };
+  $('#ogo').onclick = async () => { try { const body = {name: $('#on').value, phone: $('#op').value, email: $('#om').value, mgmt_fee_pct: +$('#of').value, mgmt_basis: $('#ox').value, notes: $('#oN').value};
+    if (ed) { body.id_number = secretVal('oi'); body.iban = secretVal('ob'); } else { body.id_number = $('#oi').value; body.iban = $('#ob').value; }
+    const r = await api('/lea/owners' + (ed ? '/' + o.id : ''), {method: ed ? 'PATCH' : 'POST', body}); closeModal(); toast(ed ? patchMsg(r) : 'أُضيف المالك'); EXT.l_lea(); } catch (e) { $('#oe').textContent = e.message; } };
 };
 
 EXT.leaNew = async function () {
@@ -1407,7 +1427,7 @@ EXT.l_adm = async function () {
     B.innerHTML = BOX('ترويسة المستندات الصادرة (عروض الأسعار، العقود، الفواتير، الإيصالات)', `<div style="padding:14px"><div class="grid2">${f('brn', 'اسم المطوّر كما يظهر في المستندات', b.name)}${f('brcr', 'رقم السجل التجاري', b.cr)}${f('brvat', 'الرقم الضريبي', b.vat)}${f('brad', 'العنوان', b.address)}${f('brph', 'الهاتف', b.phone)}${f('brem', 'البريد', b.email)}${f('brsg', 'اسم المفوَّض بالتوقيع', b.signatory)}${f('brst', 'صفته', b.signatory_title)}</div>
       <div class="btns" style="margin-top:12px"><button class="btn p" id="brsave">حفظ</button></div></div>`)
       + BOX('الشعار والختم والتوقيع المعتمد <span class="muted">صور PNG/JPEG بخلفية بيضاء أو شفافة؛ تُطبع في كل مستند</span>', `<div style="padding:14px" class="grid3">${['logo', 'stamp', 'sign'].map(k => `<div><b>${{logo: 'الشعار', stamp: 'الختم', sign: 'التوقيع'}[k]}</b><div style="margin:8px 0">${img(b[k + '_doc'])}</div><input type="file" id="br_${k}" accept=".png,.jpg,.jpeg"><button class="btn" data-call="EXT.brandUpload" data-args="${J([k])}">رفع</button></div>`).join('')}</div>`);
-    $('#brsave').onclick = async () => { await tryDo(() => api('/admin/brand', {method: 'POST', body: {name: $('#brn').value, cr: $('#brcr').value, vat: $('#brvat').value, address: $('#brad').value, phone: $('#brph').value, email: $('#brem').value, signatory: $('#brsg').value, signatory_title: $('#brst').value}}), 'حُفظت الترويسة'); };
+    $('#brsave').onclick = async () => { await tryDo(() => api('/admin/brand', {method: 'POST', body: {name: $('#brn').value, cr: $('#brcr').value, vat: $('#brvat').value, address: $('#brad').value, phone: $('#brph').value, email: $('#brem').value, signatory: $('#brsg').value, signatory_title: $('#brst').value}}), patchMsg); };
   } else if (k === 'look' && can('admin')) {
     const [U, AC] = await Promise.all([api('/appearance'), api('/admin/assistant')]);
     EXT.uiOpt = U.options; EXT.ui = {preset: U.preset, pattern: U.pattern, fit: U.fit, mode: U.mode, size: U.size, strength: U.strength, image_doc: U.image_doc}; EXT.aiCfg = AC;
@@ -1434,7 +1454,7 @@ EXT.l_adm = async function () {
     B.innerHTML = BOX('أمان حسابي', `<div style="padding:14px"><p>التحقق الثنائي: <b>${S.me.totp_enabled ? 'مفعّل ✓' : 'غير مفعّل'}</b></p><div class="btns">${S.me.totp_enabled ? '' : '<button class="btn p" id="t2">تفعيل التحقق الثنائي</button>'}<button class="btn" id="cpw">تغيير كلمة المرور</button><button class="btn" id="sall">تسجيل الخروج من كل الأجهزة الأخرى</button></div><div id="t2r"></div></div>`)
       + BOX(`جلساتي <span class="muted">تنتهي الجلسة بعد ${N(SS.idle_minutes)} دقيقة بلا نشاط أو ${N(SS.absolute_hours)} ساعة كحد أقصى</span>`, T(['الجهاز', 'العنوان', 'بدأت', 'آخر نشاط', ''], SS.sessions.map(s => `<tr><td>${esc(s.label)}${s.current ? ' ' + pill('هذه الجلسة', 'p-ok') : ''}</td><td><span class="num">${esc(s.ip)}</span></td><td>${ago(s.created)}</td><td>${ago(s.last_seen)}</td><td>${s.current ? '' : `<button class="btn" data-call="EXT.skill" data-args="${J([s.id])}">إنهاء</button>`}</td></tr>`)));
     B.innerHTML += BOX('هويتي الخارجية', `<div style="padding:14px"><p>البريد الإلكتروني: <b class="num">${esc(ID.email || '—')}</b> ${ID.email ? (ID.email_verified ? pill('موثَّق', 'p-ok') : pill('غير موثَّق', 'p-w')) : ''} <button class="link" id="idEm">تعديل</button></p> <p class="muted">البريد يتيح استعادة كلمة المرور ورابط دخول لمرة واحدة والدخول عبر Google (للحسابات بلا تحقق ثنائي).</p> <div class="btns">${ID.methods.google ? (ID.google_linked ? '<button class="btn" id="gUn">فصل حساب Google</button>' : `<a class="btn p" href="/auth/google/start?t=${encodeURIComponent(S.me.tenant || 'jadwa')}&link=1">ربط حساب Google</a>`) : '<span class="muted">الدخول عبر Google غير مفعّل على هذا الخادم.</span>'}</div></div>`);
-    $('#idEm').onclick = async () => { const v = prompt('بريدك الإلكتروني (فارغ للحذف)', ID.email || ''); if (v === null) return; await tryDo(() => api('/me/email', {method: 'POST', body: {email: v.trim()}}), 'حُدّث البريد'); EXT.l_adm(); };
+    $('#idEm').onclick = async () => { const v = prompt('بريدك الإلكتروني (فارغ للحذف)', ID.email || ''); if (v === null) return; await tryDo(() => api('/me/email', {method: 'POST', body: {email: v.trim()}}), patchMsg); EXT.l_adm(); };
     if ($('#gUn')) $('#gUn').onclick = async () => { if (!confirm('فصل حساب Google عن حسابك؟')) return; await tryDo(() => api('/me/google/unlink', {method: 'POST'}), 'فُصل الحساب'); EXT.l_adm(); };
     if ($('#t2')) $('#t2').onclick = () => EXT.setup2fa();
     $('#cpw').onclick = () => EXT.changePw(false);
@@ -1483,7 +1503,7 @@ EXT.ureset = async id => { if (!confirm('إعادة تعيين كلمة المر
 EXT.skill = async id => { await tryDo(() => api('/me/sessions/revoke', {method: 'POST', body: {id}}), 'أُنهيت الجلسة'); EXT.l_adm(); };
 EXT.ukill = async id => { if (!confirm('إنهاء كل جلسات هذا المستخدم فورًا (جهاز مفقود / مغادرة)؟')) return; const r = await tryDo(() => api(`/users/${id}/sessions/revoke`, {method: 'POST'})); toast(`أُنهيت ${N(r.revoked)} جلسة`); };
 EXT.u2fa = async id => { if (!confirm('إعادة ضبط التحقق الثنائي لهذا المستخدم؟ تُبطل رموزه وتُنهى جلساته، ويعيد التفعيل عند الدخول.')) return; await tryDo(() => api(`/users/${id}/2fa/reset`, {method: 'POST'}), 'أُعيد ضبط التحقق الثنائي'); EXT.l_adm(); };
-EXT.uemail = async (id, cur) => { const v = prompt('البريد الإلكتروني للمستخدم (فارغ للحذف) — يتيح استعادة كلمة المرور ورابط الدخول والدخول عبر Google', cur || ''); if (v === null) return; await tryDo(() => api(`/users/${id}/email`, {method: 'POST', body: {email: v.trim()}}), 'حُدّث البريد'); EXT.l_adm(); };
+EXT.uemail = async (id, cur) => { const v = prompt('البريد الإلكتروني للمستخدم (فارغ للحذف) — يتيح استعادة كلمة المرور ورابط الدخول والدخول عبر Google', cur || ''); if (v === null) return; await tryDo(() => api(`/users/${id}/email`, {method: 'POST', body: {email: v.trim()}}), patchMsg); EXT.l_adm(); };
 EXT.uact = async (id, a) => { await tryDo(() => api(`/users/${id}/active`, {method: 'POST', body: {active: !!a}}), 'حُدّث المستخدم'); EXT.l_adm(); };
 EXT.newUser = () => { modal(`<h3>مستخدم جديد</h3><label>اسم المستخدم (إنجليزي)</label><input id="un" dir="ltr"><label>الاسم</label><input id="unm"><label>البريد الإلكتروني (اختياري — لاستعادة كلمة المرور ورابط الدخول وGoogle)</label><input id="uem" dir="ltr" type="email"><label>الدور</label><select id="ur"><option value="sales">مبيعات</option><option value="finance">مالية</option><option value="engineer">مهندس</option><option value="investor">مستثمر/ممول</option><option value="accountant">محاسب</option><option value="hr">موارد بشرية</option><option value="payroll">مسؤول رواتب</option><option value="property_manager">مدير عقاري (خارجي) — يحتاج نطاق مشروع</option><option value="admin">مدير</option></select><div class="err" id="ue"></div><div class="btns" style="margin-top:12px"><button class="btn p" id="ugo">إنشاء</button><button class="btn" data-call="closeModal">إلغاء</button></div>`);
   $('#ugo').onclick = async () => { try { const r = await api('/users', {method: 'POST', body: {username: $('#un').value.trim().toLowerCase(), name: $('#unm').value, role: $('#ur').value, email: ($('#uem').value || '').trim() || null}}); modal(`<h3>أُنشئ المستخدم</h3><div class="ai"><b>${esc(r.username)}</b><br>كلمة المرور المؤقتة: <span class="num" style="user-select:all">${esc(r.temporary_password)}</span></div><p class="muted">${esc(r.note)}</p><button class="btn" data-call="closeModal">إغلاق</button>`); EXT.l_adm(); } catch (e) { $('#ue').textContent = e.message; } }; };
@@ -1509,7 +1529,7 @@ EXT.changePw = forced => {
 
 
 /* ---- Unit 3: delegated handlers are registered here (module scope, nothing on window) */
-Object.assign(CALLS, {approveIPC, rejectIPC, cancelBooking, closeModal, confirmBooking, decide, go, openBooking, resaleAct, setStage, showUnit, svcSet, EXT});
+Object.assign(CALLS, {approveIPC, rejectIPC, cancelBooking, closeModal, confirmBooking, decide, go, openBooking, resaleAct, setStage, showUnit, svcSet, clearField, EXT});
 applyI18n();
 const langBtn = document.getElementById('lang');
 if (langBtn) { langBtn.textContent = lang() === 'ar' ? 'EN' : 'ع'; langBtn.onclick = () => toggleLang(); }
@@ -1928,7 +1948,7 @@ EXT.accNewAcc = () => {
 };
 EXT.accRebind = async (id, cur) => {
   const key = prompt('مفتاح الحدث الذي يُرحَّل إلى هذا الحساب (اتركه فارغًا لفك الربط)، مثل bank_main أو rev_rent:', cur); if (key == null) return;
-  await tryDo(() => api('/acc/accounts/' + id, {method: 'PATCH', body: {system_key: key.trim()}}), 'حُدّث الربط'); EXT.l_acc();
+  await tryDo(() => api('/acc/accounts/' + id, {method: 'PATCH', body: {system_key: key.trim()}}), patchMsg); EXT.l_acc();
 };
 EXT.accOpen = async () => {
   const lines = $('#opL').value.split('\n').map(s => s.trim()).filter(Boolean).map(s => { const [code, d, c] = s.split(/[,\t;]/).map(x => x.trim()); return {code, debit: +d || 0, credit: +c || 0}; });
@@ -2292,7 +2312,7 @@ EXT.hrDeptForm = async id => {
     ${cc.length ? HS('hdc', 'مركز الكلفة', [['', '— لا شيء —']].concat(cc.map(x => [x.id, x.name])), d.cost_center_id) : ''}${id ? `<label><input type="checkbox" id="hda" ${d.active ? 'checked' : ''}> نشط</label>` : ''}<div class="err" id="hdE"></div><div class="btns" style="margin-top:12px"><button class="btn p" id="hdGo">حفظ</button> <button class="btn" data-call="closeModal">إلغاء</button></div>`);
   $('#hdGo').onclick = async () => {
     const body = {name: $('#hdn').value.trim(), parent_id: +$('#hdp').value || null, head_employee_id: +$('#hdh').value || null, cost_center_id: $('#hdc') ? (+$('#hdc').value || null) : null};
-    try { if (id) { body.active = $('#hda').checked; await api('/hr/departments/' + id, {method: 'PATCH', body}); } else await post('/hr/departments', body); closeModal(); toast('حُفظ'); EXT.l_hr(); } catch (e) { $('#hdE').textContent = e.message; }
+    try { let r; if (id) { body.active = $('#hda').checked; r = await api('/hr/departments/' + id, {method: 'PATCH', body}); } else await post('/hr/departments', body); closeModal(); toast(id ? patchMsg(r) : 'حُفظ'); EXT.l_hr(); } catch (e) { $('#hdE').textContent = e.message; }
   };
 };
 EXT.hrPosForm = async id => {
@@ -2300,8 +2320,8 @@ EXT.hrPosForm = async id => {
   modal(`<h3>${id ? 'تعديل مسمى' : 'مسمى وظيفي جديد'}</h3>${HF('hpt', 'المسمى', p.title, 'text', 'maxlength="80"')}${id ? '' : HS('hpd', 'القسم', [['', '— بلا قسم —']].concat(D.filter(d => d.active).map(d => [d.id, d.name])), '')}${HF('hpg', 'الدرجة', p.grade, 'text', 'maxlength="20"')}${HF('hph', 'العدد المعتمد', p.headcount ?? 1, 'number', 'min="0"')}
     ${id ? `<label><input type="checkbox" id="hpa" ${p.active ? 'checked' : ''}> نشط</label>` : ''}<div class="err" id="hpE"></div><div class="btns" style="margin-top:12px"><button class="btn p" id="hpGo">حفظ</button> <button class="btn" data-call="closeModal">إلغاء</button></div>`);
   $('#hpGo').onclick = async () => {
-    try { if (id) await api('/hr/positions/' + id, {method: 'PATCH', body: {title: $('#hpt').value.trim(), grade: $('#hpg').value.trim(), headcount: +$('#hph').value || 0, active: $('#hpa').checked}});
-      else await post('/hr/positions', {title: $('#hpt').value.trim(), department_id: +$('#hpd').value || null, grade: $('#hpg').value.trim(), headcount: +$('#hph').value || 0}); closeModal(); toast('حُفظ'); EXT.l_hr(); } catch (e) { $('#hpE').textContent = e.message; }
+    try { let r; if (id) r = await api('/hr/positions/' + id, {method: 'PATCH', body: {title: $('#hpt').value.trim(), grade: $('#hpg').value.trim(), headcount: +$('#hph').value || 0, active: $('#hpa').checked}});
+      else await post('/hr/positions', {title: $('#hpt').value.trim(), department_id: +$('#hpd').value || null, grade: $('#hpg').value.trim(), headcount: +$('#hph').value || 0}); closeModal(); toast(id ? patchMsg(r) : 'حُفظ'); EXT.l_hr(); } catch (e) { $('#hpE').textContent = e.message; }
   };
 };
 
@@ -2356,7 +2376,7 @@ EXT.hrEmpForm = async id => {
     const n = v => +v || null, body = {name: $('#fn').value.trim(), name_en: $('#fne').value.trim(), omani: $('#fo').checked, nationality: $('#fna').value.trim(), gender: $('#fg').value || null, marital: $('#fm').value || null, id_number: $('#fid').value.trim(), dob: $('#fdb').value,
       phone: $('#fp').value.trim(), email: $('#fe').value.trim(), address: $('#fa').value.trim(), department_id: n($('#fd').value), position_id: n($('#fpo').value), manager_id: n($('#fmg').value), hire_date: $('#fh').value, contract_type: $('#fc').value,
       contract_end: $('#fce').value, probation_end: $('#fpe').value, bank_name: $('#fb').value.trim(), iban: $('#fib').value.trim(), social_ins_no: $('#fsi').value.trim(), pasi_applies: $('#fpa').checked, emergency_contact: $('#fem').value.trim()};
-    try { const r = id ? await api('/hr/employees/' + id, {method: 'PATCH', body}) : await post('/hr/employees', body); closeModal(); toast(id ? 'حُفظ الملف' : 'أُنشئ الملف ' + r.number + (r.warnings.length ? ' — ' + r.warnings[0] : '')); EXT.l_hr(); if (id) EXT.hrEmp(id); } catch (e) { $('#fE').textContent = e.message; }
+    try { const r = id ? await api('/hr/employees/' + id, {method: 'PATCH', body}) : await post('/hr/employees', body); closeModal(); toast(id ? patchMsg(r) : 'أُنشئ الملف ' + r.number + (r.warnings.length ? ' — ' + r.warnings[0] : '')); EXT.l_hr(); if (id) EXT.hrEmp(id); } catch (e) { $('#fE').textContent = e.message; }
   };
 };
 
@@ -2806,8 +2826,9 @@ EXT.polForm = async function (id) {
   $('#plGo').onclick = async () => {
     const body = {title: $('#plT').value.trim(), category: $('#plK').value, owner_role: $('#plO').value.trim(), summary: $('#plS').value.trim(), basis: $('#plB').value.trim(), review_months: +$('#plM').value || 12, ack_required: $('#plA').checked, articles: EXT.polParse($('#plX').value)};
     try {
-      if (id) await api('/policies/' + id, {method: 'PATCH', body}); else await post('/policies', {...body, code: $('#plC').value.trim()});
-      closeModal(); toast('حُفظت المسودة — يعتمدها شخص آخر'); EXT.l_pol();
+      let r;
+      if (id) r = await api('/policies/' + id, {method: 'PATCH', body}); else await post('/policies', {...body, code: $('#plC').value.trim()});
+      closeModal(); toast(id ? patchMsg(r) : 'حُفظت المسودة — يعتمدها شخص آخر'); EXT.l_pol();
     } catch (e) { $('#plE').textContent = e.message; }
   };
 };

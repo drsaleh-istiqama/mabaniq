@@ -20,6 +20,7 @@ from .auth import need
 from .common import act_as, audit, db, now_s, rows, today
 from .db import TENANT, connect, tenants
 from .modules import one
+from .partial import Col, diff
 
 router = APIRouter()
 
@@ -111,11 +112,18 @@ class DeptIn(BaseModel):
 
 class DeptPatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    name: str | None = Field(default=None, min_length=2, max_length=80)
+    name: str | None = Field(default=None, max_length=80)
     parent_id: int | None = None
     head_employee_id: int | None = None
     cost_center_id: int | None = None
     active: bool | None = None
+
+
+DEPT_COLS = {   # 0.30.0 — الاسم والفعّالية إلزاميان؛ القسم الأعلى ورئيس القسم ومركز الكلفة تُفرَّغ بـnull
+    "name": Col("اسم القسم", required=True, check=lambda v: None if len(v) >= 2 else "اسم القسم حرفان على الأقل"),
+    "parent_id": Col("القسم الأعلى", kind="num"), "head_employee_id": Col("رئيس القسم", kind="num"), "cost_center_id": Col("مركز الكلفة", kind="num"),
+    "active": Col("القسم فعّال", required=True, kind="bool"),
+}
 
 
 def _dept_refs(c, b, did: int | None = None) -> None:
@@ -153,13 +161,7 @@ def api_dept_edit(did: int, b: DeptPatch, u=Depends(act_as("hr"))):
     _dept_refs(c, b, did)
     if b.active is False and c.execute("SELECT 1 FROM employees WHERE department_id=? AND status!='terminated'", (did,)).fetchone():
         raise HTTPException(409, "في القسم موظفون على رأس العمل — انقلهم قبل إيقافه")
-    new = {k: (getattr(b, k) if k in sent else cur[k]) for k in ("name", "parent_id", "head_employee_id", "cost_center_id")}
-    new["name"] = (new["name"] or cur["name"]).strip()
-    c.execute("UPDATE departments SET name=?, parent_id=?, head_employee_id=?, cost_center_id=?, active=? WHERE id=?",
-              (new["name"], new["parent_id"], new["head_employee_id"], new["cost_center_id"], int(b.active) if b.active is not None else cur["active"], did))
-    audit(c, "تعديل قسم", new["name"])
-    c.commit()
-    return {"ok": True}
+    return diff(cur, b, DEPT_COLS).commit(c, "departments", did, "تعديل قسم", cur["name"])
 
 
 @router.get("/api/hr/positions")
@@ -180,10 +182,16 @@ class PositionIn(BaseModel):
 
 class PositionPatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    title: str | None = Field(default=None, min_length=2, max_length=80)
+    title: str | None = Field(default=None, max_length=80)
     grade: str | None = Field(default=None, max_length=20)
     headcount: int | None = Field(default=None, ge=0, le=1000)
     active: bool | None = None
+
+
+POSITION_COLS = {
+    "title": Col("المسمى الوظيفي", required=True, check=lambda v: None if len(v) >= 2 else "المسمى الوظيفي حرفان على الأقل"),
+    "grade": Col("الدرجة"), "headcount": Col("العدد المطلوب", required=True, kind="num"), "active": Col("المسمى فعّال", required=True, kind="bool"),
+}
 
 
 @router.post("/api/hr/positions")
@@ -203,18 +211,12 @@ def api_position_add(b: PositionIn, u=Depends(act_as("hr"))):
 def api_position_edit(pid: int, b: PositionPatch, u=Depends(act_as("hr"))):
     c = db()
     cur = dict(one(c, "SELECT * FROM positions WHERE id=?", (pid,), "المسمى غير موجود"))
-    sent = b.model_fields_set
-    title = (b.title or cur["title"]).strip() if "title" in sent else cur["title"]
-    if title != cur["title"] and c.execute("SELECT 1 FROM positions WHERE title=? AND COALESCE(department_id,0)=? AND id!=?", (title, cur["department_id"] or 0, pid)).fetchone():
+    p = diff(cur, b, POSITION_COLS)
+    if "title" in p.changed and c.execute("SELECT 1 FROM positions WHERE title=? AND COALESCE(department_id,0)=? AND id!=?", (p.value("title"), cur["department_id"] or 0, pid)).fetchone():
         raise HTTPException(409, "مسمى وظيفي بهذا الاسم موجود في القسم")
-    if b.active is False and c.execute("SELECT 1 FROM employees WHERE position_id=? AND status!='terminated'", (pid,)).fetchone():
+    if "active" in p.changed and not p.value("active") and c.execute("SELECT 1 FROM employees WHERE position_id=? AND status!='terminated'", (pid,)).fetchone():
         raise HTTPException(409, "يشغل المسمى موظفون على رأس العمل")
-    c.execute("UPDATE positions SET title=?, grade=?, headcount=?, active=? WHERE id=?",
-              (title, (b.grade or None) if "grade" in sent else cur["grade"], b.headcount if "headcount" in sent and b.headcount is not None else cur["headcount"],
-               int(b.active) if b.active is not None else cur["active"], pid))
-    audit(c, "تعديل مسمى وظيفي", title)
-    c.commit()
-    return {"ok": True}
+    return p.commit(c, "positions", pid, "تعديل مسمى وظيفي", cur["title"])
 
 
 @router.get("/api/hr/tree")
@@ -408,6 +410,12 @@ def api_employee_add(b: EmployeeIn, u=Depends(act_as("hr"))):
     return out
 
 
+EMP_LABELS = {"name": "الاسم", "name_en": "الاسم بالإنجليزية", "nationality": "الجنسية", "gender": "الجنس", "marital": "الحالة الاجتماعية", "phone": "الهاتف", "email": "البريد",
+              "address": "العنوان", "bank_name": "البنك", "contract_type": "نوع العقد", "omani": "عُماني", "pasi_applies": "يخضع للتأمينات", "id_number": "رقم الهوية",
+              "iban": "الآيبان", "social_ins_no": "رقم التأمينات", "emergency_contact": "جهة الطوارئ", "dob": "تاريخ الميلاد", "hire_date": "تاريخ التعيين",
+              "contract_end": "نهاية العقد", "probation_end": "نهاية التجربة", "department_id": "القسم", "position_id": "المسمى الوظيفي", "manager_id": "المدير المباشر"}
+
+
 @router.patch("/api/hr/employees/{eid}")
 def api_employee_edit(eid: int, b: EmployeePatch, u=Depends(act_as("hr"))):
     c = db()
@@ -461,7 +469,7 @@ def api_employee_edit(eid: int, b: EmployeePatch, u=Depends(act_as("hr"))):
         # the audit line names the fields, never the values of the sensitive ones
         audit(c, "تعديل ملف موظف", f"{cur['number']} · الحقول: {', '.join(changed)}")
         c.commit()
-    return {"ok": True, "changed": changed, "warnings": warns}
+    return {"ok": True, "changed": changed, "changes": [{"field": k, "label": EMP_LABELS.get(k, k), "personal": True} for k in changed], "warnings": warns}
 
 
 class StatusIn(BaseModel):
@@ -662,19 +670,41 @@ def api_doc_add(eid: int, b: DocIn, u=Depends(act_as("hr"))):
     return {"id": did}
 
 
+class DocPatch(BaseModel):
+    """0.30.0 — PATCH صريح: ما لم يُرسَل لا يُمس (كان الفعل PATCH يستبدل الوثيقة كلها فيمحو ما لا يُرسل)، والفارغ المُرسَل يُفرَّغ، والنوع إلزامي."""
+    model_config = ConfigDict(extra="forbid")
+    kind: str | None = None
+    number: str | None = Field(default=None, max_length=60)
+    issued: str | None = None
+    expires: str | None = None
+    document_id: int | None = None
+    note: str | None = Field(default=None, max_length=200)
+
+
+DOC_REQUIRE_EXPIRY = ("passport", "resident_card", "work_permit", "labour_card", "health_insurance")
+DOC_COLS = {
+    "kind": Col("نوع الوثيقة", required=True, check=lambda v: None if v in DOC_KINDS else "نوع الوثيقة غير معروف"),
+    "number": Col("رقم الوثيقة", secret=True),
+    "issued": Col("تاريخ الإصدار", kind="date", to_db=lambda v: opt_date(v, "تاريخ الإصدار")),
+    "expires": Col("تاريخ الانتهاء", kind="date", to_db=lambda v: opt_date(v, "تاريخ الانتهاء")),
+    "document_id": Col("الملف المرفوع", kind="num"),
+    "note": Col("ملاحظة"),
+}
+
+
 @router.patch("/api/hr/documents/{did}")
-def api_doc_edit(did: int, b: DocIn, u=Depends(act_as("hr"))):
+def api_doc_edit(did: int, b: DocPatch, u=Depends(act_as("hr"))):
     c = db()
     d = dict(one(c, "SELECT * FROM employee_documents WHERE id=?", (did,), "الوثيقة غير موجودة"))
-    iss, exp = opt_date(b.issued, "تاريخ الإصدار"), opt_date(b.expires, "تاريخ الانتهاء")
-    if iss and exp and exp < iss:
+    p = diff(d, b, DOC_COLS)
+    iss, exp, kind = p.value("issued"), p.value("expires"), p.value("kind")
+    if iss and exp and str(exp)[:10] < str(iss)[:10]:
         raise HTTPException(400, "تاريخ الانتهاء قبل الإصدار")
-    _doc_scan(c, d["employee_id"], b.document_id)
-    c.execute("UPDATE employee_documents SET kind=?, number=?, issued=?, expires=?, document_id=?, note=? WHERE id=?",
-              (b.kind, pii.enc(b.number.strip()) if b.number else None, iss, exp, b.document_id, b.note or None, did))
-    audit(c, "تعديل وثيقة موظف", f"#{did} · {DOC_KINDS[b.kind]}")
-    c.commit()
-    return {"ok": True}
+    if ("expires" in p.changed or "kind" in p.changed) and kind in DOC_REQUIRE_EXPIRY and not exp:
+        raise HTTPException(400, "هذه الوثيقة تلزمها نهاية صلاحية")
+    if "document_id" in p.changed and p.value("document_id") is not None:
+        _doc_scan(c, d["employee_id"], p.value("document_id"))
+    return p.commit(c, "employee_documents", did, "تعديل وثيقة موظف", f"#{did} · {DOC_KINDS.get(kind, kind)}")
 
 
 @router.delete("/api/hr/documents/{did}")

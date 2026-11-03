@@ -92,6 +92,8 @@ select{background:var(--pane);border:1px solid var(--line);border-radius:8px;pad
 .btn{border:1px solid var(--line);background:var(--pane2);border-radius:8px;padding:9px 14px;font-weight:600;min-height:40px}
 .btn.p{background:var(--pri);border-color:var(--pri);color:var(--on-pri)}
 .btn.w{width:100%}.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn.sm{min-height:34px;padding:5px 11px;font-size:12px;white-space:nowrap}
+.fld{display:flex;gap:6px;align-items:center}.fld>input,.fld>select{flex:1;min-width:0}
 .btns{display:flex;gap:8px;flex-wrap:wrap}
 .inst{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px dashed var(--line);font-size:13px;gap:8px}
 .inst:last-child{border:0}

@@ -29,6 +29,7 @@ from .auth import need, need_any
 from .common import act_as, audit, db, now_s, rows, today
 from .db import TENANT, audit_insert, setting_f, valid_tenant
 from .modules import PLAN_LABEL, booking_full, one, portal_owned
+from .partial import Col, diff
 from .seed import schedule
 
 router = APIRouter()
@@ -89,23 +90,32 @@ def brand_get(_=Depends(need("admin"))):
     return {k: v for k, v in b.items() if not k.endswith("_path")}
 
 
+BRAND_COLS = {   # 0.30.0 — تُقارَن القيم المخزَّنة فعلًا (لا الاسم الاحتياطي من اسم المؤسسة) فلا يُعلَن «حُفظ» لما لم يتغيّر
+    "name": Col("اسم المنشأة"), "cr": Col("السجل التجاري"), "vat": Col("الرقم الضريبي"), "address": Col("العنوان"), "phone": Col("الهاتف"),
+    "email": Col("البريد"), "signatory": Col("المفوّض بالتوقيع", personal=True), "signatory_title": Col("صفة المفوّض"),
+    "logo_doc": Col("الشعار", kind="num", to_db=lambda v: v or None), "stamp_doc": Col("الختم", kind="num", to_db=lambda v: v or None),
+    "sign_doc": Col("التوقيع", kind="num", to_db=lambda v: v or None),
+}
+
+
 @router.post("/api/admin/brand")
 def brand_set(body: BrandIn, _=Depends(act_as("admin"))):
     c = db()
-    for k in BRAND_KEYS:
-        v = getattr(body, k)
-        if v is not None:
-            c.execute("INSERT OR REPLACE INTO settings VALUES(?,?)", (f"brand:{k}", v.strip()))
+    cur = {k: _setting(c, f"brand:{k}") or None for k in BRAND_KEYS}
     for d in BRAND_DOCS:
-        did = getattr(body, f"{d}_doc")
-        if did is not None:
-            if did and not c.execute("SELECT 1 FROM documents WHERE id=? AND ref_type='brand' AND mime IN ('image/png','image/jpeg')", (did,)).fetchone():
-                raise HTTPException(400, f"المستند {did} ليس صورة مرفوعة ضمن هوية المطوّر")
-            c.execute("INSERT OR REPLACE INTO settings VALUES(?,?)", (f"brand:{d}_doc", str(did or "")))
-    audit(c, "تحديث هوية المستندات", ", ".join(k for k in BRAND_KEYS + tuple(f"{d}_doc" for d in BRAND_DOCS) if getattr(body, k) is not None))
-    c.commit()
+        raw = _setting(c, f"brand:{d}_doc")
+        cur[f"{d}_doc"] = int(raw) if raw and raw.isdigit() else None
+    p = diff(cur, body, BRAND_COLS)
+    for d in BRAND_DOCS:
+        did = p.value(f"{d}_doc") if f"{d}_doc" in p.changed else None
+        if did and not c.execute("SELECT 1 FROM documents WHERE id=? AND ref_type='brand' AND mime IN ('image/png','image/jpeg')", (did,)).fetchone():
+            raise HTTPException(400, f"المستند {did} ليس صورة مرفوعة ضمن هوية المطوّر")
+    for x in p.changes:
+        c.execute("INSERT OR REPLACE INTO settings VALUES(?,?)", (f"brand:{x.field}", str(x.new or "")))
+    if p.changes:
+        p.audited(c, "تحديث هوية المستندات", "")
     b = brand(c)
-    return {k: v for k, v in b.items() if not k.endswith("_path")}
+    return {**{k: v for k, v in b.items() if not k.endswith("_path")}, **p.response()}
 
 
 # ---------------------------------------------------------------- verification registry

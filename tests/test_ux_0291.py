@@ -91,16 +91,22 @@ def test_audit_log_search_actor_dates_and_paging(cl):
     assert cl.get("/api/audit", params={"offset": -1}).status_code == 422
 
 
-def test_owner_edit_with_blank_identity_and_iban_keeps_the_stored_values(cl):
+def test_owner_edit_keeps_the_stored_identity_unless_it_is_sent_and_clears_it_only_with_an_explicit_empty(cl):
+    """0.29.2 kept the masked identity/IBAN by treating a blank as «keep» — which made them impossible to clear. 0.30.0 (docs/DESIGN-partial-update.md):
+    a field that is not sent is never touched (the form omits a masked field the user did not touch), a typed value replaces, and an explicit empty clears."""
     oid = cl.post("/api/lea/owners", json={"name": "مالك اختبار 0291", "kind": "third_party", "id_number": "99887766", "iban": "OM12ABCD0000123456789", "mgmt_fee_pct": 5}).json()["id"]
     try:
         before = next(o for o in cl.get("/api/lea/owners").json() if o["id"] == oid)
-        assert cl.post(f"/api/lea/owners/{oid}", json={"name": "مالك اختبار 0291 (معدَّل)", "id_number": "", "iban": "", "mgmt_fee_pct": 7}).status_code == 200
+        assert cl.post(f"/api/lea/owners/{oid}", json={"name": "مالك اختبار 0291 (معدَّل)", "mgmt_fee_pct": 7}).status_code == 200      # the masked fields are not in the request
         after = next(o for o in cl.get("/api/lea/owners").json() if o["id"] == oid)
         assert after["name"].endswith("(معدَّل)") and after["mgmt_fee_pct"] == 7
         assert after["id_number"] == before["id_number"] and after["iban"] == before["iban"] and after["iban"].endswith("6789")
-        assert cl.post(f"/api/lea/owners/{oid}", json={"name": "مالك اختبار 0291", "id_number": "11223344", "iban": "", "mgmt_fee_pct": 7}).status_code == 200
-        assert next(o for o in cl.get("/api/lea/owners").json() if o["id"] == oid)["id_number"].endswith("3344")   # a typed value replaces
+        assert cl.post(f"/api/lea/owners/{oid}", json={"name": "مالك اختبار 0291", "id_number": "11223344"}).status_code == 200
+        now = next(o for o in cl.get("/api/lea/owners").json() if o["id"] == oid)
+        assert now["id_number"].endswith("3344") and now["iban"] == before["iban"]                                              # a typed value replaces; the other stays
+        assert cl.post(f"/api/lea/owners/{oid}", json={"iban": ""}).json()["changed"] == ["iban"]                              # an explicit empty clears it
+        now = next(o for o in cl.get("/api/lea/owners").json() if o["id"] == oid)
+        assert not now["iban"] and now["id_number"].endswith("3344")
     finally:
         tok = TENANT.set("bayan")
         try:

@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import calendar
 import datetime as dt
+import re
 from fractions import Fraction
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -25,6 +26,7 @@ from .auth import need
 from .common import ACTOR, act_as, audit, db, now_s, rows, today, xlock
 from .db import TENANT, connect, tenants
 from .modules import one
+from .partial import Col, diff
 
 router = APIRouter()
 
@@ -379,38 +381,45 @@ def api_unit_candidates(_=Depends(need("leasing"))):
 
 
 class UnitPatch(BaseModel):
+    """0.30.0 — PATCH صريح: المالك ومواقف السيارات يُفرَّغان بـnull (كان null يعني «غير مُرسَل» فلا يُفرَّغان أبدًا). docs/DESIGN-partial-update.md"""
     owner_id: int | None = None
-    lease_state: str | None = Field(default=None, pattern=r"^(prep|maintenance|not_leasable|none)$")
-    parking_bays: int | None = Field(default=None, ge=0, le=50)
-    use: str | None = Field(default=None, pattern=r"^(residential|commercial|office|warehouse|land)$")
+    lease_state: str | None = None
+    parking_bays: int | None = None
+    use: str | None = None
     retained: bool | None = None
 
 
+UNIT_COLS = {
+    "owner_id": Col("المالك", kind="num"),
+    "lease_state": Col("حالة التأجير اليدوية", to_db=lambda v: None if v == "none" else v,
+                       check=lambda v: None if v in ("prep", "maintenance", "not_leasable", "none") else "حالة التأجير اليدوية غير معروفة"),
+    "parking_bays": Col("مواقف السيارات", kind="num", check=lambda v: None if 0 <= v <= 50 else "مواقف السيارات بين 0 و50"),
+    "use": Col("الاستخدام", required=True, check=lambda v: None if v in USES else "الاستخدام غير معروف"),
+    "retained": Col("ضمن محفظة التأجير", required=True, kind="bool"),
+}
+
+
+@router.patch("/api/lea/units/{uid}")
 @router.post("/api/lea/units/{uid}")
 def api_unit_patch(uid: int, b: UnitPatch, _=Depends(act_as("leasing"))):
     c = db()
-    u = one(c, "SELECT * FROM units WHERE id=?", (uid,), "الوحدة غير موجودة")
-    if b.owner_id is not None:
+    u = dict(one(c, "SELECT * FROM units WHERE id=?", (uid,), "الوحدة غير موجودة"))
+    p = diff(u, b, UNIT_COLS)
+    if "owner_id" in b.model_fields_set and b.owner_id is not None:
         one(c, "SELECT 1 FROM owners WHERE id=? AND active=1", (b.owner_id,), "المالك غير موجود")
-        c.execute("UPDATE units SET owner_id=? WHERE id=?", (b.owner_id, uid))
-    if b.lease_state is not None:
-        c.execute("UPDATE units SET lease_state=? WHERE id=?", (None if b.lease_state == "none" else b.lease_state, uid))
-    if b.parking_bays is not None:
-        c.execute("UPDATE units SET parking_bays=? WHERE id=?", (b.parking_bays, uid))
-    if b.use is not None:
-        c.execute("UPDATE units SET use=? WHERE id=?", (b.use, uid))
-    if b.retained is not None:
-        if b.retained and u["status"] == "s":
+    if "retained" in p.changed:
+        if p.value("retained") and u["status"] == "s":
             raise HTTPException(409, "وحدة مباعة لا تدخل محفظة التأجير")
-        if not b.retained and c.execute("SELECT 1 FROM leases WHERE unit_id=? AND status IN ('active','draft')", (uid,)).fetchone():
+        if not p.value("retained") and c.execute("SELECT 1 FROM leases WHERE unit_id=? AND status IN ('active','draft')", (uid,)).fetchone():
             raise HTTPException(409, "على الوحدة عقد ساري أو مسودة")
-        c.execute("UPDATE units SET retained=? WHERE id=?", (int(b.retained), uid))
-        if b.retained and not u["owner_id"] and b.owner_id is None:
+    if p.value("retained") and p.value("owner_id") is None:
+        if "owner_id" in p.changed:             # أفرغ العميل مالك وحدة داخل المحفظة
+            raise HTTPException(400, "وحدة ضمن محفظة التأجير تحتاج مالكًا — انقلها خارج المحفظة أولًا أو اختر مالكًا")
+        if "retained" in p.changed:             # دخلت المحفظة الآن بلا مالك: مالك الشركة افتراضيًا (كما قبل 0.30.0)
             own = c.execute("SELECT id FROM owners WHERE kind='own' ORDER BY id LIMIT 1").fetchone()
-            c.execute("UPDATE units SET owner_id=? WHERE id=?", (own["id"] if own else None, uid))
-    audit(c, "تعديل وحدة تأجير", f"{u['code']}")
-    c.commit()
-    return {"ok": True}
+            if own:
+                p = diff(u, b, UNIT_COLS, extra={"owner_id": own["id"]})
+    return p.commit(c, "units", uid, "تعديل وحدة تأجير", u["code"])
 
 
 class MeterIn(BaseModel):
@@ -477,18 +486,37 @@ def api_owner_add(b: OwnerIn, _=Depends(act_as("leasing"))):
     return {"id": oid}
 
 
+class OwnerPatch(BaseModel):
+    """0.30.0 — PATCH صريح. الهوية والآيبان مقنَّعتان في العرض فلا يُرسلهما النموذج إلا بقيمة جديدة أو بمسح صريح (`""`)؛ غير المُرسَل يبقى
+    (كان في 0.29.2 «الفارغ = أبقِ» فلا سبيل إلى المسح). docs/DESIGN-partial-update.md"""
+    name: str | None = Field(default=None, max_length=120)
+    id_number: str | None = Field(default=None, max_length=30)
+    phone: str | None = Field(default=None, max_length=30)
+    email: str | None = Field(default=None, max_length=120)
+    iban: str | None = Field(default=None, max_length=40)
+    mgmt_fee_pct: float | None = Field(default=None, ge=0, le=50)
+    mgmt_basis: str | None = None
+    notes: str | None = Field(default=None, max_length=500)
+
+
+OWNER_COLS = {
+    "name": Col("الاسم", required=True, personal=True, check=lambda v: None if len(v) >= 2 else "الاسم حرفان على الأقل"),
+    "id_number": Col("الهوية / السجل", secret=True),
+    "phone": Col("الهاتف", personal=True),
+    "email": Col("البريد", personal=True),
+    "iban": Col("الآيبان", secret=True),
+    "mgmt_fee_pct": Col("عمولة الإدارة ٪", required=True, kind="num"),
+    "mgmt_basis": Col("أساس العمولة", required=True, check=lambda v: None if v in ("collected", "invoiced") else "أساس العمولة: المحصَّل أو المفوتَر"),
+    "notes": Col("ملاحظات", personal=True),
+}
+
+
+@router.patch("/api/lea/owners/{oid}")
 @router.post("/api/lea/owners/{oid}")
-def api_owner_edit(oid: int, b: OwnerIn, _=Depends(act_as("leasing"))):
+def api_owner_edit(oid: int, b: OwnerPatch, _=Depends(act_as("leasing"))):
     c = db()
-    cur = one(c, "SELECT id_number, iban FROM owners WHERE id=?", (oid,), "المالك غير موجود")
-    # 0.29.2 — الهوية والآيبان تُعرضان مقنَّعتين، فحقل فارغ يعني «أبقِ القائم» لا «امسح» (النموذج لا يستطيع إعادة إرسال القيمة الأصلية)
-    id_number = pii.enc(b.id_number) if b.id_number.strip() else cur["id_number"]
-    iban = pii.enc(b.iban) if b.iban.strip() else cur["iban"]
-    c.execute("UPDATE owners SET name=?, id_number=?, phone=?, email=?, iban=?, mgmt_fee_pct=?, mgmt_basis=?, notes=? WHERE id=?",
-              (b.name, id_number, b.phone, b.email, iban, b.mgmt_fee_pct, b.mgmt_basis, b.notes, oid))
-    audit(c, "تعديل مالك", f"{b.name}")
-    c.commit()
-    return {"ok": True}
+    cur = dict(one(c, "SELECT * FROM owners WHERE id=?", (oid,), "المالك غير موجود"))
+    return diff(cur, b, OWNER_COLS).commit(c, "owners", oid, "تعديل مالك", cur["name"])
 
 
 # ----------------------------------------------------------------------------------------------------- lessees
@@ -568,15 +596,65 @@ def api_tenant(tid: int, _=Depends(need("leasing"))):
     return x
 
 
+class TenantPatch(BaseModel):
+    """0.30.0 — PATCH صريح: الحقل غير المُرسَل لا يُمس (كان العميل الجزئي يمحو الباقي)، والفارغ المُرسَل يُفرَّغ، والاسم والنوع إلزاميان."""
+    name: str | None = Field(default=None, max_length=120)
+    phone: str | None = Field(default=None, max_length=30)
+    id_number: str | None = Field(default=None, max_length=30)
+    kind: str | None = None
+    cr_number: str | None = Field(default=None, max_length=30)
+    tax_no: str | None = Field(default=None, max_length=30)
+    rep_name: str | None = Field(default=None, max_length=120)
+    rep_title: str | None = Field(default=None, max_length=60)
+    rep_id_number: str | None = Field(default=None, max_length=30)
+    contact_name: str | None = Field(default=None, max_length=120)
+    email: str | None = Field(default=None, max_length=120)
+    address: str | None = Field(default=None, max_length=250)
+    nationality: str | None = Field(default=None, max_length=40)
+    id_expiry: str | None = Field(default=None, max_length=10)
+    rating: str | None = None
+    rating_note: str | None = Field(default=None, max_length=250)
+
+
+def _re_check(pattern: str, msg: str):
+    rx = re.compile(pattern)
+    return lambda v: None if rx.fullmatch(v) else msg
+
+
+def _iso_day(v: str) -> str | None:
+    try:
+        dt.date.fromisoformat(v[:10])
+    except ValueError:
+        return "تاريخ انتهاء الهوية بصيغة سنة-شهر-يوم"
+    return None
+
+
+TENANT_COLS = {
+    "name": Col("الاسم", required=True, personal=True, check=lambda v: None if len(v) >= 3 else "الاسم ثلاثة أحرف على الأقل"),
+    "kind": Col("النوع", required=True, check=lambda v: None if v in ("individual", "company") else "النوع: فرد أو شركة"),
+    "phone": Col("الهاتف", personal=True, check=_re_check(r"[0-9+ ()-]*", "الهاتف أرقام وعلامات + - ( ) فقط")),
+    "id_number": Col("رقم الهوية", secret=True, check=_re_check(r"[A-Za-z0-9]*", "رقم الهوية حروف وأرقام فقط")),
+    "cr_number": Col("السجل التجاري"),
+    "tax_no": Col("الرقم الضريبي"),
+    "rep_name": Col("الممثل القانوني", personal=True),
+    "rep_title": Col("صفة الممثل"),
+    "rep_id_number": Col("هوية الممثل", secret=True, check=_re_check(r"[A-Za-z0-9]*", "هوية الممثل حروف وأرقام فقط")),
+    "contact_name": Col("جهة الاتصال", personal=True),
+    "email": Col("البريد", personal=True),
+    "address": Col("العنوان", personal=True),
+    "nationality": Col("الجنسية"),
+    "id_expiry": Col("انتهاء الهوية", kind="date", check=_iso_day),
+    "rating": Col("التقييم", check=_re_check(r"[A-D]", "التقييم من A إلى D")),
+    "rating_note": Col("ملاحظة التقييم", personal=True),
+}
+
+
+@router.patch("/api/lea/tenants/{tid}")
 @router.post("/api/lea/tenants/{tid}")
-def api_tenant_edit(tid: int, b: TenantIn, _=Depends(act_as("leasing"))):
+def api_tenant_edit(tid: int, b: TenantPatch, _=Depends(act_as("leasing"))):
     c = db()
-    one(c, "SELECT 1 FROM tenants_l WHERE id=?", (tid,), "المستأجر غير موجود")
-    c.execute("UPDATE tenants_l SET name=?, phone=?, id_number=?, kind=?, cr_number=?, tax_no=?, rep_name=?, rep_title=?, rep_id_number=?, contact_name=?, email=?, "
-              "address=?, nationality=?, id_expiry=?, rating=?, rating_note=? WHERE id=?", (*_tenant_cols(b), tid))
-    audit(c, "تعديل مستأجر", b.name)
-    c.commit()
-    return {"ok": True}
+    cur = dict(one(c, "SELECT * FROM tenants_l WHERE id=?", (tid,), "المستأجر غير موجود"))
+    return diff(cur, b, TENANT_COLS).commit(c, "tenants_l", tid, "تعديل مستأجر", cur["name"])
 
 
 class BlackIn(BaseModel):

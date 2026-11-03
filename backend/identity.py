@@ -414,10 +414,15 @@ def _set_email(c, uid: int, email: str, actor: str, who: str) -> dict:
         raise HTTPException(400, "صيغة البريد غير صحيحة")
     if email and c.execute("SELECT 1 FROM users WHERE lower(email)=? AND id!=?", (email, uid)).fetchone():
         raise HTTPException(409, "هذا البريد مسجَّل لحساب آخر")
+    cur = c.execute("SELECT email, email_verified FROM users WHERE id=?", (uid,)).fetchone()
+    if (norm_email(cur["email"] or "") or None) == (email or None):
+        # 0.30.0 — إعادة حفظ البريد نفسه ليست تغييرًا: لا يُسقَط توثيقه ولا يُكتب تدقيق ولا commit
+        return {"ok": True, "changed": [], "changes": [], "email": cur["email"], "email_verified": bool(cur["email_verified"])}
     c.execute("UPDATE users SET email=?, email_verified=0 WHERE id=?", (email or None, uid))
-    audit_insert(c, actor, "تحديث البريد الإلكتروني", f"{who} ⟵ {email or '—'}")
+    state = "أُضيف" if not cur["email"] else "حُذف" if not email else "تغيّر"   # العنوان نفسه بيانات شخصية: لا يُكتب في التدقيق
+    audit_insert(c, actor, "تحديث البريد الإلكتروني", f"{who} · البريد الإلكتروني (قيمة محجوبة): {state}")
     c.commit()
-    return {"email": email or None, "email_verified": False}
+    return {"ok": True, "changed": ["email"], "changes": [{"field": "email", "label": "البريد الإلكتروني", "personal": True}], "email": email or None, "email_verified": False}
 
 
 @router.post("/api/me/email")

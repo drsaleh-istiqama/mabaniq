@@ -21,6 +21,7 @@ from . import ledger
 from .auth import need
 from .common import act_as, audit, db, now_s, rows, today
 from .db import setting_f
+from .partial import Col, diff
 
 router = APIRouter()
 r3 = ledger.r3
@@ -159,7 +160,8 @@ def api_account_add(b: AccountIn, u=Depends(act_as("accounting_approve"))):
 
 
 class AccountPatch(BaseModel):
-    name: str | None = Field(default=None, min_length=2, max_length=120)
+    """0.30.0 — PATCH صريح: الحقل الاختياري يُفرَّغ بـnull أو الفارغ، والاسم والفعّالية إلزاميان. docs/DESIGN-partial-update.md"""
+    name: str | None = Field(default=None, max_length=120)
     name_en: str | None = Field(default=None, max_length=120)
     active: bool | None = None
     system_key: str | None = Field(default=None, max_length=40)
@@ -168,47 +170,35 @@ class AccountPatch(BaseModel):
     note: str | None = Field(default=None, max_length=300)
 
 
+ACCOUNT_COLS = {
+    "name": Col("اسم الحساب", required=True, check=lambda v: None if len(v) >= 2 else "اسم الحساب حرفان على الأقل"),
+    "name_en": Col("الاسم الإنجليزي"),
+    "note": Col("ملاحظة"),
+    "vat_class": Col("فئة الضريبة"),
+    "cash_class": Col("تصنيف التدفق النقدي"),
+    "system_key": Col("ربط حدث تلقائي"),
+    "active": Col("الحساب فعّال", required=True, kind="bool"),
+}
+
+
 @router.patch("/api/acc/accounts/{aid}")
 def api_account_patch(aid: int, b: AccountPatch, u=Depends(act_as("accounting_approve"))):
     c = db()
     a = c.execute("SELECT * FROM acc_accounts WHERE id=?", (aid,)).fetchone()
     if not a:
         raise HTTPException(404, "الحساب غير موجود")
-    sets, args = [], []
-    for col in ("name", "name_en", "note"):
-        v = getattr(b, col)
-        if v is not None:
-            sets.append(f"{col}=?")
-            args.append(v)
-    for col in ("vat_class", "cash_class"):
-        v = getattr(b, col)
-        if v is not None:
-            sets.append(f"{col}=?")
-            args.append(v or None)
-    if b.system_key is not None:
-        key = b.system_key.strip() or None
-        if key:
-            holder = c.execute("SELECT code FROM acc_accounts WHERE system_key=? AND id<>?", (key, aid)).fetchone()
-            if holder:
-                raise HTTPException(409, f"المفتاح «{key}» مربوط بالحساب {holder['code']} — فُكّ ربطه أولًا")
-            if not a["postable"]:
-                raise HTTPException(400, "لا يُربط حدث بحساب تجميعي غير قابل للترحيل")
-        elif a["system_key"]:
-            sets.append("system_key=?")
-            args.append(None)
-        if key:
-            sets.append("system_key=?")
-            args.append(key)
-    if b.active is not None:
-        if not b.active and a["system_key"] and b.system_key is None:
-            raise HTTPException(409, "الحساب مربوط بحدث تلقائي — أعد الربط قبل إيقافه")
-        sets.append("active=?")
-        args.append(int(b.active))
-    if sets:
-        c.execute(f"UPDATE acc_accounts SET {', '.join(sets)} WHERE id=?", (*args, aid))
-        audit(c, "تعديل حساب", f"{a['code']} {a['name']}")
-        c.commit()
-    return {"ok": True}
+    a = dict(a)
+    p = diff(a, b, ACCOUNT_COLS)
+    key = p.value("system_key") if "system_key" in p.changed else None
+    if key:
+        holder = c.execute("SELECT code FROM acc_accounts WHERE system_key=? AND id<>?", (key, aid)).fetchone()
+        if holder:
+            raise HTTPException(409, f"المفتاح «{key}» مربوط بالحساب {holder['code']} — فُكّ ربطه أولًا")
+        if not a["postable"]:
+            raise HTTPException(400, "لا يُربط حدث بحساب تجميعي غير قابل للترحيل")
+    if "active" in p.changed and not p.value("active") and a["system_key"] and "system_key" not in b.model_fields_set:
+        raise HTTPException(409, "الحساب مربوط بحدث تلقائي — أعد الربط قبل إيقافه")
+    return p.commit(c, "acc_accounts", aid, "تعديل حساب", f"{a['code']} {a['name']}")
 
 
 @router.get("/api/acc/cost-centers")

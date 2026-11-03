@@ -17,6 +17,7 @@ from . import auth as A
 from .auth import need, need_any
 from .common import act_as, audit, db, now_s, rows
 from .modules import one
+from .partial import Col, diff
 
 router = APIRouter()
 KINDS = {"site": "المخطط العام للموقع", "floor": "مخطط طابق", "unit": "مخطط نموذج الوحدة", "elevation": "واجهة", "section": "قطاع",
@@ -99,28 +100,33 @@ def plan_markers(pid: int, body: MarkersIn, u=Depends(act_as("inventory"))):
 
 
 class PlanPatch(BaseModel):
-    title: str | None = Field(default=None, min_length=2, max_length=100)
+    """0.30.0 — PATCH صريح: الطابق والمبنى ونوع الوحدة تُفرَّغ بـnull أو الفارغ (كان الطابق لا يُفرَّغ)، والعنوان والظهور إلزاميان."""
+    title: str | None = Field(default=None, max_length=100)
     public: bool | None = None
     building: str | None = Field(default=None, max_length=40)
     floor: int | None = None
     unit_type: str | None = Field(default=None, max_length=60)
 
 
+PLAN_COLS = {
+    "title": Col("العنوان", required=True, check=lambda v: None if len(v) >= 2 else "العنوان حرفان على الأقل"),
+    "public": Col("ظاهر للعميل", required=True, kind="bool"),
+    "building": Col("المبنى"),
+    "floor": Col("الطابق", kind="num"),
+    "unit_type": Col("نوع الوحدة"),
+}
+
+
+@router.patch("/api/plans/{pid}")
 @router.post("/api/plans/{pid}")
 def plan_patch(pid: int, body: PlanPatch, u=Depends(act_as("docs"))):
     c = db()
     pl = plan_row(c, pid)
-    if body.title is not None:
-        c.execute("UPDATE plans SET title=? WHERE id=?", (body.title, pid))
-    if body.public is not None:
-        c.execute("UPDATE plans SET public=? WHERE id=?", (0 if pl["kind"] in INTERNAL else int(body.public), pid))
-    for k in ("building", "floor", "unit_type"):
-        v = getattr(body, k)
-        if v is not None:
-            c.execute(f"UPDATE plans SET {k}=? WHERE id=?", (v or None, pid))
-    audit(c, "تعديل مخطط", pl["title"])
-    c.commit()
-    return plan_row(c, pid)
+    if pl["kind"] in INTERNAL and "public" in body.model_fields_set:
+        body.public = False     # المخططات الداخلية (إنشائي/كهروميكانيكي) لا تظهر للعميل أبدًا
+    patch = diff(pl, body, PLAN_COLS)
+    out = patch.commit(c, "plans", pid, "تعديل مخطط", pl["title"])
+    return {**plan_row(c, pid), **out}
 
 
 @router.post("/api/plans/{pid}/remove")

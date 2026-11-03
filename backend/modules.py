@@ -11,13 +11,14 @@ import secrets
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from . import engines_ext as X
 from . import pii
 from .auth import ROLES, check_pw, hash_pw, need, need_any, temp_password
 from .common import act_as, audit, db, now_s, rows, today
 from .db import setting, setting_f
+from .partial import Col, diff
 
 router = APIRouter()
 PLAN_LABEL = {"milestone": "مرتبطة بمراحل الإنجاز", "6040": "60/40", "murabaha": "تمويل مرابحة بنكي"}
@@ -110,22 +111,40 @@ def permits(_=Depends(need_any("permits", "view"))):
     return out
 
 
-class PermitIn(BaseModel):
-    status: str = Field(pattern="^(submitted|in_review|issued|rejected)$")
-    ref: str = Field(default="", max_length=40)
+PERMIT_SETTABLE = ("submitted", "in_review", "issued", "rejected")   # ما يضبطه الموظف؛ «لم يبدأ» و«منتهٍ» يشتقهما النظام
+
+
+class PermitPatch(BaseModel):
+    """0.30.0 — PATCH صريح (docs/DESIGN-partial-update.md): غير المُرسَل لا يُمس، والرقم المرجعي والانتهاء المُرسَلان فارغين يُفرَّغان، والحالة إلزامية."""
+    model_config = ConfigDict(extra="forbid")
+    status: str | None = None
+    ref: str | None = Field(default=None, max_length=40)
     expires: dt.date | None = None
 
 
+PERMIT_COLS = {
+    "status": Col("الحالة", required=True, check=lambda v: None if v in PERMIT_SETTABLE else "حالة الترخيص غير مسموحة — المسموح: " + "، ".join(PERMIT_STATUS[s] for s in PERMIT_SETTABLE)),
+    "ref": Col("الرقم المرجعي"),
+    "expires": Col("تاريخ الانتهاء", kind="date"),
+    "applied": Col("تاريخ التقديم", kind="date"),     # يشتقهما الخادم عند الانتقال، لا يرسلهما العميل
+    "issued": Col("تاريخ الصدور", kind="date"),
+}
+
+
+@router.patch("/api/permits/{pid}")
 @router.post("/api/permits/{pid}")
-def permit_update(pid: int, p: PermitIn, _=Depends(act_as("permits"))):
+def permit_update(pid: int, p: PermitPatch, _=Depends(act_as("permits"))):
     c = db()
-    r = one(c, "SELECT * FROM permits WHERE id=?", (pid,))
-    c.execute("UPDATE permits SET status=?, ref=COALESCE(NULLIF(?,''),ref), applied=COALESCE(applied,?), issued=?, expires=COALESCE(?,expires) WHERE id=?",
-              (p.status, p.ref, today().isoformat(), today().isoformat() if p.status == "issued" else r["issued"],
-               p.expires.isoformat() if p.expires else None, pid))
-    audit(c, "تحديث ترخيص", f"{r['kind']} ← {PERMIT_STATUS[p.status]}")
-    c.commit()
-    return {"ok": True}
+    r = dict(one(c, "SELECT * FROM permits WHERE id=?", (pid,)))
+    extra = {}
+    new_status = (p.status or "").strip() if "status" in p.model_fields_set else ""
+    if new_status and new_status != r["status"]:   # تاريخ الصدور يُحدَّد عند الانتقال إلى «صادر» فقط (كان يتحرك مع كل حفظ)
+        if not r["applied"]:
+            extra["applied"] = today().isoformat()
+        if new_status == "issued":
+            extra["issued"] = today().isoformat()
+    patch = diff(r, p, PERMIT_COLS, extra=extra)
+    return patch.commit(c, "permits", pid, "تحديث ترخيص", f"{r['kind']} ({r['authority']})")
 
 
 # ======================================================================= الإنشاء

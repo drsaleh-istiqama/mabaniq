@@ -19,6 +19,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from .auth import PERMS, need
 from .common import act_as, audit, db, now_s, rows, today
 from .modules import one
+from .partial import Col, diff
 
 router = APIRouter()
 CATEGORIES = {"hr": "الموارد البشرية", "governance": "الحوكمة", "finance": "المالية", "leasing": "التأجير", "sales": "المبيعات", "operations": "التشغيل والصيانة", "compliance": "الامتثال"}
@@ -57,6 +58,18 @@ class PolicyPatch(BaseModel):
     basis: str | None = Field(default=None, max_length=400)
     review_months: int | None = Field(default=None, ge=1, le=60)
     ack_required: bool | None = None
+
+
+POLICY_COLS = {   # 0.30.0 — أسماء الحقول في رسالة الواجهة وسطر التدقيق؛ المواد نص طويل فتُذكر معدَّلة بلا قيم
+    "title": Col("العنوان", required=True),
+    "category": Col("التصنيف", required=True),
+    "owner_role": Col("الجهة المسؤولة"),
+    "summary": Col("الملخص"),
+    "basis": Col("الأساس"),
+    "body": Col("المواد", quiet=True),
+    "review_months": Col("مدة المراجعة (أشهر)", kind="num"),
+    "ack_required": Col("يلزم الإقرار", kind="bool"),
+}
 
 
 class ApproveIn(BaseModel):
@@ -203,11 +216,7 @@ def api_edit(pid: int, b: PolicyPatch, u=Depends(act_as("policies_admin"))):
         new["review_months"] = b.review_months
     if "ack_required" in sent and b.ack_required is not None:
         new["ack_required"] = int(b.ack_required)
-    if new:
-        c.execute("UPDATE policies SET " + ", ".join(f"{k}=?" for k in new) + " WHERE id=?", (*new.values(), pid))
-        audit(c, "تعديل مسودة سياسة", f"{r['code']} v{r['version']} · الحقول: {', '.join(new)}")
-        c.commit()
-    return {"ok": True}
+    return diff(r, new, POLICY_COLS).commit(c, "policies", pid, "تعديل مسودة سياسة", f"{r['code']} v{r['version']}")   # 0.30.0: لا كتابة ولا تدقيق إن تساوت القيم
 
 
 @router.post("/api/policies/{pid}/new-version")
